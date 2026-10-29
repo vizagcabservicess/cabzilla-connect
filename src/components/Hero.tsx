@@ -2735,7 +2735,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       if (tripMode === 'one-way') {
         const days = 1;
         const totalMinKm = days * 300;
-        const effectiveDistance = filledStops.length > 0 ? distance : distance * 2;
+        const effectiveDistance = distance * 2;
         const extraKm = Math.max(effectiveDistance - totalMinKm, 0);
         const totalBaseFare = basePrice;
         const totalDistanceFare = extraKm * perKmRate;
@@ -4886,11 +4886,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                     dropLocation={dropLocation}
                                     waypoints={filledStops}
                                     tripType={tripType}
-                                    returnToPickup={
-                                      tripType === 'outstation' &&
-                                      tripMode === 'one-way' &&
-                                      filledStops.length > 0
-                                    }
                                     onDistanceCalculated={handleDistanceCalculated}
                                   />
                                 </Suspense>

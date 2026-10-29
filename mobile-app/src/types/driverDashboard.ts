@@ -18,7 +18,10 @@ export interface DriverDashboardTrip {
   tripMode?: string;
   cabType?: string;
   fuelSpend?: number;
+  /** Litres or kg filled on this booking. */
+  fuelLitres?: number;
   startTime: string | null;
+  returnDate?: string | null;
   endTime: string | null;
   pickupLocation: string;
   dropLocation: string;
@@ -30,11 +33,30 @@ export interface DriverDashboardTrip {
   storedDistanceKm?: number;
   paymentType: PaymentType;
   driverCollectedAmount?: number | null;
+  extraCollectedAmount?: number | null;
+  extraCollectedCategory?: string | null;
   startingOdometer: number;
   endingOdometer: number;
   totalKilometers: number;
   totalDurationHours: number;
   tripAmount: number;
+  /** Amount already received before the trip. The driver collects the balance. */
+  advancePaidAmount?: number;
+  /** False on agent jobs: the driver must not see or collect a fare. */
+  driverCollectsPayment?: boolean;
+  additionalRequirements?: string | null;
+  hourlyPackage?: string;
+  pickupMapUrl?: string;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  tripTerms?: {
+    places?: string[];
+    day_window?: string | null;
+    package_hours?: number | null;
+    package_km?: number | null;
+    notes?: string[];
+    duty_dates?: string[];
+  } | null;
 }
 
 export interface DriverFuelRecord {

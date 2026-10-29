@@ -2,6 +2,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/admin_booking_format.inc.php';
 
 // Prevent any output before headers are sent
 ob_start();
@@ -274,13 +275,24 @@ try {
         'distance' => 'distance',
         'paymentType' => 'payment_type',
         'driverCollectedAmount' => 'driver_collected_amount',
+        'extraCollectedAmount' => 'extra_collected_amount',
+        'extraCollectedCategory' => 'extra_collected_category',
     ];
 
     foreach ($otherFields as $requestField => $dbField) {
         if (array_key_exists($requestField, $data)) {
             $val = $data[$requestField];
-            if (($requestField === 'driverCollectedAmount') && ($val === '' || $val === null)) {
+            if (($requestField === 'driverCollectedAmount' || $requestField === 'extraCollectedAmount' || $requestField === 'extraCollectedCategory') && ($val === '' || $val === null)) {
                 $val = null;
+            }
+            if ($requestField === 'extraCollectedAmount' && $val !== null) {
+                $val = round((float)$val, 2);
+            }
+            if ($requestField === 'extraCollectedCategory' && $val !== null) {
+                $val = strtolower(trim((string)$val));
+                if (!in_array($val, ['extra_hours', 'extra_km', 'tolls', 'other'], true)) {
+                    $val = null;
+                }
             }
             logDebug("Processing field", ['field' => $requestField, 'dbField' => $dbField, 'value' => $val]);
             $updateFields[] = "$dbField = ?";
@@ -296,6 +308,11 @@ try {
         $params[] = ($cv === null || $cv === '') ? null : (string)$cv;
     }
     
+    if (array_key_exists('extraCollectedAmount', $data) || array_key_exists('extraCollectedCategory', $data)) {
+        @$conn->query('ALTER TABLE bookings ADD COLUMN extra_collected_amount DECIMAL(12,2) NULL');
+        @$conn->query('ALTER TABLE bookings ADD COLUMN extra_collected_category VARCHAR(32) NULL');
+    }
+
     // Process extra charges if provided
     if (array_key_exists('extraCharges', $data) || array_key_exists('extra_charges', $data)) {
         $receivedExtraCharges = $data['extraCharges'] ?? $data['extra_charges'] ?? [];
@@ -428,6 +445,7 @@ try {
         'extraCharges' => $decodedExtraCharges,
         'updatedAt' => $updatedBooking['updated_at']
     ];
+    admin_booking_append_messaging_fields($updatedBooking, $formattedBooking);
     
     // Send success response
     $response = [

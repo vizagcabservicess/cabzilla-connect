@@ -5,14 +5,38 @@ import { parseBookingText, normalizeVehicleName } from '@/utils/bookingParser';
 
 export const AI_SHEET_TAB_STORAGE_KEY = 'ai_assistant_sheet_tab';
 
-export function defaultAiSheetTabName(): string {
-  return format(new Date(), 'MMM yyyy');
+const SHORT_MONTH_TO_FULL: Record<string, string> = {
+  Jan: 'January',
+  Feb: 'February',
+  Mar: 'March',
+  Apr: 'April',
+  May: 'May',
+  Jun: 'June',
+  Jul: 'July',
+  Aug: 'August',
+  Sep: 'September',
+  Oct: 'October',
+  Nov: 'November',
+  Dec: 'December',
+};
+
+/** Spreadsheet tabs use the full month, e.g. "October 2026". */
+export function defaultAiSheetTabName(date = new Date()): string {
+  return format(date, 'MMMM yyyy');
+}
+
+/** "Oct 2026" was the old default and does not match the sheet tab "October 2026". */
+export function normalizeAiSheetTabName(name: string): string {
+  const trimmed = name.trim();
+  const match = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/.exec(trimmed);
+  if (!match) return trimmed;
+  return `${SHORT_MONTH_TO_FULL[match[1]]} ${match[2]}`;
 }
 
 export function readStoredAiSheetTab(): string {
   try {
     const stored = localStorage.getItem(AI_SHEET_TAB_STORAGE_KEY)?.trim();
-    return stored || defaultAiSheetTabName();
+    return stored ? normalizeAiSheetTabName(stored) : defaultAiSheetTabName();
   } catch {
     return defaultAiSheetTabName();
   }
@@ -31,8 +55,51 @@ export const AI_VEHICLE_TYPES = [
 
 export const AI_PAYMENT_MODES = ['Cash', 'PhonePe', 'Online', 'UPI'] as const;
 
+export type TripTerms = {
+  package_hours: number | null;
+  package_km: number | null;
+  day_window: string | null;
+  extra_hour_rate: number | null;
+  extra_hour_free_km: number | null;
+  extra_km_rate: number | null;
+  garage_to_garage: boolean;
+  driver_food: boolean;
+  ac_off_standby_ghat: boolean;
+  exclusions: string[];
+  notes: string[];
+  places: string[];
+  flight_number: string | null;
+  flight_time: string | null;
+  flight_direction: 'arrival' | 'departure' | null;
+  flight_route: string | null;
+  vehicle_note: string | null;
+};
+
+export function emptyTripTerms(): TripTerms {
+  return {
+    package_hours: null,
+    package_km: null,
+    day_window: null,
+    extra_hour_rate: null,
+    extra_hour_free_km: null,
+    extra_km_rate: null,
+    garage_to_garage: false,
+    driver_food: false,
+    ac_off_standby_ghat: false,
+    exclusions: [],
+    notes: [],
+    places: [],
+    flight_number: null,
+    flight_time: null,
+    flight_direction: null,
+    flight_route: null,
+    vehicle_note: null,
+  };
+}
+
 export type ParsedBooking = {
   pickup_date: string;
+  return_date: string;
   pickup_time: string;
   pickup_location: string;
   drop_location: string;
@@ -47,11 +114,19 @@ export type ParsedBooking = {
   vehicle_type: string;
   seating_capacity: number;
   payment_mode: string;
+  driver_collects_payment: boolean;
+  pickup_map_url: string;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  hourly_package: string;
+  additional_requirements: string;
+  trip_terms: TripTerms;
 };
 
 export type ParseBookingResponse = {
   success: boolean;
   data?: ParsedBooking;
+  bookings?: ParsedBooking[];
   parse_errors?: string[];
   errors?: string[];
 };
@@ -123,6 +198,7 @@ function localParseResponse(
   return {
     success: true as const,
     data: local.data,
+    bookings: local.bookings,
     parse_errors: local.parse_errors,
     parsed_locally: true as const,
     local_parse_reason: reason,
@@ -277,15 +353,10 @@ export function validateBookingClient(data: Partial<ParsedBooking>): string[] {
   if (!data.drop_location?.trim()) errors.push('Drop location is required');
   if (!data.customer_name?.trim()) errors.push('Customer name is required');
   if (!data.pickup_date) errors.push('Pickup date is required');
-  else {
-    const d = new Date(data.pickup_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (d < today) errors.push('Pickup date cannot be in the past');
-  }
-  if (!data.cost || data.cost <= 0) errors.push('Cost must be greater than 0');
+  const agent = data.driver_collects_payment === false;
+  if (!agent && (!data.cost || data.cost <= 0)) errors.push('Cost must be greater than 0');
   const vehicle = normalizeVehicleName(data.vehicle_type ?? '', data.seating_capacity ?? 0);
-  if (!vehicle || !AI_VEHICLE_TYPES.includes(vehicle as typeof AI_VEHICLE_TYPES[number])) {
+  if (!agent && (!vehicle || !AI_VEHICLE_TYPES.includes(vehicle as typeof AI_VEHICLE_TYPES[number]))) {
     errors.push('Select a valid vehicle type');
   }
   return errors;

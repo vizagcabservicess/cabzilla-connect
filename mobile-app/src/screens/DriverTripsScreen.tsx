@@ -138,7 +138,13 @@ export function DriverTripsScreen() {
               <Text style={styles.pickup} numberOfLines={1}>{item.pickupLocation}</Text>
               <Text style={styles.drop} numberOfLines={1}>{item.dropLocation || '—'}</Text>
               <View style={styles.cardFooter}>
-                <Text style={styles.date}>{formatDate(item.pickupDate)} {item.pickupTime}</Text>
+                <Text style={styles.date}>
+                  {formatDate(item.pickupDate)}
+                  {item.returnDate && formatDate(item.returnDate) !== formatDate(item.pickupDate)
+                    ? ` to ${formatDate(item.returnDate)}`
+                    : ''}{' '}
+                  {item.pickupTime}
+                </Text>
                 <Text style={styles.passenger}>{item.passengerName}</Text>
               </View>
             </TouchableOpacity>

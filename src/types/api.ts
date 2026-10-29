@@ -147,6 +147,12 @@ export interface Booking {
   vehicle_capacity?: number;
   fare: number;
   totalAmount?: number;
+  /** Cash the driver collected on top of the package fare. */
+  extraCollectedAmount?: number | null;
+  extra_collected_amount?: number | null;
+  /** extra_hours, extra_km, tolls, or other. */
+  extraCollectedCategory?: string | null;
+  extra_collected_category?: string | null;
   status: BookingStatus;
   payment_status: string;
   payment_method?: string;

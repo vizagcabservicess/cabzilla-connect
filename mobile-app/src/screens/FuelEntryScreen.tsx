@@ -193,6 +193,21 @@ function fuelPumpImpliedRateLooksInvalid(amount: number, qty: number): boolean {
 }
 
 /** Match server `fuel_pump_numeric_math_abs_delta_inr` (~₹0.10; small slack for float). */
+/** 36.99 L × ₹104.11 = ₹3851.03, while Gemini often returns the whole rupee 3851. */
+function snapPumpAmountPaise(amount: number, qty: number, rate: number | null): number {
+  if (rate == null || !(rate > 0) || !(qty > 0)) return amount;
+  const expected = Math.round(qty * rate * 100) / 100;
+  const gap = Math.abs(amount - expected);
+  const wholeRupee = Math.abs(amount - Math.round(amount)) < 0.001;
+  const expectedHasPaise = Math.abs(expected - Math.round(expected)) >= 0.005;
+  if (wholeRupee && expectedHasPaise && gap >= 0.005 && gap <= 0.11) return expected;
+  return amount;
+}
+
+function formatFuelAmount(amount: number): string {
+  return (Math.round(amount * 100) / 100).toFixed(2);
+}
+
 function pumpSaleTotalMatchesVolumeTimesRate(amount: number, qty: number, rate: number): boolean {
   const calc = qty * rate;
   if (!(calc > 0) || !Number.isFinite(calc) || !Number.isFinite(amount)) return false;
@@ -362,9 +377,13 @@ export function FuelEntryScreen() {
 
   const ocrReceiptAmountRef = useRef<number | null>(null);
   const ocrPumpAmountRef = useRef<number | null>(null);
+  const ocrReceiptQuantityRef = useRef<number | null>(null);
+  const ocrPumpQuantityRef = useRef<number | null>(null);
   const guidedCaptureRef = useRef<{ resolve: (uri: string) => void; reject: (e: Error) => void } | null>(
     null
   );
+  const captureGenerationRef = useRef({ receipt: 0, pump: 0, odometer: 0 });
+  const cameraOpenRef = useRef(false);
   const [guidedCameraVisible, setGuidedCameraVisible] = useState(false);
   const [guidedCameraPhase, setGuidedCameraPhase] = useState<'receipt' | 'pump' | 'odometer'>('pump');
   /** Server-side fuel OCR debug pairs receipt Vision text with pump text on the next pump upload. */
@@ -515,6 +534,8 @@ export function FuelEntryScreen() {
     }
     if (capturingPhase) return;
 
+    const seq = captureGenerationRef.current[phase] + 1;
+    captureGenerationRef.current[phase] = seq;
     setCapturingPhase(phase);
     try {
       const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
@@ -522,7 +543,13 @@ export function FuelEntryScreen() {
         Alert.alert('Validation', 'Location permission is required for GPS validation');
         return;
       }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const locationPromise = Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<Location.LocationObject>((_, reject) => {
+          setTimeout(() => reject(new Error('Could not read GPS. Turn on location and try again.')), 15000);
+        }),
+      ]);
+      locationPromise.catch(() => undefined);
 
       let localUri: string;
       if (Platform.OS === 'web') {
@@ -539,13 +566,28 @@ export function FuelEntryScreen() {
         if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) return;
         localUri = pickerResult.assets[0].uri;
       } else {
-        localUri = await new Promise<string>((resolve, reject) => {
-          guidedCaptureRef.current = { resolve, reject };
-          setGuidedCameraPhase(phase);
-          setGuidedCameraVisible(true);
-        });
+        cameraOpenRef.current = true;
+        try {
+          localUri = await new Promise<string>((resolve, reject) => {
+            guidedCaptureRef.current = { resolve, reject };
+            setGuidedCameraPhase(phase);
+            setGuidedCameraVisible(true);
+          });
+        } finally {
+          cameraOpenRef.current = false;
+        }
       }
       const capturedAt = new Date().toISOString();
+      const previewMeta: CaptureMeta = { latitude: null, longitude: null, accuracy: null, capturedAt };
+      if (phase === 'receipt') setReceiptPhoto({ localUri, imageUrl: '', meta: previewMeta });
+      else if (phase === 'pump') setPumpPhoto({ localUri, imageUrl: '', meta: previewMeta });
+      else setOdometerPhoto({ localUri, imageUrl: '', meta: previewMeta });
+      setCapturingPhase(null);
+
+      void (async () => {
+        try {
+      const pos = await locationPromise;
+      if (captureGenerationRef.current[phase] !== seq) return;
 
       const uploadType: 'fuel_receipt' | 'fuel_pump' | 'odometer' =
         phase === 'receipt' ? 'fuel_receipt' : phase === 'pump' ? 'fuel_pump' : 'odometer';
@@ -584,11 +626,26 @@ export function FuelEntryScreen() {
 
       const [uploaded, unifiedFromParallel] = await Promise.all([
         driverTripsAPI.uploadFuelOdometer(uploadParams),
-        phase !== 'pump' && visionToken
+        phase === 'receipt' && visionToken
           ? analyzeFuelCaptureUnified(uploadUri, visionToken, phase)
           : Promise.resolve(null),
       ]);
+      if (captureGenerationRef.current[phase] !== seq) return;
       let unifiedVision: FuelVisionUnifiedResult | null = unifiedFromParallel;
+      if (phase === 'odometer') {
+        const fromUpload = fuelUnifiedVisionFromUploadPayload(
+          (uploaded as { fuelUnifiedVision?: unknown }).fuelUnifiedVision,
+        );
+        const uploadKm = fromUpload?.odometer_reading ?? null;
+        const parallelKm = unifiedFromParallel?.odometer_reading ?? null;
+        if (uploadKm != null && uploadKm >= 10000) {
+          unifiedVision = fromUpload;
+        } else if (parallelKm != null && parallelKm >= 10000) {
+          unifiedVision = unifiedFromParallel;
+        } else if (fromUpload) {
+          unifiedVision = fromUpload;
+        }
+      }
       if (phase === 'pump') {
         const fromUpload = fuelUnifiedVisionFromUploadPayload(
           (uploaded as { fuelUnifiedVision?: unknown }).fuelUnifiedVision,
@@ -612,6 +669,8 @@ export function FuelEntryScreen() {
       const fraudFlags = (Array.isArray(uploaded.fraudFlags) ? uploaded.fraudFlags : []).filter(
         (f) => f !== 'OCR_TIMESTAMP_MISMATCH'
       );
+      if (captureGenerationRef.current[phase] !== seq) return;
+
       if (phase === 'receipt') {
         setEntryFlags((prev) => {
           const rest = prev.filter((f) => f !== 'OCR_TIMESTAMP_MISMATCH');
@@ -638,6 +697,7 @@ export function FuelEntryScreen() {
       }
 
       const extracted = (uploaded.extracted ?? {}) as Record<string, unknown>;
+      let odometerAccepted = false;
       if (phase === 'odometer') {
         const rawOdo = extracted.odometer;
         let odoVal: number | null = null;
@@ -665,17 +725,30 @@ export function FuelEntryScreen() {
             }
           }
         }
-        if (
+        const visionKm = unifiedVision?.odometer_reading ?? null;
+        if (visionKm != null && visionKm >= 10000 && visionKm <= 9_999_999) {
+          // Total ODO (e.g. 54556) beats a cautious retake when RANGE km is also on the cluster.
+          odoVal = visionKm;
+        } else if (
           unifiedVision &&
           (unifiedVision.confidence === 'high' || unifiedVision.confidence === 'medium') &&
           !unifiedVision.should_retake &&
-          unifiedVision.odometer_reading != null &&
-          unifiedVision.odometer_reading > 0
+          visionKm != null &&
+          visionKm > 0
         ) {
-          odoVal = unifiedVision.odometer_reading;
+          odoVal = visionKm;
+        }
+        if (
+          odoVal != null &&
+          odoVal < 1000 &&
+          (unifiedVision?.should_retake === true || unifiedVision?.confidence === 'low')
+        ) {
+          // 3-digit km with a retake flag is RANGE / distance-to-empty, not the ODO total.
+          odoVal = null;
         }
         setOcrOdometerValue(odoVal);
         setOdometer(odoVal != null ? String(odoVal) : '');
+        odometerAccepted = odoVal != null && odoVal >= 10000;
         if (__DEV__) {
           const mini = mergeFuelOcrDebugWithClientUnified(null, 'odometer', unifiedVision, Boolean(visionToken));
           // eslint-disable-next-line no-console
@@ -704,7 +777,16 @@ export function FuelEntryScreen() {
             (unifiedVision.confidence === 'high' || unifiedVision.confidence === 'medium')
           ) {
             const ua = parsePositiveAmount(unifiedVision.fuel_amount);
-            if (ua != null) amountVal = ua;
+            const uv = parsePositiveAmount(unifiedVision.volume);
+            const ur = parsePositiveAmount(unifiedVision.rate);
+            if (uv != null) qtyVal = uv;
+            if (ua != null && uv != null && ur != null && ur >= 70 && ur <= 140) {
+              const expected = Math.round(uv * ur * 100) / 100;
+              const amountOff = ua < 800 || Math.abs(ua - expected) / expected > 0.15;
+              amountVal = expected >= 500 && amountOff ? expected : ua;
+            } else if (ua != null) {
+              amountVal = ua;
+            }
           }
         }
 
@@ -715,6 +797,8 @@ export function FuelEntryScreen() {
           if (!serverVisionOk && !unifiedTrust) {
             amountVal = null;
             qtyVal = null;
+          } else if (amountVal != null && qtyVal != null) {
+            amountVal = snapPumpAmountPaise(amountVal, qtyVal, parsePositiveAmount(unifiedVision?.rate));
           }
         }
 
@@ -725,8 +809,9 @@ export function FuelEntryScreen() {
           setOcrReceiptAmount(amountVal);
           ocrReceiptAmountRef.current = amountVal;
           setOcrReceiptQuantity(qtyVal);
+          ocrReceiptQuantityRef.current = qtyVal;
           if (amountVal != null) {
-            setTotalCost(String(amountVal));
+            setTotalCost(formatFuelAmount(amountVal));
           } else {
             const pump = ocrPumpAmountRef.current;
             setTotalCost(pump != null && pump > 0 ? String(pump) : '');
@@ -734,10 +819,10 @@ export function FuelEntryScreen() {
           const pumpAmt = ocrPumpAmountRef.current;
           if (ocrPumpAndReceiptTotalsDangerouslyMismatch(amountVal, pumpAmt)) {
             setOcrPumpQuantity(null);
-            setQuantity('');
-          } else {
-            const pumpHasQty = pumpPhoto != null && ocrPumpQuantity != null;
-            if (!pumpHasQty) setQuantity(qtyVal != null ? String(qtyVal) : '');
+            ocrPumpQuantityRef.current = null;
+            if (qtyVal != null) setQuantity(String(qtyVal));
+          } else if (qtyVal != null && ocrPumpQuantityRef.current == null) {
+            setQuantity(String(qtyVal));
           }
         } else {
           setOcrPumpAmount(amountVal);
@@ -747,13 +832,21 @@ export function FuelEntryScreen() {
           const pumpTotalsMismatch = ocrPumpAndReceiptTotalsDangerouslyMismatch(receiptOcr, amountVal);
           if (pumpTotalsMismatch || pumpMismatchTight) {
             setOcrPumpQuantity(null);
-            setQuantity('');
-          } else {
+            ocrPumpQuantityRef.current = null;
+            const receiptQty = ocrReceiptQuantityRef.current;
+            if (receiptQty != null) setQuantity(String(receiptQty));
+          } else if (qtyVal != null) {
             setOcrPumpQuantity(qtyVal);
-            setQuantity(qtyVal != null ? String(qtyVal) : '');
+            ocrPumpQuantityRef.current = qtyVal;
+            setQuantity(String(qtyVal));
+          } else {
+            setOcrPumpQuantity(null);
+            ocrPumpQuantityRef.current = null;
+            const receiptQty = ocrReceiptQuantityRef.current;
+            if (receiptQty != null) setQuantity(String(receiptQty));
           }
           const hasReceipt = ocrReceiptAmountRef.current != null && ocrReceiptAmountRef.current > 0;
-          if (!hasReceipt && amountVal != null) setTotalCost(String(amountVal));
+          if (!hasReceipt && amountVal != null) setTotalCost(formatFuelAmount(amountVal));
           else if (!hasReceipt && amountVal == null) setTotalCost('');
         }
 
@@ -801,12 +894,12 @@ export function FuelEntryScreen() {
 
         if (ocrRetake && retakeAlert) {
           Alert.alert(retakeAlert.title, retakeAlert.message);
-        } else if (phase === 'receipt' && amountVal == null) {
+        } else if (!cameraOpenRef.current && phase === 'receipt' && amountVal == null) {
           Alert.alert(
             'Could not read receipt total',
             'We could not detect the bill amount on this photo. Retake the receipt with the total in clear view, less glare, and good lighting. You can still enter the amount manually.'
           );
-        } else if (phase === 'pump') {
+        } else if (!cameraOpenRef.current && phase === 'pump') {
           if (extracted.pump_reading_rejected !== true && amountVal == null) {
             Alert.alert(
               'Could not read pump amount',
@@ -834,7 +927,12 @@ export function FuelEntryScreen() {
         if (ft) setFuelType(ft);
       }
 
-      if (unifiedVision?.should_retake === true && unifiedVision.confidence === 'low') {
+      if (
+        !cameraOpenRef.current &&
+        !odometerAccepted &&
+        unifiedVision?.should_retake === true &&
+        unifiedVision.confidence === 'low'
+      ) {
         Alert.alert('Retake suggested', FUEL_RETAKE_GUIDANCE_MESSAGE);
       }
 
@@ -850,6 +948,11 @@ export function FuelEntryScreen() {
       } catch {
         /* optional geocode */
       }
+        } catch (e) {
+          if (captureGenerationRef.current[phase] !== seq) return;
+          Alert.alert('Error', e instanceof Error ? e.message : 'Failed to process photos');
+        }
+      })();
     } catch (e) {
       if (e instanceof Error && e.message === 'cancelled') {
         return;
@@ -865,15 +968,20 @@ export function FuelEntryScreen() {
       Alert.alert('Validation', 'Please select a vehicle');
       return;
     }
-    if (pumpOcrGateBlocked) {
+    const manualAmountsReady = parseFloat(quantity) > 0 && parseFloat(totalCost) > 0;
+    if (pumpOcrGateBlocked && !manualAmountsReady) {
       Alert.alert(
         'Pump photo not validated',
-        'The last pump photo failed validation or is on hold for a receipt mismatch. Retake the pump photo or resolve the review flag before saving.'
+        'The pump photo could not be read. Enter the quantity and total cost, or retake the pump photo.'
       );
       return;
     }
     if (!receiptPhoto || !pumpPhoto || !odometerPhoto) {
       Alert.alert('Validation', 'Capture Fuel receipt, Pump photo, and Odometer photo before submitting');
+      return;
+    }
+    if (!receiptPhoto.imageUrl || !pumpPhoto.imageUrl || !odometerPhoto.imageUrl) {
+      Alert.alert('Photos still sending', 'The photos are still uploading. Wait a few seconds, then save.');
       return;
     }
     if (![receiptPhoto.meta.capturedAt, pumpPhoto.meta.capturedAt, odometerPhoto.meta.capturedAt].every((at) => isCapturedWithinWindow(at))) {
@@ -999,13 +1107,14 @@ export function FuelEntryScreen() {
       ? [receiptPhoto.meta.capturedAt, pumpPhoto.meta.capturedAt, odometerPhoto.meta.capturedAt].every((at) => isCapturedWithinWindow(at))
       : false;
   const numericValid = !Number.isNaN(qNum) && qNum > 0 && !Number.isNaN(tNum) && tNum > 0 && !Number.isNaN(odoNum) && odoNum > 0;
+  const manualAmountsReady = !Number.isNaN(qNum) && qNum > 0 && !Number.isNaN(tNum) && tNum > 0;
 
   const saveDisabled =
     submitting ||
     !photosCaptured ||
     !captureTimesValid ||
     !numericValid ||
-    pumpOcrGateBlocked ||
+    (pumpOcrGateBlocked && !manualAmountsReady) ||
     entryFlags.includes('FUEL_AMOUNT_MISMATCH') ||
     entryFlags.includes('PUMP_RECEIPT_MISMATCH_HOLD');
 
@@ -1040,124 +1149,117 @@ export function FuelEntryScreen() {
         showsVerticalScrollIndicator={true}
       >
         <View style={styles.captureRow}>
-          <View style={styles.captureCard}>
+          <TouchableOpacity
+            style={[styles.captureCard, capturingPhase !== null && styles.captureCardBusy]}
+            activeOpacity={0.75}
+            disabled={capturingPhase !== null}
+            onPress={() => {
+              setReceiptPhoto(null);
+              setOcrReceiptAmount(null);
+              setOcrReceiptQuantity(null);
+              ocrReceiptAmountRef.current = null;
+              ocrReceiptQuantityRef.current = null;
+              receiptPairedOcrTextRef.current = null;
+              setFuelOcrDebug(null);
+              setFuelOcrDebugOpen(false);
+              setTotalCost('');
+              void handleCapturePhoto('receipt');
+            }}
+          >
             <Text style={styles.captureCardTitle} numberOfLines={2}>
               Receipt *
             </Text>
             {receiptPhoto ? (
               <>
-                <Image source={{ uri: receiptPhoto.localUri }} style={styles.capturePreview} />
-                <TouchableOpacity
-                  style={styles.retakeBtnSm}
-                  onPress={() => {
-                    setReceiptPhoto(null);
-                    setOcrReceiptAmount(null);
-                    setOcrReceiptQuantity(null);
-                    ocrReceiptAmountRef.current = null;
-                    receiptPairedOcrTextRef.current = null;
-                    setFuelOcrDebug(null);
-                    setFuelOcrDebugOpen(false);
-                    // Clear receipt total until new OCR runs (avoids stale closure + wrong pump fallback before upload completes).
-                    setTotalCost('');
-                    void handleCapturePhoto('receipt');
-                  }}
-                  disabled={capturingPhase !== null}
-                >
+                <Image source={{ uri: receiptPhoto.localUri }} style={styles.capturePreview} pointerEvents="none" />
+                <View style={styles.retakeBtnSm}>
                   <Text style={styles.retakeBtnTextSm}>Retake</Text>
-                </TouchableOpacity>
+                </View>
               </>
             ) : (
-              <TouchableOpacity
-                style={styles.captureBtnSm}
-                onPress={() => void handleCapturePhoto('receipt')}
-                disabled={capturingPhase !== null || !vehicleId}
-              >
+              <View style={styles.captureBtnSm}>
                 {capturingPhase === 'receipt' ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Ionicons name="receipt-outline" size={18} color="#fff" />
                 )}
                 <Text style={styles.captureBtnTextSm}>Capture</Text>
-              </TouchableOpacity>
+              </View>
             )}
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.captureCard}>
+          <TouchableOpacity
+            style={[styles.captureCard, capturingPhase !== null && styles.captureCardBusy]}
+            activeOpacity={0.75}
+            disabled={capturingPhase !== null}
+            onPress={() => {
+              setPumpPhoto(null);
+              setOcrPumpAmount(null);
+              setOcrPumpQuantity(null);
+              ocrPumpAmountRef.current = null;
+              ocrPumpQuantityRef.current = null;
+              setPumpOcrGateBlocked(false);
+              setFuelOcrDebug(null);
+              setFuelOcrDebugOpen(false);
+              const receiptQty = ocrReceiptQuantityRef.current;
+              setQuantity(receiptQty != null ? String(receiptQty) : '');
+              void handleCapturePhoto('pump');
+            }}
+          >
             <Text style={styles.captureCardTitle} numberOfLines={2}>
               Pump *
             </Text>
             {pumpPhoto ? (
               <>
-                <Image source={{ uri: pumpPhoto.localUri }} style={styles.capturePreview} />
-                <TouchableOpacity
-                  style={styles.retakeBtnSm}
-                  onPress={() => {
-                    setPumpPhoto(null);
-                    setOcrPumpAmount(null);
-                    setOcrPumpQuantity(null);
-                    ocrPumpAmountRef.current = null;
-                    setPumpOcrGateBlocked(false);
-                    setFuelOcrDebug(null);
-                    setFuelOcrDebugOpen(false);
-                    setQuantity('');
-                    void handleCapturePhoto('pump');
-                  }}
-                  disabled={capturingPhase !== null}
-                >
+                <Image source={{ uri: pumpPhoto.localUri }} style={styles.capturePreview} pointerEvents="none" />
+                <View style={styles.retakeBtnSm}>
                   <Text style={styles.retakeBtnTextSm}>Retake</Text>
-                </TouchableOpacity>
+                </View>
               </>
             ) : (
-              <TouchableOpacity
-                style={styles.captureBtnSm}
-                onPress={() => void handleCapturePhoto('pump')}
-                disabled={capturingPhase !== null || !vehicleId}
-              >
+              <View style={styles.captureBtnSm}>
                 {capturingPhase === 'pump' ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Ionicons name="flame-outline" size={18} color="#fff" />
                 )}
                 <Text style={styles.captureBtnTextSm}>Capture</Text>
-              </TouchableOpacity>
+              </View>
             )}
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.captureCard}>
+          <TouchableOpacity
+            style={[styles.captureCard, capturingPhase !== null && styles.captureCardBusy]}
+            activeOpacity={0.75}
+            disabled={capturingPhase !== null}
+            onPress={() => {
+              setOdometerPhoto(null);
+              setOcrOdometerValue(null);
+              setOdometer('');
+              void handleCapturePhoto('odometer');
+            }}
+          >
             <Text style={styles.captureCardTitle} numberOfLines={2}>
               Odo *
             </Text>
             {odometerPhoto ? (
               <>
-                <Image source={{ uri: odometerPhoto.localUri }} style={styles.capturePreview} />
-                <TouchableOpacity
-                  style={styles.retakeBtnSm}
-                  onPress={() => {
-                    setOdometerPhoto(null);
-                    setOcrOdometerValue(null);
-                    setOdometer('');
-                    void handleCapturePhoto('odometer');
-                  }}
-                  disabled={capturingPhase !== null}
-                >
+                <Image source={{ uri: odometerPhoto.localUri }} style={styles.capturePreview} pointerEvents="none" />
+                <View style={styles.retakeBtnSm}>
                   <Text style={styles.retakeBtnTextSm}>Retake</Text>
-                </TouchableOpacity>
+                </View>
               </>
             ) : (
-              <TouchableOpacity
-                style={[styles.captureBtnSm, styles.captureBtnOutline]}
-                onPress={() => void handleCapturePhoto('odometer')}
-                disabled={capturingPhase !== null || !vehicleId}
-              >
+              <View style={[styles.captureBtnSm, styles.captureBtnOutline]}>
                 {capturingPhase === 'odometer' ? (
                   <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
                   <Ionicons name="speedometer-outline" size={18} color={colors.primary} />
                 )}
                 <Text style={[styles.captureBtnTextSm, styles.captureBtnTextOutline]}>Capture</Text>
-              </TouchableOpacity>
+              </View>
             )}
-          </View>
+          </TouchableOpacity>
         </View>
 
         {entryFlags.includes('FUEL_AMOUNT_MISMATCH') ? (
@@ -1465,6 +1567,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.gray200,
   },
+  captureCardBusy: { opacity: 0.55 },
   captureCardTitle: { fontSize: 11, fontWeight: '700', color: colors.gray700, marginBottom: 6, minHeight: 28 },
   capturePreview: { width: '100%', height: 76, borderRadius: 8, backgroundColor: colors.gray50, marginBottom: 6 },
   retakeBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.primary, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },

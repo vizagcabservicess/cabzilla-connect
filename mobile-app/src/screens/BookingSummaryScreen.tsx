@@ -33,6 +33,7 @@ import { colors, fonts } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/types';
 import type { Location } from '../types';
 import type { TripType } from '../types';
+import { resolveVehicleImageUrl } from '../utils/mediaUrl';
 
 export type BookingSummaryParams = {
   pickupLocation: Location;
@@ -94,6 +95,7 @@ export function BookingSummaryScreen({ route, navigation }: Props) {
     selectedVehicle,
     totalPrice: passedTotalPrice,
   } = route.params;
+  const vehiclePhoto = resolveVehicleImageUrl(selectedVehicle);
 
   const [fares, setFares] = React.useState<Record<string, { basePrice: number; pricePerKm: number; driverAllowance: number }>>({});
   const [localMatrix, setLocalMatrix] = React.useState<LocalPackageMatrix | null>(null);
@@ -224,7 +226,7 @@ export function BookingSummaryScreen({ route, navigation }: Props) {
       hourlyPackage: tripType === 'local' ? hourlyPackage : undefined,
       tourId: tripType === 'tour' ? tourId : undefined,
       tourName: tripType === 'tour' ? tourName : undefined,
-      selectedVehicle,
+      selectedVehicle: { ...selectedVehicle, image: vehiclePhoto },
       totalPrice,
       paymentMode,
     });
@@ -364,13 +366,7 @@ export function BookingSummaryScreen({ route, navigation }: Props) {
 
         {/* Vehicle card - web uses bg-blue-50 (light blue) */}
         <View style={styles.vehicleCard}>
-          {selectedVehicle.image ? (
-            <Image source={{ uri: selectedVehicle.image }} style={styles.vehicleImage} />
-          ) : (
-            <View style={[styles.vehicleImage, styles.vehicleImagePlaceholder]}>
-              <Text style={styles.vehiclePlaceholderText}>🚗</Text>
-            </View>
-          )}
+          <Image source={{ uri: vehiclePhoto }} style={styles.vehicleImage} resizeMode="contain" />
           <View style={styles.vehicleInfo}>
             <Text style={styles.vehicleName}>{selectedVehicle.name}</Text>
             <View style={styles.vehicleSpecs}>

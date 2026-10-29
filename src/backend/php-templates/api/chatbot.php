@@ -21,9 +21,77 @@ function sendError($message, $code = 500) {
     exit;
 }
 
-// IMPORTANT: Using API keys directly in code is not recommended for production.
-// It's better to store this in a secure environment variable.
-define('OPENAI_API_KEY', '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');
+function cabzilla_server_env($name) {
+    $fromEnv = getenv($name);
+    if (is_string($fromEnv) && trim($fromEnv) !== '') {
+        return trim($fromEnv);
+    }
+    if (isset($_ENV[$name]) && trim((string) $_ENV[$name]) !== '') {
+        return trim((string) $_ENV[$name]);
+    }
+    static $fileVars = null;
+    if ($fileVars === null) {
+        $fileVars = [];
+        foreach ([__DIR__ . '/../.env', __DIR__ . '/.env', dirname(__DIR__, 2) . '/.env'] as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            if (!is_array($lines)) {
+                continue;
+            }
+            foreach ($lines as $line) {
+                if ($line === '' || $line[0] === '#') {
+                    continue;
+                }
+                $parts = explode('=', $line, 2);
+                if (count($parts) !== 2) {
+                    continue;
+                }
+                $k = trim($parts[0]);
+                $v = trim($parts[1]);
+                $q = strlen($v) >= 2 ? $v[0] : '';
+                if (($q === '"' || $q === "'") && substr($v, -1) === $q) {
+                    $v = substr($v, 1, -1);
+                }
+                $fileVars[$k] = $v;
+            }
+            break;
+        }
+    }
+    return isset($fileVars[$name]) ? trim((string) $fileVars[$name]) : '';
+}
+
+function cabzilla_rate_limit($bucket, $max, $windowSec) {
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '0');
+    $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'cabzilla-rl';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0700, true);
+    }
+    $file = $dir . DIRECTORY_SEPARATOR . hash('sha256', $bucket . '|' . $ip) . '.json';
+    $now = time();
+    $hits = [];
+    if (is_file($file)) {
+        $raw = json_decode((string) @file_get_contents($file), true);
+        if (is_array($raw)) {
+            $hits = $raw;
+        }
+    }
+    $fresh = [];
+    foreach ($hits as $t) {
+        if (is_int($t) && $t > $now - $windowSec) {
+            $fresh[] = $t;
+        }
+    }
+    if (count($fresh) >= $max) {
+        return false;
+    }
+    $fresh[] = $now;
+    @file_put_contents($file, json_encode($fresh), LOCK_EX);
+    return true;
+}
+
+$openaiKey = cabzilla_server_env('OPENAI_API_KEY');
 
 // Get the request body
 $input = json_decode(file_get_contents('php://input'), true);
@@ -33,8 +101,14 @@ $history = $input['history'] ?? [];
 if (empty($user_message)) {
     sendError('Message is required.', 400);
 }
+if (strlen($user_message) > 500) {
+    sendError('Message is too long.', 400);
+}
+if (!cabzilla_rate_limit('chatbot', 20, 600)) {
+    sendError('Too many messages. Try again in a few minutes.', 429);
+}
 
-if (OPENAI_API_KEY === 'YOUR_OPENAI_API_KEY_HERE' || empty(OPENAI_API_KEY)) {
+if ($openaiKey === '' || $openaiKey === 'YOUR_OPENAI_API_KEY_HERE') {
     sendResponse(['reply' => 'The chatbot is not configured yet. An API key for the AI service is missing.']);
 }
 
@@ -71,7 +145,7 @@ try {
         'messages' => $messages,
     ]));
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Bearer ' . OPENAI_API_KEY,
+        'Authorization: Bearer ' . $openaiKey,
         'Content-Type: application/json'
     ]);
 

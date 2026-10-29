@@ -1,5 +1,6 @@
 import { endOfDay, isValid, parseISO, startOfDay } from 'date-fns';
 import type { Booking } from '@/types/api';
+import { bookingAmountWithExtra, extraCollectedAmount, extraCollectedCategoryLabel } from '@/lib/bookingExtra';
 
 export function bookingPickupInDateRange(
   pickupDateStr: string | undefined,
@@ -57,7 +58,9 @@ export function buildBookingExportRows(
     Drop: formatDrop(b.dropLocation ?? ''),
     'Pickup date': formatDateTime(b.pickupDate ?? ''),
     Vehicle: b.cabType ?? '',
-    Amount: formatMoney(Number(b.totalAmount ?? 0)),
+    Amount: formatMoney(bookingAmountWithExtra(b)),
+    Extra: extraCollectedAmount(b) > 0 ? formatMoney(extraCollectedAmount(b)) : '',
+    'Extra reason': extraCollectedCategoryLabel(b.extraCollectedCategory ?? b.extra_collected_category),
     Status: b.status ?? '',
     'Payment status': (b as Booking & { payment_status?: string }).payment_status ?? '—',
   }));

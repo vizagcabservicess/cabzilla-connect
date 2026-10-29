@@ -88,6 +88,7 @@ function mapDashboardTripItem(raw: Record<string, unknown>): DriverDashboardTrip
     tripMode: toStringSafe(t.tripMode ?? t.trip_mode),
     cabType: toStringSafe(t.cabType ?? t.cab_type),
     fuelSpend: toNum(t.fuelSpend ?? t.fuel_spend),
+    fuelLitres: toNum(t.fuelLitres ?? t.fuel_litres ?? t.fuel_quantity),
     startTime,
     endTime,
     pickupLocation: toStringSafe(t.pickupLocation ?? t.pickup_location ?? t.pickup),
@@ -98,12 +99,40 @@ function mapDashboardTripItem(raw: Record<string, unknown>): DriverDashboardTrip
     storedDistanceKm: toNum(t.storedDistanceKm ?? t.stored_distance_km ?? t.distance_km),
     paymentType: (t.paymentType ?? t.payment_type ?? 'self_paid') as DriverDashboardTrip['paymentType'],
     driverCollectedAmount,
+    extraCollectedAmount: (() => {
+      const rawExtra = t.extraCollectedAmount ?? t.extra_collected_amount;
+      if (rawExtra == null || rawExtra === '') return null;
+      const n = toNum(rawExtra);
+      return Number.isFinite(n) ? n : null;
+    })(),
+    extraCollectedCategory: toStringSafe(t.extraCollectedCategory ?? t.extra_collected_category) || null,
     startingOdometer: toNum(t.startingOdometer ?? t.starting_odometer ?? t.start_odometer),
     endingOdometer: toNum(t.endingOdometer ?? t.ending_odometer ?? t.end_odometer),
     totalKilometers: toNum(t.totalKilometers ?? t.total_kilometers ?? t.total_km ?? t.distance_km),
     totalDurationHours,
     tripAmount: toNum(t.tripAmount ?? t.trip_amount ?? t.total_amount),
+    advancePaidAmount: toNum(t.advancePaidAmount ?? t.advance_paid_amount ?? t.advance_received),
+    driverCollectsPayment: t.driverCollectsPayment !== false && t.driver_collects_payment !== 0 && t.driver_collects_payment !== false && t.driver_collects_payment !== '0',
+    additionalRequirements: (t.additionalRequirements ?? t.additional_requirements ?? null) as string | null,
+    hourlyPackage: toStringSafe(t.hourlyPackage ?? t.hourly_package),
+    pickupMapUrl: toStringSafe(t.pickupMapUrl ?? t.pickup_map_url),
+    pickupLat: t.pickupLat != null && t.pickupLat !== '' ? toNum(t.pickupLat) : t.pickup_lat != null && t.pickup_lat !== '' ? toNum(t.pickup_lat) : null,
+    pickupLng: t.pickupLng != null && t.pickupLng !== '' ? toNum(t.pickupLng) : t.pickup_lng != null && t.pickup_lng !== '' ? toNum(t.pickup_lng) : null,
+    tripTerms: parseTripTerms(t.tripTerms ?? t.trip_terms),
   };
+}
+
+function parseTripTerms(raw: unknown): DriverDashboardTrip['tripTerms'] {
+  let value = raw;
+  if (typeof value === 'string' && value.trim() !== '') {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== 'object') return null;
+  return value as DriverDashboardTrip['tripTerms'];
 }
 
 /** Clears cached dashboard payload (forces next GET to hit the server). */
@@ -112,12 +141,25 @@ export async function invalidateDriverDashboardCache(): Promise<void> {
   await AsyncStorage.removeItem(cacheKey);
 }
 
+function withoutCompletedTrips(data: DriverDashboardData): DriverDashboardData {
+  const items = (data.trips?.items ?? []).filter((t) => t.status === 'assigned' || t.status === 'in_progress');
+  return {
+    ...data,
+    trips: {
+      ...data.trips,
+      items,
+    },
+  };
+}
+
 export const driverDashboardAPI = {
   getDashboard: async (filters?: DriverDashboardFilters): Promise<DriverDashboardData> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
     const base = getResolvedApiOrigin();
     const cacheKey = await dashboardCacheKey();
+    const user = await authAPI.getStoredUser();
+    const driverView = user?.role === 'driver';
     if (process.env.EXPO_PUBLIC_SHOW_TRIP_ASSIGNMENT_DEBUG === '1') {
       console.warn('[driverDashboard] GET', `${base || '(relative)'}/api/driver/dashboard.php`);
     }
@@ -133,8 +175,10 @@ export const driverDashboardAPI = {
       }
       const payload = data.data as DriverDashboardData & { fuelRecords?: { items?: Record<string, unknown>[] } };
       const tripRaw = Array.isArray(payload?.trips?.items) ? payload.trips.items : [];
-      const tripItems = tripRaw.map((row) => mapDashboardTripItem(row as Record<string, unknown>));
-      const items = Array.isArray(payload?.fuelRecords?.items) ? payload.fuelRecords.items.map((r) => normalizeFuelItem(r)) : [];
+      const tripItems = tripRaw.map((row) => mapDashboardTripItem(row as unknown as Record<string, unknown>));
+      const items = Array.isArray(payload?.fuelRecords?.items)
+        ? payload.fuelRecords.items.map((r) => normalizeFuelItem(r as unknown as Record<string, unknown>))
+        : [];
       const mapped: DriverDashboardData = {
         ...payload,
         trips: {
@@ -152,12 +196,14 @@ export const driverDashboardAPI = {
           offset: payload.fuelRecords?.offset ?? 0,
         },
       };
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(mapped));
-      return mapped;
+      const visible = driverView ? withoutCompletedTrips(mapped) : mapped;
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(visible));
+      return visible;
     } catch (error) {
       const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
-        return JSON.parse(cached) as DriverDashboardData;
+        const parsed = JSON.parse(cached) as DriverDashboardData;
+        return driverView ? withoutCompletedTrips(parsed) : parsed;
       }
       throw error;
     }

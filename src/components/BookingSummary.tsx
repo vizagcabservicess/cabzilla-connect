@@ -12,7 +12,7 @@ import { isValidTripDate } from '@/lib/dateUtils';
 import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, Briefcase, Fuel, Check, X, Edit2, MessageCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
-import { calculateFare, calculateOutstationRoundTripFare, OUTSTATION_INCLUDED_KM_PER_DAY, oneWayOutstationExtra } from '@/lib/fareCalculationService';
+import { calculateFare, calculateOutstationRoundTripFare, oneWayOutstationExtra } from '@/lib/fareCalculationService';
 import { getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import { useFare } from '../hooks/useFare';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
@@ -1465,7 +1465,7 @@ export const BookingSummary = ({
     if (tripMode === 'round-trip') {
       includedKm = distance * 2; // Actual round-trip distance
     } else if (tripMode === 'one-way') {
-      includedKm = oneWayViaStops ? OUTSTATION_INCLUDED_KM_PER_DAY : 0;
+      includedKm = 0;
     }
   }
 

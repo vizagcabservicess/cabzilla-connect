@@ -1,3 +1,5 @@
+import { resolveVehicleImageUrl } from '../utils/mediaUrl';
+
 export function keepFilled(current: string, next?: string | null): string {
   if (current.trim()) return current;
   return (next || '').trim();
@@ -103,15 +105,7 @@ export function mapsUrl(lat: number, lng: number): string {
 }
 
 export function fleetPhoto(type: string): string {
-  const name = type.toLowerCase();
-  const origin = 'https://www.vizagtaxihub.com/uploads';
-  if (name.includes('urban')) return `${origin}/og-image-urbania.jpg`;
-  if (name.includes('fortun')) return `${origin}/taxi-services--visakhapatnam-fortuner.png`;
-  if (name.includes('hycross')) return `${origin}/taxi-services--visakhapatnam-innova-hycross.png`;
-  if (name.includes('innova') || name.includes('crysta')) return `${origin}/taxi-services--visakhapatnam-innova-crysta.png`;
-  if (name.includes('ertiga')) return `${origin}/ertiga-taxi-services-in-visakhapatnam-vizagtaxihub.png`;
-  if (name.includes('tempo') || name.includes('traveller')) return `${origin}/taxi-services--visakhapatnam-tempo-traveller.png`;
-  return `${origin}/taxi-services--visakhapatnam-sedan.png`;
+  return resolveVehicleImageUrl({ name: type });
 }
 
 function isOdometerYear(value: number): boolean {

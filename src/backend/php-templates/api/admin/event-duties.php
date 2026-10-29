@@ -42,6 +42,9 @@ switch ($action) {
     case 'set_notes':
         vth_event_ok(['duty' => vth_duty_set_notes($conn, $admin, $body)], 'Notes updated');
         break;
+    case 'set_toll_parking':
+        vth_event_ok(['duty' => vth_duty_set_toll_parking($conn, $admin, $body)], 'Tolls and parking updated');
+        break;
     case 'delete':
         vth_duty_delete($conn, $admin, (int) ($body['id'] ?? 0));
         vth_event_ok([], 'Duty deleted');
@@ -370,6 +373,62 @@ function vth_duty_set_notes(mysqli $conn, array $admin, array $body): array
     $upd->execute();
     $upd->close();
     vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'duty_notes_updated', 'duty', $id, (int) $old['event_id'], $old['notes'], $notes);
+    return vth_duty_get($conn, $id) ?: [];
+}
+
+function vth_duty_ensure_toll_parking_column(mysqli $conn): void
+{
+    try {
+        $col = $conn->query("SHOW COLUMNS FROM `vth_event_duties` LIKE 'toll_parking'");
+        if ($col instanceof mysqli_result && $col->num_rows > 0) {
+            return;
+        }
+        $conn->query('ALTER TABLE vth_event_duties ADD COLUMN toll_parking DECIMAL(10,2) NOT NULL DEFAULT 0');
+    } catch (Throwable $e) {
+        // The column was added by another request, or the update below reports the failure.
+    }
+}
+
+function vth_duty_set_toll_parking(mysqli $conn, array $admin, array $body): array
+{
+    $id = (int) ($body['id'] ?? 0);
+    $raw = $body['tollParking'] ?? null;
+    if ($raw === '' || $raw === null) {
+        $amount = 0.0;
+    } elseif (!is_numeric($raw)) {
+        vth_event_error('Tolls and parking must be a number');
+    } else {
+        $amount = round((float) $raw, 2);
+    }
+    if ($amount < 0 || $amount > 999999.99) {
+        vth_event_error('Tolls and parking must be zero or more');
+    }
+    $stmt = $conn->prepare('SELECT * FROM vth_event_duties WHERE id = ?');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $old = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$old) {
+        vth_event_error('Duty not found', 404);
+    }
+    vth_duty_ensure_toll_parking_column($conn);
+    $stored = number_format($amount, 2, '.', '');
+    try {
+        $upd = $conn->prepare('UPDATE vth_event_duties SET toll_parking = ? WHERE id = ?');
+        if (!$upd) {
+            vth_event_error('Could not save tolls and parking');
+        }
+        $upd->bind_param('si', $stored, $id);
+        if (!$upd->execute()) {
+            $upd->close();
+            vth_event_error('Could not save tolls and parking');
+        }
+        $upd->close();
+    } catch (Throwable $e) {
+        vth_event_error('Could not save tolls and parking');
+    }
+    $previous = isset($old['toll_parking']) ? (string) $old['toll_parking'] : '0';
+    vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'duty_toll_parking_updated', 'duty', $id, (int) $old['event_id'], $previous, (string) $amount);
     return vth_duty_get($conn, $id) ?: [];
 }
 

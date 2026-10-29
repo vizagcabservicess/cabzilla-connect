@@ -131,6 +131,8 @@ try {
     }
 
     ensureAssignDriverSchema($conn);
+    require_once __DIR__ . '/../utils/duty_days.php';
+    duty_ensure_schema($conn);
 
     // Start transaction
     $conn->begin_transaction();
@@ -184,7 +186,7 @@ try {
         }
 
         $bs = strtolower((string)($booking['status'] ?? ''));
-        if (!in_array($bs, ['pending', 'confirmed', 'assigned', 'admin_created'], true)) {
+        if (!in_array($bs, ['pending', 'confirmed', 'assigned', 'admin_created', 'pending_offline_booking'], true)) {
             throw new Exception("Booking cannot be assigned (current status: {$booking['status']})");
         }
         
@@ -217,6 +219,8 @@ try {
         if (!$updateBookingStmt->execute()) {
             throw new Exception("Failed to update booking: " . $updateBookingStmt->error);
         }
+
+        duty_ensure_booking($conn, (int) $bookingId);
         
         // Update driver status to busy
         $updateDriverStmt = $conn->prepare("

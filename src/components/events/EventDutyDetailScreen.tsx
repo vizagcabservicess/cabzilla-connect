@@ -17,11 +17,10 @@ import {
 import { Logo } from '@/components/Logo';
 import { DriverFace } from '@/components/events/DriverFace';
 import {
-  billableDutyEnd,
   dutyClosingTime,
   dutyStatusLabel,
   formatDutyDate,
-  formatDutyDuration,
+  formatReportDutyDuration,
   formatReportingTime,
   formatServerDateTime,
   formatServerTime,
@@ -98,7 +97,7 @@ export function EventDutyDetailScreen({
   const askedToEnd = Boolean(model.endRequestedAt) && canEnd && !panel;
   const showParking = Boolean(parkingAction) && canEnd && !panel;
   const startedClock = formatServerTime(model.openingAt);
-  const totalTime = formatDutyDuration(model.openingAt, billableDutyEnd(model.closingAt, model.endRequestedAt), undefined, model.pausedSeconds) || '—';
+  const totalTime = formatReportDutyDuration(model) || '—';
   const totalKm = model.totalKm != null ? model.totalKm.toLocaleString('en-IN') : '—';
   const openingKm = model.openingKm != null ? model.openingKm.toLocaleString('en-IN') : '—';
   const mapGps = model.openingGps?.lat != null ? model.openingGps : model.closingGps;

@@ -22,7 +22,8 @@
     "test:ai-lead": "npm --prefix visitor-analytics run test:ai-lead",
     "test:checkout-prefill": "npx tsx src/lib/vthAiCheckoutPrefill.selftest.ts",
     "test:vth-ai": "npm run test:ai-lead && npm run test:checkout-prefill",
-    "test:event-duty": "npx tsx --tsconfig tsconfig.json src/lib/eventDuty.selftest.ts"
+    "test:event-duty": "npx tsx --tsconfig tsconfig.json src/lib/eventDuty.selftest.ts",
+    "test:event-billing": "npx tsx --tsconfig tsconfig.json src/lib/eventDutyBilling.selftest.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -71,6 +72,7 @@
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.3.0",
+    "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.23.11",
     "input-otp": "^1.2.4",

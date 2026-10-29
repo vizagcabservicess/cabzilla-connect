@@ -141,6 +141,66 @@ export function getInvoiceTripTypeDisplayForMobile(booking: Record<string, unkno
   return `— (${modeLabel})`;
 }
 
+const INVOICE_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export interface MobileTripSummary {
+  tripType: string;
+  vehicleType: string;
+  vehicleNumber: string;
+  tripDate: string;
+  noOfHours: string;
+  noOfKilometers: string;
+}
+
+export function formatInvoiceTripDateForMobile(dateStr?: unknown): string {
+  if (dateStr == null || String(dateStr).trim() === '') return '';
+  const raw = String(dateStr);
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${day} ${INVOICE_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+export function getDefaultBillingAddressForMobile(booking?: Record<string, unknown>): string {
+  if (!booking) return '';
+  return String(booking.billingAddress ?? booking.billing_address ?? '').trim();
+}
+
+export function getDefaultTripSummaryForMobile(booking?: Record<string, unknown>): MobileTripSummary {
+  if (!booking) {
+    return {
+      tripType: '',
+      vehicleType: '',
+      vehicleNumber: '',
+      tripDate: '',
+      noOfHours: '--',
+      noOfKilometers: '--',
+    };
+  }
+
+  let noOfHours = '--';
+  const hours =
+    booking.hoursIncluded ?? booking.hours_included ?? booking.no_of_hours ?? booking.estimated_hours;
+  if (hours != null && String(hours).trim() !== '') {
+    noOfHours = String(hours);
+  }
+
+  let noOfKilometers = '--';
+  const km = booking.kmIncluded ?? booking.km_included ?? booking.distance;
+  if (km != null && String(km).trim() !== '' && Number(km) > 0) {
+    noOfKilometers = String(Math.round(Number(km)));
+  }
+
+  return {
+    tripType: getInvoiceTripTypeDisplayForMobile(booking),
+    vehicleType: String(booking.cabType ?? booking.cab_type ?? booking.vehicle_type ?? ''),
+    vehicleNumber: String(booking.vehicleNumber ?? booking.vehicle_number ?? '').trim(),
+    tripDate: formatInvoiceTripDateForMobile(booking.pickupDate ?? booking.pickup_date),
+    noOfHours,
+    noOfKilometers,
+  };
+}
+
 export function patchInvoiceHtmlTripTypeCellForMobile(
   html: string,
   booking: Record<string, unknown> | undefined

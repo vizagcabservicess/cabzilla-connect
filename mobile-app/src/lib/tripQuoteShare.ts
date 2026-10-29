@@ -1,6 +1,10 @@
 import { Linking, Share } from 'react-native';
-import { sharePdfFile } from './eventReportExport';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { tripShareUrl, type TripTour } from './tripCart';
+import { buildTourQuotationPdf, type QuotePdfInput } from './tourQuotationPdf';
+
+export type { QuotePdfInput };
 
 export async function shareBuildTripLink(tours: TripTour[]): Promise<void> {
   const url = tripShareUrl(tours);
@@ -19,33 +23,13 @@ export async function shareBuildTripLink(tours: TripTour[]): Promise<void> {
   }
 }
 
-export async function sharePackagePdf(input: {
-  tours: TripTour[];
-  guest?: string;
-  phone?: string;
-  pickup?: string;
-  vehicle?: string;
-  amount?: string;
-  notes?: string;
-}): Promise<void> {
-  const days = input.tours.reduce((sum, tour) => sum + (tour.days || 1), 0);
-  const subtitle = [
-    input.guest ? `Guest: ${input.guest}` : '',
-    input.phone ? `Mobile: ${input.phone}` : '',
-    input.pickup ? `Pickup: ${input.pickup}` : '',
-    input.vehicle ? `Vehicle: ${input.vehicle}` : '',
-    `${days} day${days === 1 ? '' : 's'}`,
-    input.amount ? `Amount: Rs ${input.amount}` : '',
-  ].filter(Boolean).join('  |  ');
-  const rows = input.tours.map((tour, index) => [
-    `${index + 1}. ${tour.name}`,
-    `${tour.days || 1}`,
-  ]);
-  if (input.notes?.trim()) rows.push(['Notes', input.notes.trim()]);
-  await sharePdfFile('vizag-taxi-hub-quotation.pdf', {
-    heading: 'Vizag Taxi Hub quotation',
-    subtitle,
-    headers: ['Package', 'Days'],
-    rows: rows.length > 0 ? rows : [['No packages selected', '-']],
-  });
+export async function sharePackagePdf(input: QuotePdfInput): Promise<void> {
+  const pdf = buildTourQuotationPdf(input);
+  const directory = FileSystem.cacheDirectory;
+  if (!directory) throw new Error('File storage is not available');
+  const path = `${directory}vizag-taxi-hub-quotation.pdf`;
+  await FileSystem.writeAsStringAsync(path, pdf, { encoding: 'utf8' });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(path, { mimeType: 'application/pdf', dialogTitle: 'Vizag Taxi Hub quotation' });
+  }
 }

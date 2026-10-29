@@ -2,7 +2,7 @@
  * Tour Detail Screen - native, matches web TourDetailPage
  * Gallery, Overview/Itinerary/Inclusions tabs, vehicle selection, Book Now
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,10 +22,31 @@ import { loadVehicles } from '../services/vehiclesAPI';
 import { DateTimePickerComponent } from '../components/DateTimePicker';
 import { LocationInput } from '../components/LocationInput';
 import { colors, fonts } from '../theme/colors';
+import { resolveMediaUrl, resolveVehicleImageUrl } from '../utils/mediaUrl';
 import type { RootStackParamList } from '../navigation/types';
 import type { Location } from '../types';
 
 type TabId = 'overview' | 'itinerary' | 'inclusions';
+
+const GALLERY_FALLBACK =
+  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop';
+
+function tourPhotoUrls(tour: TourDetail): string[] {
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  const add = (raw?: string) => {
+    const url = resolveMediaUrl(raw);
+    if (!url) return;
+    const key = url.split('?')[0].replace(/\/+$/, '').toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    urls.push(url);
+  };
+  add(tour.imageUrl);
+  for (const item of tour.gallery || []) add(item.url);
+  if (urls.length === 0) add(GALLERY_FALLBACK);
+  return urls;
+}
 
 function toMinimalLocation(name: string, isInVizag = true): Location {
   return {
@@ -50,8 +71,8 @@ export function TourDetailScreen({ route, navigation }: Props) {
   const [tour, setTour] = useState<TourDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const [vehicles, setVehicles] = useState<{ id: string; name: string; capacity?: number; price: number }[]>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState<{ id: string; name: string; capacity?: number; price: number } | null>(null);
+  const [vehicles, setVehicles] = useState<{ id: string; name: string; capacity?: number; price: number; image?: string }[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState<{ id: string; name: string; capacity?: number; price: number; image?: string } | null>(null);
   const [pickupLocation, setPickupLocation] = useState<Location | null>(
     paramPickup ?? toMinimalLocation('Visakhapatnam')
   );
@@ -66,9 +87,17 @@ export function TourDetailScreen({ route, navigation }: Props) {
   const [paymentMode, setPaymentMode] = useState<'partial' | 'full'>('partial');
   const tripCart = useTripCart();
   const addedToTrip = Boolean(tourId && tripCart.has(tourId));
+  const galleryRef = useRef<ScrollView>(null);
+  const [heroWidth, setHeroWidth] = useState(0);
+  const [photoIndex, setPhotoIndex] = useState(0);
 
   const totalPrice = selectedVehicle?.price ?? 0;
   const partialAmount = Math.round(totalPrice * 0.3);
+
+  useEffect(() => {
+    setPhotoIndex(0);
+    galleryRef.current?.scrollTo({ x: 0, animated: false });
+  }, [tour?.tourId]);
 
   useEffect(() => {
     if (!tourId) {
@@ -122,7 +151,13 @@ export function TourDetailScreen({ route, navigation }: Props) {
                 }
               }
             }
-            return { ...v, price };
+            return {
+              id: String(v.id || ''),
+              name: v.name,
+              capacity: v.capacity,
+              price,
+              image: resolveVehicleImageUrl(v),
+            };
           })
           .filter((v) => v.price > 0);
         setVehicles(withPricing);
@@ -157,6 +192,7 @@ export function TourDetailScreen({ route, navigation }: Props) {
         id: selectedVehicle.id,
         name: selectedVehicle.name,
         capacity: selectedVehicle.capacity,
+        image: resolveVehicleImageUrl(selectedVehicle),
       },
       totalPrice: selectedVehicle.price,
       paymentMode,
@@ -190,10 +226,17 @@ export function TourDetailScreen({ route, navigation }: Props) {
     );
   }
 
-  const displayImages = tour.gallery && tour.gallery.length > 0
-    ? tour.gallery
-    : [{ id: '1', url: tour.imageUrl || '', alt: tour.tourName }];
-  const mainImage = displayImages[0]?.url || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop';
+  const photos = tourPhotoUrls(tour);
+  const safePhotoIndex = Math.min(photoIndex, Math.max(0, photos.length - 1));
+  const showGalleryNav = photos.length > 1 && heroWidth > 0;
+
+  const goToPhoto = (index: number) => {
+    const next = Math.max(0, Math.min(photos.length - 1, index));
+    setPhotoIndex(next);
+    if (heroWidth > 0) {
+      galleryRef.current?.scrollTo({ x: next * heroWidth, animated: true });
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -208,8 +251,68 @@ export function TourDetailScreen({ route, navigation }: Props) {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         <View>
         {/* Hero image - 4th screenshot style with overlay tag */}
-        <View style={styles.heroWrap}>
-          <Image source={{ uri: mainImage }} style={styles.heroImage} resizeMode="cover" />
+        <View
+          style={styles.heroWrap}
+          onLayout={(event) => {
+            const width = Math.round(event.nativeEvent.layout.width);
+            if (width > 0 && width !== heroWidth) setHeroWidth(width);
+          }}
+        >
+          <ScrollView
+            ref={galleryRef}
+            horizontal
+            pagingEnabled
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={photos.length > 1}
+            onMomentumScrollEnd={(event) => {
+              if (heroWidth <= 0) return;
+              const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
+              setPhotoIndex(Math.max(0, Math.min(photos.length - 1, index)));
+            }}
+          >
+            {photos.map((uri) => (
+              <Image
+                key={uri}
+                source={{ uri }}
+                style={[styles.heroImage, heroWidth > 0 ? { width: heroWidth } : null]}
+                resizeMode="cover"
+              />
+            ))}
+          </ScrollView>
+          {showGalleryNav ? (
+            <>
+              <TouchableOpacity
+                style={[styles.galleryArrow, styles.galleryArrowLeft]}
+                onPress={() => goToPhoto(safePhotoIndex - 1)}
+                disabled={safePhotoIndex === 0}
+                accessibilityLabel="Previous photo"
+              >
+                <Feather name="chevron-left" size={22} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.galleryArrow, styles.galleryArrowRight]}
+                onPress={() => goToPhoto(safePhotoIndex + 1)}
+                disabled={safePhotoIndex >= photos.length - 1}
+                accessibilityLabel="Next photo"
+              >
+                <Feather name="chevron-right" size={22} color="#fff" />
+              </TouchableOpacity>
+              <View style={styles.galleryDots}>
+                {photos.map((uri, index) => (
+                  <View
+                    key={uri}
+                    style={[styles.galleryDot, index === safePhotoIndex && styles.galleryDotOn]}
+                  />
+                ))}
+              </View>
+              <View style={styles.galleryCount}>
+                <Text style={styles.galleryCountText}>
+                  {safePhotoIndex + 1} / {photos.length}
+                </Text>
+              </View>
+            </>
+          ) : null}
           {(tour.category || tour.difficulty) && (
             <View style={styles.badgeOverlay}>
               {tour.category ? (
@@ -246,7 +349,7 @@ export function TourDetailScreen({ route, navigation }: Props) {
                 id,
                 name: tour.tourName,
                 days: tour.days,
-                image: tour.imageUrl,
+                image: photos[0],
                 minPrice: prices.length > 0 ? Math.min(...prices) : undefined,
                 timeDuration: tour.timeDuration,
               });
@@ -507,6 +610,44 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     backgroundColor: colors.gray100,
   },
+  galleryArrow: {
+    position: 'absolute',
+    top: 90,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  galleryArrowLeft: { left: 8 },
+  galleryArrowRight: { right: 8 },
+  galleryDots: {
+    position: 'absolute',
+    bottom: 36,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  galleryDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  galleryDotOn: { backgroundColor: '#fff', width: 16 },
+  galleryCount: {
+    position: 'absolute',
+    right: 10,
+    bottom: 32,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  galleryCountText: { color: '#fff', fontSize: 11, fontFamily: fonts.semiBold },
   badgeOverlay: {
     position: 'absolute',
     top: 12,

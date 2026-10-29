@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AdminLayout from '@/components/admin/AdminLayout';
 import { DateChipPicker } from '@/components/admin/events/DateChipPicker';
 import { DutyDuration, DutyStamp } from '@/components/admin/events/DutyReportDetails';
+import { EventBillingPanel } from '@/components/admin/events/EventBillingPanel';
 import { EventFormDialog } from '@/components/admin/events/EventFormDialog';
 import { EventListFilters } from '@/components/admin/events/EventListFilters';
 import { AskDriverEndButton } from '@/components/events/AskDriverEndButton';
@@ -49,6 +50,7 @@ import {
   formatGps,
   formatServerDateTime,
   isRegisteredEventVehicle,
+  normalizeVehicleReg,
   keepFilled,
   qrImageUrl,
   todayIsoDate,
@@ -56,6 +58,7 @@ import {
   whatsappUrl,
   type DocumentOcrFields,
 } from '@/lib/eventDuty';
+import { compareBillingSerial } from '@/lib/eventDutyBilling';
 import { EVENT_DUTY_STATUSES, EVENT_VEHICLE_TYPES } from '@/types/eventDuty';
 import type {
   EventAssignment,
@@ -72,8 +75,8 @@ import type {
   VthEvent,
 } from '@/types/eventDuty';
 
-const TABS = ['overview', 'vehicles', 'drivers', 'assignments', 'duties', 'documents', 'reports', 'share', 'tracking', 'settings'] as const;
-const FILTER_TABS = ['overview', 'vehicles', 'drivers', 'assignments', 'duties', 'documents', 'reports'] as const;
+const TABS = ['overview', 'vehicles', 'drivers', 'assignments', 'duties', 'documents', 'reports', 'billing', 'share', 'tracking', 'settings'] as const;
+const FILTER_TABS = ['overview', 'vehicles', 'drivers', 'assignments', 'duties', 'documents', 'reports', 'billing'] as const;
 
 function confirmAction(message: string): boolean {
   return window.confirm(message);
@@ -157,18 +160,31 @@ export default function EventDetailPage() {
     try {
       const ev = await eventDutyAPI.getEvent(id);
       setEvent(ev.event);
-      const [asg, duty, opts] = await Promise.all([
+      const [asgResult, dutyResult, optsResult] = await Promise.allSettled([
         eventDutyAPI.listAssignments(id),
         eventDutyAPI.listDuties(id),
         eventDutyAPI.fleetOptions(id),
       ]);
-      setAssignments(asg.assignments || []);
-      setDuties(duty.duties || []);
-      setVehicles(opts.vehicles || []);
-      setEventDrivers(opts.eventDrivers || []);
-      if ((opts.drivers || []).length > 0) {
-        setDrivers(opts.drivers || []);
+      if (asgResult.status === 'fulfilled') setAssignments(asgResult.value.assignments || []);
+      if (dutyResult.status === 'fulfilled') setDuties(dutyResult.value.duties || []);
+      if (optsResult.status === 'fulfilled') {
+        setVehicles(optsResult.value.vehicles || []);
+        setEventDrivers(optsResult.value.eventDrivers || []);
+        if ((optsResult.value.drivers || []).length > 0) {
+          setDrivers(optsResult.value.drivers || []);
+        }
       }
+      const failed = [
+        ['Assignments', asgResult],
+        ['Duties', dutyResult],
+        ['Vehicles', optsResult],
+      ] as const;
+      failed.forEach(([label, result]) => {
+        if (result.status === 'rejected') {
+          const reason = result.reason instanceof Error ? result.reason.message : 'Request failed';
+          toast.error(`${label}: ${reason}`);
+        }
+      });
       bootedFor.current = id;
       setBooted(true);
       void Promise.all([
@@ -226,12 +242,19 @@ export default function EventDetailPage() {
 
   const from = filterFrom || event.startDate;
   const to = filterTo || event.endDate;
-  const vehicleOptions = vehicleChoices(duties, [...vehicles, ...assignments]);
+  const vehicleOptions = vehicleChoices(duties, [...vehicles, ...assignments], assignments);
   const filteredAssignments = sortAssignments(assignments.filter((a) => assignmentMatchesFilter(a, filterVehicle, from, to)));
   const filteredDuties = dutiesMatchingFilter(duties, filterVehicle, from, to);
   const reportDuties = dutiesForReport(duties, filterVehicle, from, to);
   const filteredDocuments = documents.filter((doc) => documentMatchesFilter(doc, filterVehicle, from, to));
-  const filteredVehicles = vehicles.filter((v) => filterVehicle === 'all' || v.vehicleNumber === filterVehicle);
+  const serials = assignmentSerials(assignments);
+  const filteredVehicles = vehicles
+    .filter((v) => filterVehicle === 'all' || v.vehicleNumber === filterVehicle)
+    .sort((a, b) => compareBillingSerial(serialOf(a, serials), serialOf(b, serials), a.vehicleNumber, b.vehicleNumber));
+  const rateVehicles = vehiclesForRates(vehicles, assignments, duties);
+  const visibleRateVehicles = filterVehicle === 'all'
+    ? rateVehicles
+    : rateVehicles.filter((item) => item.vehicleNumber === filterVehicle);
   const filteredKm = reportDuties.reduce((sum, d) => sum + (d.totalKm || 0), 0);
   const showFilters = (FILTER_TABS as readonly string[]).includes(tab);
 
@@ -283,7 +306,7 @@ export default function EventDetailPage() {
                 setFilterFrom(next.from);
                 setFilterTo(next.to);
               }}
-              extra={(
+              extra={tab === 'billing' ? undefined : (
                 <>
                   <Button variant="outline" onClick={() => exportTabExcel(tab, event, filterVehicle, {
                     assignments: filteredAssignments,
@@ -384,6 +407,19 @@ export default function EventDetailPage() {
             <VehicleReportPanel event={event} duties={reportDuties} vehicle={filterVehicle} from={from} to={to} />
             <EventSummaryPanel summary={summary} vehicle={filterVehicle} duties={reportDuties} />
             <Button asChild><Link to={`/admin/events/${event.id}/daily-report`}>Open daily report</Link></Button>
+          </TabsContent>
+
+          <TabsContent value="billing">
+            <EventBillingPanel
+              event={event}
+              vehicles={visibleRateVehicles}
+              allVehicles={rateVehicles}
+              duties={filteredDuties}
+              from={from}
+              to={to}
+              vehicleFilter={filterVehicle}
+              onSaved={() => { void reload(); }}
+            />
           </TabsContent>
 
           <TabsContent value="tracking" className="space-y-4">
@@ -2269,10 +2305,60 @@ function documentDate(doc: EventDocumentRow): string {
   return doc.dutyDate || (doc.createdAt ? doc.createdAt.slice(0, 10) : '');
 }
 
+function vehiclesForRates(
+  fleet: EventFleetOption[],
+  assignments: EventAssignment[],
+  duties: EventDuty[],
+): EventFleetOption[] {
+  const byId = new Map<number, EventFleetOption>();
+  const byReg = new Map<string, number>();
+  const remember = (vehicle: EventFleetOption) => {
+    byId.set(vehicle.id, vehicle);
+    const reg = normalizeVehicleReg(vehicle.vehicleNumber);
+    if (reg) byReg.set(reg, vehicle.id);
+  };
+  fleet.forEach(remember);
+  const attach = (
+    id: number | null | undefined,
+    regRaw: string | null | undefined,
+    type?: string | null,
+    owner?: string | null,
+    model?: string | null,
+  ) => {
+    const reg = (regRaw || '').trim();
+    if (!isRegisteredEventVehicle(reg)) return;
+    const normalized = normalizeVehicleReg(reg);
+    if (byReg.has(normalized)) return;
+    if (!id || id < 1) return;
+    if (byId.has(id)) return;
+    remember({
+      id,
+      vehicleNumber: reg,
+      name: model || reg,
+      model: model || undefined,
+      vehicleType: type || undefined,
+      ownerName: owner,
+    });
+  };
+  assignments.forEach((assignment) => {
+    if (assignment.status === 'cancelled') return;
+    attach(assignment.vehicleId, assignment.vehicleNumber, assignment.vehicleType, assignment.ownerName, assignment.model);
+  });
+  duties.forEach((duty) => {
+    attach(duty.vehicleId, duty.vehicleNumber, duty.vehicleType, null, null);
+  });
+  const serials = assignmentSerials(assignments);
+  return [...byId.values()]
+    .map((vehicle) => ({ ...vehicle, serialNo: serialOf(vehicle, serials) }))
+    .sort((a, b) => compareBillingSerial(a.serialNo, b.serialNo, a.vehicleNumber, b.vehicleNumber));
+}
+
 function vehicleChoices(
   duties: EventDuty[],
   extra: Array<{ vehicleNumber?: string | null }> = [],
+  assignments: EventAssignment[] = [],
 ): string[] {
+  const serials = assignmentSerials(assignments);
   return [...new Set(
     [
       ...duties.map((d) => d.vehicleNumber),
@@ -2280,7 +2366,39 @@ function vehicleChoices(
     ]
       .map((value) => (value || '').trim())
       .filter(Boolean),
-  )].sort();
+  )].sort((a, b) => compareBillingSerial(serials.byReg.get(normalizeVehicleReg(a)), serials.byReg.get(normalizeVehicleReg(b)), a, b));
+}
+
+function assignmentSerials(assignments: EventAssignment[]): { byId: Map<number, number>; byReg: Map<string, number> } {
+  const byId = new Map<number, number>();
+  const byReg = new Map<string, number>();
+  const keep = (current: number | undefined, serial: number | null | undefined) => (
+    serial != null && serial > 0 && (current == null || serial < current) ? serial : current
+  );
+  assignments.forEach((assignment) => {
+    if (assignment.status === 'cancelled') return;
+    const serial = assignment.serialNo;
+    if (assignment.vehicleId) {
+      const next = keep(byId.get(assignment.vehicleId), serial);
+      if (next != null) byId.set(assignment.vehicleId, next);
+    }
+    const reg = normalizeVehicleReg(assignment.vehicleNumber || '');
+    if (reg) {
+      const next = keep(byReg.get(reg), serial);
+      if (next != null) byReg.set(reg, next);
+    }
+  });
+  return { byId, byReg };
+}
+
+function serialOf(
+  vehicle: { id?: number | null; vehicleNumber?: string | null },
+  serials: { byId: Map<number, number>; byReg: Map<string, number> },
+): number | null {
+  const byId = vehicle.id ? serials.byId.get(vehicle.id) : undefined;
+  if (byId != null) return byId;
+  const byReg = serials.byReg.get(normalizeVehicleReg(vehicle.vehicleNumber || ''));
+  return byReg ?? null;
 }
 
 function sortAssignments(rows: EventAssignment[]): EventAssignment[] {
@@ -2389,6 +2507,8 @@ function exportTabExcel(tab: string, event: VthEvent, vehicle: string, rows: Tab
     case 'reports':
       exportVehicleExcel(event, rows.duties, vehicle);
       return;
+    case 'billing':
+      return;
     default: {
       const _never: never = current;
       void _never;
@@ -2463,6 +2583,8 @@ function exportTabPdf(
     case 'duties':
     case 'reports':
       exportVehiclePdf(event, rows.duties, rows.assignments, vehicle, from, to);
+      return;
+    case 'billing':
       return;
     default: {
       const _never: never = current;

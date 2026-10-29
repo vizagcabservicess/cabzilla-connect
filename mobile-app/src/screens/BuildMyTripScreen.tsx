@@ -245,7 +245,27 @@ export function BuildMyTripScreen() {
 
   const createPdf = () => {
     (navigation.navigate as (name: string, params?: object) => void)('Quotation', {
-      tours: rows.map((row) => ({ id: row.id, name: row.name, days: row.days })),
+      tours: rows.map((row) => {
+        const vehiclePrice = selectedVehicle ? priceForVehicle(row.pricing, selectedVehicle.id) : 0;
+        return {
+          id: row.id,
+          name: row.name,
+          days: row.days,
+          timeDuration: row.timeDuration,
+          price: vehiclePrice > 0 ? vehiclePrice : Number(row.minPrice) || 0,
+        };
+      }),
+      vehicleName: selectedVehicle?.name || '',
+      packageAmount: packageValue,
+      pickup: pickup?.name || '',
+      pickupDate: when.getTime(),
+      duration: durationLabel,
+      transfers: transfers
+        .filter((transfer) => transfer.place?.name)
+        .map((transfer) => ({
+          direction: transfer.direction,
+          placeName: transfer.place?.name || '',
+        })),
     });
   };
 

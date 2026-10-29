@@ -96,41 +96,47 @@ export function DriverAssignment({
     fetchFleetVehicles();
   }, [toast, booking.vehicleNumber]);
 
-  // Calculate commission when vehicle number changes
+  // Calculate commission from the vehicle selected on this form.
   useEffect(() => {
     const calculateCommission = async () => {
       if (!vehicleNumber || !booking.id) return;
-      
+      const matched = vehicles.find((v) => {
+        const num = v.vehicleNumber || v.vehicle_number;
+        return num === vehicleNumber || v.id?.toString() === selectedVehicleId;
+      });
+      const vehicleId = selectedVehicleId || matched?.id;
+      if (!vehicleId) return;
+      const fare = Number(booking.totalAmount);
+      const amount = Number.isFinite(fare) ? fare : 0;
+
       try {
-        // First try to calculate commission based on the booking
-        const commission = await commissionAPI.calculateCommission(booking.id.toString());
-        
+        const commission = await commissionAPI.calculateCommission(booking.id.toString(), {
+          vehicleId,
+          amount,
+        });
+
         if (commission) {
           setCommissionData({
             percentage: commission.commission_percentage,
             amount: commission.commission_amount
           });
         } else {
-          // Fallback to default 10% if calculation fails
-          const amount = booking.totalAmount * 0.1;
           setCommissionData({
             percentage: 10,
-            amount: amount
+            amount: amount * 0.1
           });
         }
       } catch (error) {
         console.error("Error calculating commission:", error);
-        // Fallback to default 10%
-        const amount = booking.totalAmount * 0.1;
         setCommissionData({
           percentage: 10,
-          amount: amount
+          amount: amount * 0.1
         });
       }
     };
 
     calculateCommission();
-  }, [vehicleNumber, booking.id, booking.totalAmount]);
+  }, [vehicleNumber, selectedVehicleId, vehicles, booking.id, booking.totalAmount]);
 
   // When the booking record gains driver/vehicle from the server, reflect it (do not clear user edits when booking fields are still empty)
   useEffect(() => {

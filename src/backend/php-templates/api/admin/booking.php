@@ -198,6 +198,7 @@ try {
                         'createdAt' => $booking['created_at'],
                         'updatedAt' => $booking['updated_at']
                     ];
+                    admin_booking_append_messaging_fields($booking, $formattedBooking);
                     
                     sendJsonResponse(['status' => 'success', 'message' => 'Booking status updated successfully', 'data' => $formattedBooking]);
                 } else {
@@ -301,6 +302,12 @@ try {
             }
             if (isset($booking['end_odometer']) && $booking['end_odometer'] !== null && $booking['end_odometer'] !== '') {
                 $formattedBooking['endOdometer'] = (int)round((float)$booking['end_odometer']);
+            }
+            if (!empty($booking['trip_started_at']) && $booking['trip_started_at'] !== '0000-00-00 00:00:00') {
+                $formattedBooking['tripStartedAt'] = $booking['trip_started_at'];
+            }
+            if (!empty($booking['completed_at']) && $booking['completed_at'] !== '0000-00-00 00:00:00') {
+                $formattedBooking['completedAt'] = $booking['completed_at'];
             }
             admin_booking_attach_trip_odometer($conn, (int)$booking['id'], $formattedBooking);
             admin_booking_append_messaging_fields($booking, $formattedBooking);

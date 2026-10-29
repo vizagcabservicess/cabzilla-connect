@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Booking } from '@/types/api';
 import { formatPrice } from '@/lib/utils';
+import { EXTRA_COLLECTED_CATEGORIES, extraCollectedAmount, extraCollectedCategoryLabel } from '@/lib/bookingExtra';
 import { PlusIcon, TrashIcon } from 'lucide-react';
 
 interface BookingAdvancedSettingsProps {
@@ -29,7 +30,7 @@ export function BookingAdvancedSettings({
   isSubmitting
 }: BookingAdvancedSettingsProps) {
   const [formData, setFormData] = useState({
-    totalAmount: booking.totalAmount || 0,
+    totalAmount: Math.max(0, (typeof booking.totalAmount === 'number' ? booking.totalAmount : Number(booking.totalAmount) || 0) - (Number(booking.discountAmount) || 0)),
     discountAmount: booking.discountAmount || 0,
     discountType: booking.discountType || 'fixed',
     discountValue: booking.discountValue || 0,
@@ -46,32 +47,37 @@ export function BookingAdvancedSettings({
     amount: 0,
     description: ''
   });
+  const [driverExtraAmount, setDriverExtraAmount] = useState(() => extraCollectedAmount(booking));
+  const [driverExtraCategory, setDriverExtraCategory] = useState(
+    booking.extraCollectedCategory ?? booking.extra_collected_category ?? ''
+  );
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  // Calculate totals
-  const extraChargesTotal = extraCharges.reduce((sum, charge) => sum + charge.amount, 0);
-  
-  // Recalculate total amount when extra charges change
-  useEffect(() => {
-    const originalTotal = booking.totalAmount || 0;
-    const newTotal = originalTotal + extraChargesTotal - formData.discountAmount;
-    
-    if (Math.abs(newTotal - formData.totalAmount) > 0.01) { // Use small threshold to avoid float precision issues
-      setFormData(prev => ({ ...prev, totalAmount: Math.max(0, newTotal) }));
-    }
-  }, [extraChargesTotal]); // Only depend on extraChargesTotal to avoid infinite loops
+  // Stored total already includes the saved extra charges. Base fare is that total minus those extras.
+  const storedExtraCharges = Array.isArray(booking.extraCharges)
+    ? booking.extraCharges.reduce((sum, charge) => sum + (Number(charge.amount) || 0), 0)
+    : 0;
+  const storedTotal = typeof booking.totalAmount === 'number' ? booking.totalAmount : Number(booking.totalAmount) || 0;
+  const baseAmount = Math.max(0, storedTotal - storedExtraCharges);
 
-  // For display purposes - calculate what the base service amount would be
-  const baseAmount = booking.totalAmount || 0;
+  const extraChargesTotal = extraCharges.reduce((sum, charge) => sum + (Number(charge.amount) || 0), 0);
+
+  useEffect(() => {
+    const newTotal = Math.max(0, baseAmount + extraChargesTotal - formData.discountAmount);
+    setFormData((prev) => {
+      if (Math.abs(newTotal - prev.totalAmount) <= 0.01) return prev;
+      return { ...prev, totalAmount: newTotal };
+    });
+  }, [baseAmount, extraChargesTotal, formData.discountAmount]);
 
   const handleInputChange = (field: string, value: any) => {
     const newFormData = { ...formData, [field]: value };
     
     // If total amount is manually changed, recalculate discount if it's percentage-based
     if (field === 'totalAmount' && formData.discountType === 'percentage' && formData.discountValue > 0) {
-      const originalTotal = booking.totalAmount || 0;
-      newFormData.discountAmount = Math.round((originalTotal * formData.discountValue) / 100);
+      const preDiscount = baseAmount + extraChargesTotal;
+      newFormData.discountAmount = Math.round((preDiscount * formData.discountValue) / 100);
     }
     
     setFormData(newFormData);
@@ -90,18 +96,16 @@ export function BookingAdvancedSettings({
     
     // Auto-calculate discount amount based on type and value
     if (field === 'discountType' || field === 'discountValue') {
-      // Use the original booking total as base for percentage calculations
-      const originalTotal = booking.totalAmount || 0;
-      
+      const preDiscount = baseAmount + extraChargesTotal;
+
       if (newFormData.discountType === 'percentage') {
         const discountPercent = Math.min(Math.max(newFormData.discountValue, 0), 100);
-        newFormData.discountAmount = Math.round((originalTotal * discountPercent) / 100);
+        newFormData.discountAmount = Math.round((preDiscount * discountPercent) / 100);
       } else {
         newFormData.discountAmount = Math.max(newFormData.discountValue, 0);
       }
-      
-      // Recalculate total amount: original + extra charges - discount
-      newFormData.totalAmount = originalTotal + extraChargesTotal - newFormData.discountAmount;
+
+      newFormData.totalAmount = Math.max(0, preDiscount - newFormData.discountAmount);
     }
     
     setFormData(newFormData);
@@ -133,6 +137,10 @@ export function BookingAdvancedSettings({
       newErrors.discountAmount = 'Discount amount cannot exceed total amount';
     }
 
+    if (driverExtraAmount > 0 && !driverExtraCategory) {
+      newErrors.driverExtraCategory = 'Choose extra hours, extra km, tolls, or others';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -146,6 +154,8 @@ export function BookingAdvancedSettings({
       const updatedData = {
         ...formData,
         extraCharges: extraCharges.length > 0 ? extraCharges : undefined,
+        extraCollectedAmount: Math.max(0, driverExtraAmount),
+        extraCollectedCategory: driverExtraAmount > 0 ? driverExtraCategory : '',
       };
 
       await onSave(updatedData);
@@ -233,6 +243,50 @@ export function BookingAdvancedSettings({
               )}
             </div>
           </div>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <h4 className="text-md font-medium">Driver extra collected</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="driverExtraAmount">Amount (₹)</Label>
+              <Input
+                id="driverExtraAmount"
+                type="number"
+                min="0"
+                step="1"
+                value={driverExtraAmount || ''}
+                onChange={(event) => setDriverExtraAmount(parseFloat(event.target.value) || 0)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="driverExtraCategory">Collected for</Label>
+              <Select
+                value={driverExtraCategory || 'unset'}
+                onValueChange={(value) => setDriverExtraCategory(value === 'unset' ? '' : value)}
+              >
+                <SelectTrigger id="driverExtraCategory">
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">Select</SelectItem>
+                  {EXTRA_COLLECTED_CATEGORIES.map((category) => (
+                    <SelectItem key={category.value} value={category.value}>{category.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.driverExtraCategory ? (
+                <p className="text-sm text-destructive mt-1">{errors.driverExtraCategory}</p>
+              ) : null}
+            </div>
+          </div>
+          {driverExtraAmount > 0 && driverExtraCategory ? (
+            <p className="text-sm text-muted-foreground">
+              {extraCollectedCategoryLabel(driverExtraCategory)} · {formatPrice(driverExtraAmount)} is added on top of the package fare.
+            </p>
+          ) : null}
         </div>
 
         <Separator />
@@ -366,6 +420,12 @@ export function BookingAdvancedSettings({
                 <span>+{formatPrice(extraChargesTotal)}</span>
               </div>
             )}
+            {driverExtraAmount > 0 && (
+              <div className="flex justify-between">
+                <span>Driver extra{driverExtraCategory ? ` (${extraCollectedCategoryLabel(driverExtraCategory)})` : ''}:</span>
+                <span>+{formatPrice(driverExtraAmount)}</span>
+              </div>
+            )}
             {formData.discountAmount > 0 && (
               <div className="flex justify-between text-green-600">
                 <span>Discount:</span>
@@ -375,7 +435,7 @@ export function BookingAdvancedSettings({
             <Separator className="my-2" />
             <div className="flex justify-between font-medium text-base">
               <span>Final Total:</span>
-              <span>{formatPrice(formData.totalAmount)}</span>
+              <span>{formatPrice(formData.totalAmount + Math.max(0, driverExtraAmount))}</span>
             </div>
           </div>
         </div>

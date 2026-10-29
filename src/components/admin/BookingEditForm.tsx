@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { Plus, X } from "lucide-react";
 import { Booking } from '@/types/api';
-import { getEffectiveBookingStatus, isBookingEditable } from '@/utils/bookingUtils';
+import { EXTRA_COLLECTED_CATEGORIES, extraCollectedAmount } from '@/lib/bookingExtra';
 import { convertUTCToLocal, formatDateForAPI } from '@/lib/dateUtils';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
@@ -71,6 +71,10 @@ export function BookingEditForm({
   });
 
   const [pendingExtraCharges, setPendingExtraCharges] = useState<null | { amount: number; description: string }[]>(null);
+  const [driverExtraAmount, setDriverExtraAmount] = useState(() => extraCollectedAmount(booking));
+  const [driverExtraCategory, setDriverExtraCategory] = useState(
+    booking.extraCollectedCategory ?? booking.extra_collected_category ?? ''
+  );
 
   // Always use pendingExtraCharges if set, otherwise use booking.extraCharges
   const displayedExtraCharges = pendingExtraCharges !== null ? pendingExtraCharges : extraCharges;
@@ -78,7 +82,9 @@ export function BookingEditForm({
   // Reset pendingExtraCharges whenever booking.extraCharges changes
   useEffect(() => {
     setPendingExtraCharges(null);
-  }, [booking.extraCharges]);
+    setDriverExtraAmount(extraCollectedAmount(booking));
+    setDriverExtraCategory(booking.extraCollectedCategory ?? booking.extra_collected_category ?? '');
+  }, [booking.id, booking.extraCharges, booking.extraCollectedAmount, booking.extra_collected_amount, booking.extraCollectedCategory, booking.extra_collected_category]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -165,6 +171,9 @@ export function BookingEditForm({
     if (!formData.pickupLocation.trim()) {
       newErrors.pickupLocation = 'Pickup location is required';
     }
+    if (driverExtraAmount > 0 && !driverExtraCategory) {
+      newErrors.driverExtraCategory = 'Choose extra hours, extra km, tolls, or others';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -176,7 +185,8 @@ export function BookingEditForm({
     : 0;
   const baseAmount = (typeof booking.totalAmount === 'number' ? booking.totalAmount : 0) - initialExtraCharges;
   const extraChargesTotal = displayedExtraCharges.reduce((sum, charge) => sum + charge.amount, 0);
-  const totalAmount = baseAmount + extraChargesTotal;
+  const packageTotal = baseAmount + extraChargesTotal;
+  const totalAmount = packageTotal + Math.max(0, driverExtraAmount);
 
   console.log('booking.totalAmount', booking.totalAmount);
   console.log('booking.extraCharges', booking.extraCharges);
@@ -200,7 +210,9 @@ export function BookingEditForm({
         pickupDate: formatDateForAPI(formData.pickupDate),
         billingAddress: formData.billingAddress,
         extraCharges: displayedExtraCharges,
-        totalAmount: totalAmount,
+        totalAmount: packageTotal,
+        extraCollectedAmount: Math.max(0, driverExtraAmount),
+        extraCollectedCategory: driverExtraAmount > 0 ? driverExtraCategory : '',
       };
       const submitHandler = onSubmit || onSave;
       if (submitHandler) {
@@ -212,9 +224,6 @@ export function BookingEditForm({
       setIsSaving(false);
     }
   };
-
-  const effectiveStatus = getEffectiveBookingStatus(booking);
-  const isEditable = isBookingEditable(effectiveStatus);
 
   useEffect(() => {
     console.log('Booking prop in modal changed:', booking);
@@ -230,7 +239,7 @@ export function BookingEditForm({
             name="passengerName"
             value={formData.passengerName}
             onChange={handleInputChange}
-            disabled={!isEditable || isSubmitting}
+            disabled={isSaving || isSubmitting}
           />
           {errors.passengerName && (
             <p className="text-sm text-red-500">{errors.passengerName}</p>
@@ -244,7 +253,7 @@ export function BookingEditForm({
             name="passengerPhone"
             value={formData.passengerPhone}
             onChange={handleInputChange}
-            disabled={!isEditable || isSubmitting}
+            disabled={isSaving || isSubmitting}
           />
           {errors.passengerPhone && (
             <p className="text-sm text-red-500">{errors.passengerPhone}</p>
@@ -258,7 +267,7 @@ export function BookingEditForm({
             name="passengerEmail"
             value={formData.passengerEmail}
             onChange={handleInputChange}
-            disabled={!isEditable || isSubmitting}
+            disabled={isSaving || isSubmitting}
           />
           {errors.passengerEmail && (
             <p className="text-sm text-red-500">{errors.passengerEmail}</p>
@@ -273,14 +282,14 @@ export function BookingEditForm({
               type="date"
               value={format(formData.pickupDate, 'yyyy-MM-dd')}
               onChange={(e) => handlePickupDatePartChange(e.target.value)}
-              disabled={!isEditable || isSubmitting}
+              disabled={isSaving || isSubmitting}
             />
             <Input
               id="pickupTime"
               type="time"
               value={format(formData.pickupDate, 'HH:mm')}
               onChange={(e) => handlePickupTimeChange(e.target.value)}
-              disabled={!isEditable || isSubmitting}
+              disabled={isSaving || isSubmitting}
             />
           </div>
           <p className="text-xs text-muted-foreground">
@@ -299,7 +308,7 @@ export function BookingEditForm({
           name="pickupLocation"
           value={formData.pickupLocation}
           onChange={handleInputChange}
-          disabled={!isEditable || isSubmitting}
+          disabled={isSaving || isSubmitting}
         />
         {errors.pickupLocation && (
           <p className="text-sm text-red-500">{errors.pickupLocation}</p>
@@ -313,7 +322,7 @@ export function BookingEditForm({
           name="dropLocation"
           value={formData.dropLocation}
           onChange={handleInputChange}
-          disabled={!isEditable || isSubmitting}
+          disabled={isSaving || isSubmitting}
         />
       </div>
       
@@ -324,9 +333,54 @@ export function BookingEditForm({
           name="billingAddress"
           value={formData.billingAddress}
           onChange={handleInputChange}
-          disabled={!isEditable || isSubmitting}
+          disabled={isSaving || isSubmitting}
         />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Driver extra collected</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="driverExtraAmount">Amount (₹)</Label>
+              <Input
+                id="driverExtraAmount"
+                type="number"
+                min="0"
+                step="1"
+                value={driverExtraAmount || ''}
+                onChange={(event) => setDriverExtraAmount(parseFloat(event.target.value) || 0)}
+                disabled={isSaving || isSubmitting}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="driverExtraCategory">Collected for</Label>
+              <select
+                id="driverExtraCategory"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={driverExtraCategory}
+                onChange={(event) => {
+                  setDriverExtraCategory(event.target.value);
+                  if (errors.driverExtraCategory) {
+                    setErrors((prev) => ({ ...prev, driverExtraCategory: '' }));
+                  }
+                }}
+                disabled={isSaving || isSubmitting}
+              >
+                <option value="">Select</option>
+                {EXTRA_COLLECTED_CATEGORIES.map((category) => (
+                  <option key={category.value} value={category.value}>{category.label}</option>
+                ))}
+              </select>
+              {errors.driverExtraCategory ? (
+                <p className="text-sm text-red-500">{errors.driverExtraCategory}</p>
+              ) : null}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Extra Charges Section */}
       <Card>
@@ -343,7 +397,7 @@ export function BookingEditForm({
                       <span className="font-medium">{charge.description}</span>
                       <span className="ml-2 text-sm text-gray-500">₹{charge.amount}</span>
                     </div>
-                    {isEditable && !isSaving && (
+                    {!isSaving && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -361,7 +415,7 @@ export function BookingEditForm({
             )}
           </div>
 
-          {isEditable && !isSaving && (
+          {!isSaving && (
             <div className="grid grid-cols-3 gap-2 items-end mt-4">
               <div className="col-span-1">
                 <Label htmlFor="amount">Amount (₹)</Label>
@@ -373,7 +427,7 @@ export function BookingEditForm({
                   step="50"
                   value={newCharge.amount || ''}
                   onChange={handleNewChargeChange}
-                  disabled={isSaving}
+                  disabled={isSaving || isSubmitting}
                 />
               </div>
               <div className="col-span-1">
@@ -383,7 +437,7 @@ export function BookingEditForm({
                   name="description"
                   value={newCharge.description}
                   onChange={handleNewChargeChange}
-                  disabled={isSaving}
+                  disabled={isSaving || isSubmitting}
                 />
               </div>
               <div className="col-span-1">
@@ -407,6 +461,11 @@ export function BookingEditForm({
                 Additional Charges: ₹{extraChargesTotal}
               </p>
             )}
+            {driverExtraAmount > 0 ? (
+              <p className="text-sm text-gray-500">
+                Driver extra: ₹{driverExtraAmount}
+              </p>
+            ) : null}
             <p className="text-lg font-bold">
               Total Amount: ₹{totalAmount}
             </p>
@@ -415,10 +474,10 @@ export function BookingEditForm({
       </Card>
       
       <div className="flex justify-end gap-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving || isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={!isEditable || isSaving}>
+        <Button type="submit" disabled={isSaving || isSubmitting}>
           {isSaving ? "Saving..." : "Save Changes"}
         </Button>
       </div>

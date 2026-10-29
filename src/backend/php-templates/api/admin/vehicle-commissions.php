@@ -184,10 +184,23 @@ try {
                 }
                 
                 $booking = $bookingResult->fetch_assoc();
-                $amount = floatval($booking['total_amount']);
-                
-                // Find the vehicle ID from vehicle_number
-                if (isset($booking['vehicle_number']) && !empty($booking['vehicle_number'])) {
+                $amount = isset($data['amount']) ? floatval($data['amount']) : floatval($booking['total_amount']);
+                $requestVehicleId = isset($data['vehicle_id']) ? intval($data['vehicle_id']) : 0;
+
+                // The assign form can send the chosen car before it is saved on the booking.
+                if ($requestVehicleId > 0 && empty($booking['vehicle_number'])) {
+                    $vehicleStmt = $conn->prepare("SELECT id, commission_percentage, use_default_commission FROM fleet_vehicles WHERE id = ?");
+                    $vehicleStmt->bind_param("i", $requestVehicleId);
+                    $vehicleStmt->execute();
+                    $vehicleResult = $vehicleStmt->get_result();
+                    if ($vehicleResult->num_rows === 0) {
+                        sendResponse(['status' => 'error', 'message' => 'Vehicle not found'], 404);
+                    }
+                    $vehicle = $vehicleResult->fetch_assoc();
+                    $vehicleId = $vehicle['id'];
+                    $customCommission = $vehicle['commission_percentage'];
+                    $useDefaultCommission = $vehicle['use_default_commission'];
+                } elseif (isset($booking['vehicle_number']) && !empty($booking['vehicle_number'])) {
                     $vehicleStmt = $conn->prepare("SELECT id, commission_percentage, use_default_commission FROM fleet_vehicles WHERE vehicle_number = ?");
                     $vehicleStmt->bind_param("s", $booking['vehicle_number']);
                     $vehicleStmt->execute();

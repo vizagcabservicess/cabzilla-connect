@@ -27,6 +27,7 @@ import {
   validateBookingClient,
 } from '@/services/api/aiBookingAPI';
 import { describeParseErrors } from '@/utils/bookingParser';
+import { applyExplicitFare, applyRouteFromText, applySightseeingFromText } from '@/utils/bookingTripTerms';
 
 const PREVIEW_FIELDS: Array<{ key: keyof ParsedBooking; label: string; format?: 'date' | 'rupee' }> = [
   { key: 'customer_name', label: 'Customer Name' },
@@ -35,10 +36,13 @@ const PREVIEW_FIELDS: Array<{ key: keyof ParsedBooking; label: string; format?: 
   { key: 'drop_location', label: 'Drop Location' },
   { key: 'trip_type', label: 'Trip Type' },
   { key: 'pickup_date', label: 'Pickup Date', format: 'date' },
+  { key: 'return_date', label: 'Return Date', format: 'date' },
   { key: 'pickup_time', label: 'Pickup Time' },
   { key: 'vehicle_type', label: 'Vehicle Type' },
   { key: 'seating_capacity', label: 'Seating Capacity' },
   { key: 'cost', label: 'Cost', format: 'rupee' },
+  { key: 'advance_received', label: 'Advance', format: 'rupee' },
+  { key: 'hourly_package', label: 'Package' },
   { key: 'payment_mode', label: 'Payment Mode' },
   { key: 'manager_name', label: 'Manager Name' },
   { key: 'manager_mobile', label: 'Manager Mobile' },
@@ -58,6 +62,7 @@ function formatFieldValue(
 export default function AIAssistantPage() {
   const [rawText, setRawText] = useState('');
   const [parsed, setParsed] = useState<ParsedBooking | null>(null);
+  const [parsedBookings, setParsedBookings] = useState<ParsedBooking[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [parsedLocally, setParsedLocally] = useState(false);
   const [localParseReason, setLocalParseReason] = useState<'development' | 'api_unavailable' | null>(null);
@@ -108,7 +113,14 @@ export default function AIAssistantPage() {
         setShowPreview(false);
         return;
       }
-      setParsed({ ...res.data, advance_received: 0 });
+      const bookings = (res.bookings && res.bookings.length > 0 ? res.bookings : [res.data]).map((booking) => {
+        applyExplicitFare(booking, rawText);
+        applyRouteFromText(booking, rawText);
+        applySightseeingFromText(booking, rawText);
+        return booking;
+      });
+      setParsed(bookings[0]);
+      setParsedBookings(bookings);
       setParseErrors(res.parse_errors ?? []);
       setParsedLocally(!!res.parsed_locally);
       setLocalParseReason(res.local_parse_reason ?? null);
@@ -128,6 +140,7 @@ export default function AIAssistantPage() {
   const handleClear = () => {
     setRawText('');
     setParsed(null);
+    setParsedBookings([]);
     setParseErrors([]);
     setParsedLocally(false);
     setLocalParseReason(null);
@@ -138,12 +151,17 @@ export default function AIAssistantPage() {
   };
 
   const handleConfirm = async () => {
-    if (!parsed) return;
+    const toCreate = parsedBookings.length > 0 ? parsedBookings : parsed ? [parsed] : [];
+    if (toCreate.length === 0) return;
     if (sheetTabMissing) {
-      toast.error('Enter the Google Sheet tab name (e.g. Jul 2026)');
+      toast.error('Enter the Google Sheet tab name (e.g. October 2026)');
       return;
     }
-    const clientErrors = validateBookingClient(parsed);
+    const clientErrors = toCreate.flatMap((booking, index) =>
+      validateBookingClient(booking).map((error) =>
+        toCreate.length > 1 ? `Trip ${index + 1}: ${error}` : error
+      )
+    );
     if (clientErrors.length > 0) {
       setErrorBanner(clientErrors.join(', '));
       return;
@@ -153,24 +171,25 @@ export default function AIAssistantPage() {
     setSuccessBanner(null);
     setSheetWarningBanner(null);
     try {
-      const res = await aiBookingAPI.createBooking(
-        { ...parsed, advance_received: 0 },
-        rawText,
-        sheetTabTrimmed
-      );
+      const created: Awaited<ReturnType<typeof aiBookingAPI.createBooking>>[] = [];
+      for (const booking of toCreate) {
+        created.push(await aiBookingAPI.createBooking(booking, rawText, sheetTabTrimmed));
+      }
+      const res = created[created.length - 1];
+      const invoiceLabel = created.map((row) => `#${row.invoice_no}`).join(', ');
       setLastInvoiceNo(res.invoice_no ?? null);
       if (res.sheet_synced) {
         setSuccessBanner(
-          res.message || `Booking created! Invoice #${res.invoice_no} — Google Sheet synced.`
+          res.message || `Booking created! Invoice ${invoiceLabel} — Google Sheet synced.`
         );
-        toast.success(`Invoice #${res.invoice_no} created and synced to Google Sheet`);
+        toast.success(`Invoice ${invoiceLabel} created and synced to Google Sheet`);
       } else {
-        setSuccessBanner(`Booking saved in database as Invoice #${res.invoice_no}.`);
+        setSuccessBanner(`Booking saved in database as Invoice ${invoiceLabel}.`);
         const syncReason =
           res.sheet_sync_error ||
           'Google Sheet sync failed. Use "Test Google Sheets" below to diagnose.';
         setSheetWarningBanner(syncReason);
-        toast.warning(`Invoice #${res.invoice_no} saved — sheet sync failed`);
+        toast.warning(`Invoice ${invoiceLabel} saved — sheet sync failed`);
       }
       handleClear();
     } catch (e) {
@@ -307,14 +326,14 @@ export default function AIAssistantPage() {
               id="sheet-tab-name"
               value={sheetTabName}
               onChange={(e) => setSheetTabName(e.target.value)}
-              placeholder="Jul 2026"
+              placeholder="October 2026"
               list="sheet-tab-suggestions"
             />
             <datalist id="sheet-tab-suggestions">
               <option value={defaultAiSheetTabName()} />
             </datalist>
             <p className="text-xs text-muted-foreground">
-              Must match the tab name in your spreadsheet exactly (e.g. Jul 2026). Saved in this browser.
+              Must match the tab name in your spreadsheet exactly (e.g. October 2026). Saved in this browser.
             </p>
           </div>
         </div>
@@ -431,7 +450,8 @@ export default function AIAssistantPage() {
                         parsed[key] === 0 ||
                         parsed[key] === null ||
                         parsed[key] === undefined;
-                      const highlight = hasError || (empty && key !== 'manager_name' && key !== 'manager_mobile' && key !== 'driver_name' && key !== 'pickup_time');
+                      const agentTrip = parsed.driver_collects_payment === false;
+                      const highlight = hasError || (empty && key !== 'manager_name' && key !== 'manager_mobile' && key !== 'driver_name' && key !== 'pickup_time' && key !== 'hourly_package' && key !== 'advance_received' && !(agentTrip && (key === 'cost' || key === 'vehicle_type' || key === 'seating_capacity')));
                       return (
                         <div
                           key={key}
@@ -440,10 +460,65 @@ export default function AIAssistantPage() {
                           }`}
                         >
                           <dt className="font-medium text-muted-foreground shrink-0">{label}</dt>
-                          <dd className="text-right">{formatFieldValue(key, parsed[key], format)}</dd>
+                          <dd className="text-right">
+                            {key === 'pickup_location' && parsed.pickup_map_url ? (
+                              <a
+                                href={parsed.pickup_map_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary underline"
+                              >
+                                {formatFieldValue(key, parsed[key], format)}
+                              </a>
+                            ) : (
+                              formatFieldValue(key, parsed[key], format)
+                            )}
+                          </dd>
                         </div>
                       );
                     })}
+                    <div className="flex justify-between gap-4 rounded px-2 py-1">
+                      <dt className="font-medium text-muted-foreground shrink-0">Places</dt>
+                      <dd className="text-right">
+                        {parsed.trip_terms?.places?.length
+                          ? parsed.trip_terms.places.map((place, index) => (
+                              <div key={`${index}-${place}`}>{index + 1}. {place}</div>
+                            ))
+                          : '—'}
+                      </dd>
+                    </div>
+                    {parsed.trip_terms?.notes?.some((note) => /^Day \d+\b/i.test(note)) ? (
+                      <div className="rounded px-2 py-1">
+                        <dt className="font-medium text-muted-foreground">Program</dt>
+                        <dd className="mt-1 space-y-1 text-left">
+                          {parsed.trip_terms.notes.map((note) => (
+                            <div key={note}>{note}</div>
+                          ))}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {parsed.trip_terms?.exclusions?.length ? (
+                      <div className="flex justify-between gap-4 rounded px-2 py-1">
+                        <dt className="font-medium text-muted-foreground shrink-0">Not included</dt>
+                        <dd className="text-right">{parsed.trip_terms.exclusions.join('; ')}</dd>
+                      </div>
+                    ) : null}
+                    {parsed.trip_terms?.day_window ? (
+                      <div className="flex justify-between gap-4 rounded px-2 py-1">
+                        <dt className="font-medium text-muted-foreground shrink-0">Day</dt>
+                        <dd className="text-right">{parsed.trip_terms.day_window}</dd>
+                      </div>
+                    ) : null}
+                    <div className="flex justify-between gap-4 rounded px-2 py-1">
+                      <dt className="font-medium text-muted-foreground shrink-0">Flight</dt>
+                      <dd className="text-right">{parsed.trip_terms?.flight_number || '—'}</dd>
+                    </div>
+                    {parsed.driver_collects_payment === false ? (
+                      <div className="rounded bg-amber-50 px-2 py-1 text-amber-950">
+                        Agent trip. The driver does not see a fare and does not collect payment.
+                        {parsedBookings.length > 1 ? ` This message creates ${parsedBookings.length} bookings.` : ''}
+                      </div>
+                    ) : null}
                   </dl>
 
                   <div className="flex flex-wrap gap-2 pt-2">
@@ -459,6 +534,7 @@ export default function AIAssistantPage() {
                       onClick={() => {
                         setShowPreview(false);
                         setParsed(null);
+                        setParsedBookings([]);
                       }}
                     >
                       Edit &amp; Re-parse

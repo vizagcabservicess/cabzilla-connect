@@ -35,6 +35,7 @@ import { format } from 'date-fns';
 import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { AdminDriverOpsTripEditModal } from '../components/AdminDriverOpsTripEditModal';
+import { shareBookingDutySlip } from '../lib/bookingDutySlip';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AdminDriverOpsDashboard'>;
 
@@ -229,6 +230,7 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
         'End_ODO',
         'Hours',
         'Kilometers',
+        'Fuel_L',
         'Fuel_INR',
         'Amount_INR',
         'Collected_INR',
@@ -246,6 +248,7 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
         toSafeNumber(trip.endingOdometer).toFixed(1),
         toSafeNumber(trip.totalDurationHours).toFixed(1),
         toSafeNumber(trip.totalKilometers).toFixed(1),
+        toSafeNumber(trip.fuelLitres).toFixed(2),
         toSafeNumber(trip.fuelSpend).toFixed(0),
         toSafeNumber(trip.tripAmount).toFixed(0),
         trip.driverCollectedAmount != null && Number.isFinite(trip.driverCollectedAmount)
@@ -634,10 +637,17 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
                     </Text>
                     <Text style={styles.tripRoute}>{compactLocation(trip.pickupLocation)} → {compactLocation(trip.dropLocation)}</Text>
                     <Text style={styles.tripMeta}>
-                      ODO {toSafeNumber(trip.startingOdometer).toFixed(1)}–{toSafeNumber(trip.endingOdometer).toFixed(1)} ·{' '}
-                      {toSafeNumber(trip.totalKilometers).toFixed(1)} km · ₹{toSafeNumber(trip.tripAmount).toFixed(0)} ·{' '}
-                      {formatTripPaymentLabel(trip.paymentType)}
+                      {toSafeNumber(trip.totalKilometers).toFixed(1)} km · {toSafeNumber(trip.totalDurationHours).toFixed(1)} hr · Fuel{' '}
+                      {toSafeNumber(trip.fuelLitres) > 0 ? `${toSafeNumber(trip.fuelLitres).toFixed(2)} L · ` : ''}
+                      ₹{toSafeNumber(trip.fuelSpend).toFixed(0)} · {trip.driverCollectsPayment === false ? 'Do not collect' : `₹${toSafeNumber(trip.tripAmount).toFixed(0)}`}
                     </Text>
+                    <TouchableOpacity
+                      style={styles.editLink}
+                      onPress={() => { void shareBookingDutySlip(trip.tripId, trip.tripCode); }}
+                    >
+                      <Ionicons name="document-text-outline" size={16} color={colors.primary} style={styles.editIcon} />
+                      <Text style={styles.editLinkText}>Duty slip</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.editLink}
                       onPress={() => {

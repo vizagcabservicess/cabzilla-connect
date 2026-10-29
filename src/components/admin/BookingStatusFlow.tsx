@@ -81,11 +81,11 @@ export function BookingStatusFlow({
 
   return (
     <div className="py-3">
-      <div className="flex items-center justify-between w-full">
+      <div className="flex w-full min-w-0 items-start justify-between gap-1">
         {statusFlow.map((status, index) => (
           <React.Fragment key={status}>
-            <div className="flex flex-col items-center">
-              <div className={`rounded-full w-10 h-10 flex items-center justify-center border ${
+            <div className="flex min-w-0 max-w-[5.5rem] flex-col items-center">
+              <div className={`flex h-8 w-8 items-center justify-center rounded-full border ${
                 isActive(status) 
                   ? 'bg-blue-100 border-blue-500 text-blue-500' 
                   : isCompleted(status)
@@ -98,7 +98,7 @@ export function BookingStatusFlow({
                   <Circle className="w-6 h-6" />
                 )}
               </div>
-              <span className={`text-xs mt-1 font-medium ${
+              <span className={`mt-1 text-center text-[11px] font-medium leading-tight ${
                 isActive(status) 
                   ? 'text-blue-500' 
                   : isCompleted(status)

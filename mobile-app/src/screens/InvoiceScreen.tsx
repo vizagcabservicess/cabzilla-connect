@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
   Switch,
   TextInput,
+  Modal,
+  FlatList,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -21,9 +23,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/core';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
-import { adminAPI, AdminInvoice } from '../services/adminAPI';
+import { adminAPI, AdminFleetVehicle, AdminInvoice, InvoiceRequestOptions } from '../services/adminAPI';
 import type { RootStackParamList } from '../navigation/types';
-import { patchInvoiceHtmlTripTypeCellForMobile } from '../utils/invoiceTripTypeLineForMobile';
+import {
+  getDefaultBillingAddressForMobile,
+  getDefaultTripSummaryForMobile,
+  MobileTripSummary,
+  patchInvoiceHtmlTripTypeCellForMobile,
+} from '../utils/invoiceTripTypeLineForMobile';
 
 type Route = RouteProp<RootStackParamList, 'BookingInvoice'>;
 
@@ -42,16 +49,29 @@ interface InvoiceState {
   includeTax: boolean;
   customInvoiceNumber: string;
   adminNotes: string;
+  billingAddress: string;
+  tripSummary: MobileTripSummary;
   gstDetails: GstDetails;
 }
 
 /** Web app logic: GST-inclusive default when GST enabled; exclusive when disabled. */
+const EMPTY_TRIP_SUMMARY: MobileTripSummary = {
+  tripType: '',
+  vehicleType: '',
+  vehicleNumber: '',
+  tripDate: '',
+  noOfHours: '--',
+  noOfKilometers: '--',
+};
+
 const DEFAULT_INVOICE_STATE: InvoiceState = {
   gstEnabled: false,
   isIGST: false,
   includeTax: false,
   customInvoiceNumber: '',
   adminNotes: '',
+  billingAddress: '',
+  tripSummary: EMPTY_TRIP_SUMMARY,
   gstDetails: { gstNumber: '', companyName: '', companyAddress: '' },
 };
 
@@ -98,8 +118,18 @@ function getInitialInvoiceState(booking: Record<string, unknown> | undefined): I
   return {
     ...DEFAULT_INVOICE_STATE,
     ...fromBooking,
+    billingAddress: getDefaultBillingAddressForMobile(booking),
+    tripSummary: getDefaultTripSummaryForMobile(booking),
     gstDetails: { ...DEFAULT_INVOICE_STATE.gstDetails, ...fromBooking.gstDetails },
   };
+}
+
+function fleetVehicleLabel(vehicle: AdminFleetVehicle): string {
+  const reg = vehicle.vehicleNumber || vehicle.vehicle_number || 'No Number';
+  const name = vehicle.name || '';
+  const model = vehicle.model || '';
+  const year = vehicle.year || '';
+  return `${reg} - ${name} ${model} ${year ? `(${year})` : ''}`.replace(/\s+/g, ' ').trim();
 }
 
 export function InvoiceScreen() {
@@ -115,11 +145,13 @@ export function InvoiceScreen() {
   const [generating, setGenerating] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [hasAttemptedGenerate, setHasAttemptedGenerate] = useState(false);
-  const [showGstSettings, setShowGstSettings] = useState(false);
   const [invoiceState, setInvoiceState] = useState<InvoiceState>(() =>
     getInitialInvoiceState(booking)
   );
   const [hasStoredSettings, setHasStoredSettings] = useState<boolean | null>(null);
+  const [fleetVehicles, setFleetVehicles] = useState<AdminFleetVehicle[]>([]);
+  const [loadingFleet, setLoadingFleet] = useState(false);
+  const [fleetPickerOpen, setFleetPickerOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -131,6 +163,9 @@ export function InvoiceScreen() {
           setInvoiceState((prev) => ({
             ...prev,
             ...parsed,
+            billingAddress:
+              typeof parsed?.billingAddress === 'string' ? parsed.billingAddress : prev.billingAddress,
+            tripSummary: { ...prev.tripSummary, ...(parsed?.tripSummary ?? {}) },
             gstDetails: { ...prev.gstDetails, ...parsed?.gstDetails },
           }));
           setHasStoredSettings(true);
@@ -167,9 +202,9 @@ export function InvoiceScreen() {
   }, [invoice, hasStoredSettings]);
 
   useEffect(() => {
-    if (!bookingId) return;
+    if (!bookingId || hasStoredSettings === null) return;
     AsyncStorage.setItem(INVOICE_SETTINGS_KEY(bookingId), JSON.stringify(invoiceState));
-  }, [bookingId, invoiceState]);
+  }, [bookingId, invoiceState, hasStoredSettings]);
 
   const loadInvoice = async () => {
     try {
@@ -186,6 +221,53 @@ export function InvoiceScreen() {
     loadInvoice();
   }, [bookingId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadFleet = async () => {
+      setLoadingFleet(true);
+      try {
+        const list = await adminAPI.getFleetVehicles();
+        if (!cancelled) setFleetVehicles(list);
+      } catch {
+        if (!cancelled) setFleetVehicles([]);
+      } finally {
+        if (!cancelled) setLoadingFleet(false);
+      }
+    };
+    loadFleet();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const updateTripSummary = (field: keyof MobileTripSummary, value: string) => {
+    setInvoiceState((s) => ({
+      ...s,
+      tripSummary: { ...s.tripSummary, [field]: value },
+    }));
+  };
+
+  const invoiceRequestOptions = (): InvoiceRequestOptions => {
+    const lockedBaseFare = computeBaseFareFromBooking(booking);
+    return {
+      gstEnabled: invoiceState.gstEnabled,
+      isIGST: invoiceState.isIGST,
+      includeTax: invoiceState.includeTax,
+      lockedBaseFare,
+      gstDetails: { ...invoiceState.gstDetails, lockedBaseFare },
+      customInvoiceNumber: invoiceState.customInvoiceNumber.trim() || undefined,
+      adminNotes: invoiceState.adminNotes.trim() || undefined,
+      billingAddress: invoiceState.billingAddress.trim() || undefined,
+      tripSummary: invoiceState.tripSummary,
+    };
+  };
+
+  const fleetVehiclesWithNumber = fleetVehicles.filter((vehicle) => {
+    const reg = vehicle.vehicleNumber || vehicle.vehicle_number;
+    return typeof reg === 'string' && reg.trim() !== '';
+  });
+  const bookingVehicleNumber = String(booking?.vehicleNumber ?? booking?.vehicle_number ?? '').trim();
+
   const handleGenerate = async () => {
     if (!bookingId) return;
     if (invoiceState.gstEnabled && (!invoiceState.gstDetails.gstNumber?.trim() || !invoiceState.gstDetails.companyName?.trim())) {
@@ -194,15 +276,7 @@ export function InvoiceScreen() {
     }
     setGenerating(true);
     try {
-      const lockedBaseFare = computeBaseFareFromBooking(booking);
-      const inv = await adminAPI.generateInvoice(bookingId, {
-        gstEnabled: invoiceState.gstEnabled,
-        isIGST: invoiceState.isIGST,
-        includeTax: invoiceState.includeTax,
-        gstDetails: { ...invoiceState.gstDetails, lockedBaseFare },
-        customInvoiceNumber: invoiceState.customInvoiceNumber.trim() || undefined,
-        adminNotes: invoiceState.adminNotes.trim() || undefined,
-      });
+      const inv = await adminAPI.generateInvoice(bookingId, invoiceRequestOptions());
       setInvoice(inv);
       Alert.alert('Generated', 'Invoice generated successfully');
     } catch (e) {
@@ -235,16 +309,7 @@ export function InvoiceScreen() {
     if (!bookingId) return;
     setLoadingPdf(true);
     try {
-      const lockedBaseFare = computeBaseFareFromBooking(booking);
-      let html = await adminAPI.getInvoiceHtml(bookingId, {
-        gstEnabled: invoiceState.gstEnabled,
-        isIGST: invoiceState.isIGST,
-        includeTax: invoiceState.includeTax,
-        lockedBaseFare,
-        gstDetails: invoiceState.gstDetails,
-        customInvoiceNumber: invoiceState.customInvoiceNumber.trim() || undefined,
-        adminNotes: invoiceState.adminNotes.trim() || undefined,
-      });
+      let html = await adminAPI.getInvoiceHtml(bookingId, invoiceRequestOptions());
       html = patchInvoiceHtmlTripTypeCellForMobile(html, booking as Record<string, unknown>);
       navigation.navigate('WebView', {
         url: '',
@@ -267,16 +332,7 @@ export function InvoiceScreen() {
     if (!bookingId) return;
     setLoadingPdf(true);
     try {
-      const lockedBaseFare = computeBaseFareFromBooking(booking);
-      const { data } = await adminAPI.getInvoicePdfBlob(bookingId, {
-        gstEnabled: invoiceState.gstEnabled,
-        isIGST: invoiceState.isIGST,
-        includeTax: invoiceState.includeTax,
-        lockedBaseFare,
-        gstDetails: invoiceState.gstDetails,
-        customInvoiceNumber: invoiceState.customInvoiceNumber.trim() || undefined,
-        adminNotes: invoiceState.adminNotes.trim() || undefined,
-      });
+      const { data } = await adminAPI.getInvoicePdfBlob(bookingId, invoiceRequestOptions());
       const bytes = new Uint8Array(data);
       let base64 = '';
       for (let i = 0; i < bytes.length; i++) base64 += String.fromCharCode(bytes[i]);
@@ -314,7 +370,7 @@ export function InvoiceScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Feather name="arrow-left" size={24} color={colors.foreground} />
           </TouchableOpacity>
-          <Text style={styles.title}>Invoice</Text>
+          <Text style={styles.title}>Invoice & Billing</Text>
         </View>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -353,10 +409,14 @@ export function InvoiceScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Feather name="arrow-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={styles.title}>Invoice</Text>
+        <Text style={styles.title}>Invoice & Billing</Text>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         {hasDisplayData ? (
           <View style={styles.card}>
             <View style={styles.row}>
@@ -440,6 +500,254 @@ export function InvoiceScreen() {
           </View>
         )}
 
+        <View style={styles.gstCard}>
+          <Text style={styles.sectionTitle}>Billing</Text>
+
+          <View style={styles.gstRow}>
+            <Text style={styles.gstLabel}>Custom Invoice Number</Text>
+            <TextInput
+              style={styles.gstInput}
+              value={invoiceState.customInvoiceNumber}
+              onChangeText={(t) => setInvoiceState((s) => ({ ...s, customInvoiceNumber: t }))}
+              placeholder="Optional - leave blank for auto-generated number"
+              placeholderTextColor={colors.gray400}
+            />
+            <Text style={styles.hint}>If provided, this will replace the auto-generated invoice number</Text>
+          </View>
+
+          <View style={styles.gstRow}>
+            <Text style={styles.gstLabel}>Billing Address</Text>
+            <TextInput
+              style={[styles.gstInput, styles.gstInputMultiline]}
+              value={invoiceState.billingAddress}
+              onChangeText={(t) => setInvoiceState((s) => ({ ...s, billingAddress: t }))}
+              placeholder="Company or billing address shown on invoice"
+              placeholderTextColor={colors.gray400}
+              multiline
+            />
+            <Text style={styles.hint}>
+              Shown under Customer Details. Prefilled from the booking; edit here to override on the invoice only.
+            </Text>
+          </View>
+
+          <View style={styles.summaryBlock}>
+            <Text style={styles.summaryTitle}>Trip Summary (Invoice)</Text>
+            <Text style={styles.hint}>
+              Override trip details shown on the invoice without changing the booking record.
+            </Text>
+          </View>
+
+          <View style={styles.gstRow}>
+            <Text style={styles.gstLabel}>Trip Type</Text>
+            <TextInput
+              style={styles.gstInput}
+              value={invoiceState.tripSummary.tripType}
+              onChangeText={(t) => updateTripSummary('tripType', t)}
+              placeholder="e.g. Local or Outstation (One way)"
+              placeholderTextColor={colors.gray400}
+            />
+          </View>
+
+          <View style={styles.gstRow}>
+            <Text style={styles.gstLabel}>Vehicle Type</Text>
+            <TextInput
+              style={styles.gstInput}
+              value={invoiceState.tripSummary.vehicleType}
+              onChangeText={(t) => updateTripSummary('vehicleType', t)}
+              placeholder="e.g. Innova Crysta"
+              placeholderTextColor={colors.gray400}
+            />
+          </View>
+
+          <View style={styles.gstRow}>
+            <Text style={styles.gstLabel}>Vehicle Number (Registration)</Text>
+            <TouchableOpacity
+              style={styles.fleetSelect}
+              onPress={() => setFleetPickerOpen(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.fleetSelectText} numberOfLines={1}>
+                {loadingFleet ? 'Loading fleet vehicles...' : 'Select from fleet (optional)'}
+              </Text>
+              <Feather name="chevron-down" size={18} color={colors.gray600} />
+            </TouchableOpacity>
+            <TextInput
+              style={styles.gstInput}
+              value={invoiceState.tripSummary.vehicleNumber}
+              onChangeText={(t) => updateTripSummary('vehicleNumber', t)}
+              placeholder="e.g. AP39AX0007"
+              placeholderTextColor={colors.gray400}
+              autoCapitalize="characters"
+            />
+            <View style={styles.vehicleHintRow}>
+              <Text style={[styles.hint, styles.hintFlex]}>
+                Shown on invoice as Vehicle No. Prefilled from assigned fleet vehicle; edit here to override on the invoice only.
+                {bookingVehicleNumber && invoiceState.tripSummary.vehicleNumber !== bookingVehicleNumber
+                  ? ` Booking has: ${bookingVehicleNumber}`
+                  : ''}
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.removeBtn,
+                  !invoiceState.tripSummary.vehicleNumber.trim() && styles.removeBtnDisabled,
+                ]}
+                disabled={!invoiceState.tripSummary.vehicleNumber.trim()}
+                onPress={() => updateTripSummary('vehicleNumber', '')}
+              >
+                <Text style={styles.removeBtnText}>Remove from invoice</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.gstRow}>
+            <Text style={styles.gstLabel}>Date</Text>
+            <TextInput
+              style={styles.gstInput}
+              value={invoiceState.tripSummary.tripDate}
+              onChangeText={(t) => updateTripSummary('tripDate', t)}
+              placeholder="e.g. 26 Oct 2026"
+              placeholderTextColor={colors.gray400}
+            />
+          </View>
+
+          <View style={styles.pairRow}>
+            <View style={styles.pairCol}>
+              <Text style={styles.gstLabel}>No. of Hours</Text>
+              <TextInput
+                style={styles.gstInput}
+                value={invoiceState.tripSummary.noOfHours}
+                onChangeText={(t) => updateTripSummary('noOfHours', t)}
+                placeholder="e.g. 8 or --"
+                placeholderTextColor={colors.gray400}
+              />
+            </View>
+            <View style={styles.pairCol}>
+              <Text style={styles.gstLabel}>No. of Kilometers</Text>
+              <TextInput
+                style={styles.gstInput}
+                value={invoiceState.tripSummary.noOfKilometers}
+                onChangeText={(t) => updateTripSummary('noOfKilometers', t)}
+                placeholder="e.g. 80 or --"
+                placeholderTextColor={colors.gray400}
+              />
+            </View>
+          </View>
+
+          <View style={[styles.gstRow, styles.gstRowSwitch]}>
+            <Text style={[styles.gstLabel, styles.switchLabel]}>Include GST (18%)</Text>
+            <Switch
+              value={invoiceState.gstEnabled}
+              onValueChange={(v) =>
+                setInvoiceState((s) => ({
+                  ...s,
+                  gstEnabled: v,
+                  includeTax: v ? true : s.includeTax,
+                }))
+              }
+              trackColor={{ false: colors.gray200, true: colors.primary + '80' }}
+              thumbColor={invoiceState.gstEnabled ? colors.primary : colors.gray400}
+            />
+          </View>
+
+          <View style={[styles.gstRow, styles.gstRowSwitch]}>
+            <Text style={[styles.gstLabel, styles.switchLabel, !invoiceState.gstEnabled && styles.gstLabelDisabled]}>
+              {invoiceState.includeTax ? 'Price including tax' : 'Price excluding tax'}
+              {!invoiceState.gstEnabled ? ' (Enable GST first)' : ''}
+            </Text>
+            <Switch
+              value={invoiceState.includeTax}
+              onValueChange={(v) => setInvoiceState((s) => ({ ...s, includeTax: v }))}
+              disabled={!invoiceState.gstEnabled}
+              trackColor={{ false: colors.gray200, true: colors.primary + '80' }}
+              thumbColor={invoiceState.includeTax ? colors.primary : colors.gray400}
+            />
+          </View>
+
+          {invoiceState.gstEnabled && (
+            <>
+              <View style={styles.gstRow}>
+                <Text style={styles.gstLabel}>GST Number *</Text>
+                <TextInput
+                  style={styles.gstInput}
+                  value={invoiceState.gstDetails.gstNumber}
+                  onChangeText={(t) =>
+                    setInvoiceState((s) => ({
+                      ...s,
+                      gstDetails: { ...s.gstDetails, gstNumber: t },
+                    }))
+                  }
+                  placeholder="Enter GST number"
+                  placeholderTextColor={colors.gray400}
+                />
+              </View>
+              <View style={styles.gstRow}>
+                <Text style={styles.gstLabel}>Company Name *</Text>
+                <TextInput
+                  style={styles.gstInput}
+                  value={invoiceState.gstDetails.companyName}
+                  onChangeText={(t) =>
+                    setInvoiceState((s) => ({
+                      ...s,
+                      gstDetails: { ...s.gstDetails, companyName: t },
+                    }))
+                  }
+                  placeholder="Enter company name"
+                  placeholderTextColor={colors.gray400}
+                />
+              </View>
+              <View style={styles.gstRow}>
+                <Text style={styles.gstLabel}>Company Address</Text>
+                <TextInput
+                  style={[styles.gstInput, styles.gstInputMultiline]}
+                  value={invoiceState.gstDetails.companyAddress}
+                  onChangeText={(t) =>
+                    setInvoiceState((s) => ({
+                      ...s,
+                      gstDetails: { ...s.gstDetails, companyAddress: t },
+                    }))
+                  }
+                  placeholder="Enter company address"
+                  placeholderTextColor={colors.gray400}
+                  multiline
+                />
+              </View>
+              <View style={styles.gstRow}>
+                <Text style={styles.gstLabel}>GST Type</Text>
+                <View style={styles.radioRow}>
+                  <TouchableOpacity
+                    style={[styles.radioOption, !invoiceState.isIGST && styles.radioOptionSelected]}
+                    onPress={() => setInvoiceState((s) => ({ ...s, isIGST: false }))}
+                  >
+                    <Text style={[styles.radioText, !invoiceState.isIGST && styles.radioTextSelected]}>
+                      Intra-state (CGST+SGST)
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.radioOption, invoiceState.isIGST && styles.radioOptionSelected]}
+                    onPress={() => setInvoiceState((s) => ({ ...s, isIGST: true }))}
+                  >
+                    <Text style={[styles.radioText, invoiceState.isIGST && styles.radioTextSelected]}>
+                      Inter-state (IGST)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          )}
+
+          <View style={styles.gstRow}>
+            <Text style={styles.gstLabel}>Admin Notes</Text>
+            <TextInput
+              style={[styles.gstInput, styles.gstInputMultiline]}
+              value={invoiceState.adminNotes}
+              onChangeText={(t) => setInvoiceState((s) => ({ ...s, adminNotes: t }))}
+              placeholder="Optional notes for the invoice"
+              placeholderTextColor={colors.gray400}
+              multiline
+            />
+          </View>
+        </View>
+
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.downloadPdfBtn, loadingPdf && styles.downloadBtnDisabled]}
@@ -506,174 +814,42 @@ export function InvoiceScreen() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          style={styles.gstToggleHeader}
-          onPress={() => setShowGstSettings((s) => !s)}
-          activeOpacity={0.7}
-        >
-          <Feather
-            name={showGstSettings ? 'chevron-down' : 'chevron-right'}
-            size={20}
-            color={colors.gray600}
-          />
-          <Text style={styles.gstToggleText}>GST & Invoice Settings</Text>
-        </TouchableOpacity>
-
-        {showGstSettings && (
-          <View style={styles.gstCard}>
-            <View style={styles.gstRow}>
-              <Text style={styles.gstLabel}>Custom Invoice #</Text>
-              <TextInput
-                style={styles.gstInput}
-                value={invoiceState.customInvoiceNumber}
-                onChangeText={(t) =>
-                  setInvoiceState((s) => ({ ...s, customInvoiceNumber: t }))
-                }
-                placeholder="Optional - auto-generated if blank"
-                placeholderTextColor={colors.gray400}
-              />
+      </ScrollView>
+      <Modal visible={fleetPickerOpen} transparent animationType="slide" onRequestClose={() => setFleetPickerOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select fleet vehicle</Text>
+              <TouchableOpacity onPress={() => setFleetPickerOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Feather name="x" size={22} color={colors.foreground} />
+              </TouchableOpacity>
             </View>
-
-            <View style={styles.gstRow}>
-              <Text style={styles.gstLabel}>Admin Notes</Text>
-              <TextInput
-                style={[styles.gstInput, styles.gstInputMultiline]}
-                value={invoiceState.adminNotes}
-                onChangeText={(t) =>
-                  setInvoiceState((s) => ({ ...s, adminNotes: t }))
-                }
-                placeholder="Optional notes for the invoice"
-                placeholderTextColor={colors.gray400}
-                multiline
+            {loadingFleet ? (
+              <ActivityIndicator color={colors.primary} style={styles.modalLoader} />
+            ) : (
+              <FlatList
+                style={styles.fleetList}
+                data={fleetVehiclesWithNumber}
+                keyExtractor={(item) => String(item.id)}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={<Text style={styles.hint}>No fleet vehicles with a registration number.</Text>}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.fleetRow}
+                    onPress={() => {
+                      const reg = (item.vehicleNumber || item.vehicle_number || '').trim();
+                      updateTripSummary('vehicleNumber', reg);
+                      setFleetPickerOpen(false);
+                    }}
+                  >
+                    <Text style={styles.fleetRowText}>{fleetVehicleLabel(item)}</Text>
+                  </TouchableOpacity>
+                )}
               />
-            </View>
-
-            <View style={[styles.gstRow, styles.gstRowSwitch]}>
-              <Text style={styles.gstLabel}>Include GST (18%)</Text>
-              <Switch
-                value={invoiceState.gstEnabled}
-                onValueChange={(v) =>
-                  setInvoiceState((s) => ({
-                    ...s,
-                    gstEnabled: v,
-                    // When enabling GST, default to inclusive (match web app)
-                    includeTax: v ? true : s.includeTax,
-                  }))
-                }
-                trackColor={{ false: colors.gray200, true: colors.primary + '80' }}
-                thumbColor={invoiceState.gstEnabled ? colors.primary : colors.gray400}
-              />
-            </View>
-
-            <View style={[styles.gstRow, styles.gstRowSwitch]}>
-              <Text style={[styles.gstLabel, !invoiceState.gstEnabled && styles.gstLabelDisabled]}>
-                {invoiceState.includeTax ? 'Price including tax' : 'Price excluding tax'}
-              </Text>
-              <Switch
-                value={invoiceState.includeTax}
-                onValueChange={(v) =>
-                  setInvoiceState((s) => ({ ...s, includeTax: v }))
-                }
-                disabled={!invoiceState.gstEnabled}
-                trackColor={{ false: colors.gray200, true: colors.primary + '80' }}
-                thumbColor={invoiceState.includeTax ? colors.primary : colors.gray400}
-              />
-            </View>
-
-            {invoiceState.gstEnabled && (
-              <>
-                <View style={styles.gstRow}>
-                  <Text style={styles.gstLabel}>GST Number *</Text>
-                  <TextInput
-                    style={styles.gstInput}
-                    value={invoiceState.gstDetails.gstNumber}
-                    onChangeText={(t) =>
-                      setInvoiceState((s) => ({
-                        ...s,
-                        gstDetails: { ...s.gstDetails, gstNumber: t },
-                      }))
-                    }
-                    placeholder="Enter GST number"
-                    placeholderTextColor={colors.gray400}
-                  />
-                </View>
-                <View style={styles.gstRow}>
-                  <Text style={styles.gstLabel}>Company Name *</Text>
-                  <TextInput
-                    style={styles.gstInput}
-                    value={invoiceState.gstDetails.companyName}
-                    onChangeText={(t) =>
-                      setInvoiceState((s) => ({
-                        ...s,
-                        gstDetails: { ...s.gstDetails, companyName: t },
-                      }))
-                    }
-                    placeholder="Enter company name"
-                    placeholderTextColor={colors.gray400}
-                  />
-                </View>
-                <View style={styles.gstRow}>
-                  <Text style={styles.gstLabel}>Company Address</Text>
-                  <TextInput
-                    style={[styles.gstInput, styles.gstInputMultiline]}
-                    value={invoiceState.gstDetails.companyAddress}
-                    onChangeText={(t) =>
-                      setInvoiceState((s) => ({
-                        ...s,
-                        gstDetails: { ...s.gstDetails, companyAddress: t },
-                      }))
-                    }
-                    placeholder="Enter company address"
-                    placeholderTextColor={colors.gray400}
-                    multiline
-                  />
-                </View>
-                <View style={styles.gstRow}>
-                  <Text style={styles.gstLabel}>GST Type</Text>
-                  <View style={styles.radioRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.radioOption,
-                        !invoiceState.isIGST && styles.radioOptionSelected,
-                      ]}
-                      onPress={() =>
-                        setInvoiceState((s) => ({ ...s, isIGST: false }))
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.radioText,
-                          !invoiceState.isIGST && styles.radioTextSelected,
-                        ]}
-                      >
-                        Intra-state (CGST+SGST)
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.radioOption,
-                        invoiceState.isIGST && styles.radioOptionSelected,
-                      ]}
-                      onPress={() =>
-                        setInvoiceState((s) => ({ ...s, isIGST: true }))
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.radioText,
-                          invoiceState.isIGST && styles.radioTextSelected,
-                        ]}
-                      >
-                        Inter-state (IGST)
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </>
             )}
           </View>
-        )}
-      </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -778,19 +954,68 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
   },
   viewInvoiceBtnText: { fontSize: 15, fontWeight: '600', color: colors.primary },
-  gstToggleHeader: {
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.foreground, marginBottom: 12 },
+  summaryBlock: { marginBottom: 12, paddingTop: 4, borderTopWidth: 1, borderTopColor: colors.gray200 },
+  summaryTitle: { fontSize: 14, fontWeight: '600', color: colors.foreground, marginTop: 12, marginBottom: 4 },
+  hint: { fontSize: 12, color: colors.gray600, marginTop: 6, lineHeight: 16 },
+  hintFlex: { marginTop: 0 },
+  fleetSelect: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: colors.gray200,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
+    backgroundColor: '#fff',
   },
-  gstToggleText: { fontSize: 15, fontWeight: '500', color: colors.foreground },
+  fleetSelectText: { flex: 1, fontSize: 15, color: colors.gray600, marginRight: 8 },
+  vehicleHintRow: { marginTop: 8, alignItems: 'flex-start' },
+  removeBtn: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  removeBtnDisabled: { opacity: 0.45 },
+  removeBtnText: { fontSize: 12, fontWeight: '600', color: colors.foreground },
+  pairRow: { flexDirection: 'row', gap: 12, marginBottom: 14 },
+  pairCol: { flex: 1 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    height: '70%',
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
+  },
+  modalTitle: { fontSize: 16, fontWeight: '600', color: colors.foreground },
+  modalLoader: { marginVertical: 24 },
+  fleetList: { flex: 1 },
+  fleetRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+  },
+  fleetRowText: { fontSize: 15, color: colors.foreground },
   gstCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -806,6 +1031,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   gstLabel: { fontSize: 14, color: colors.gray600, marginBottom: 6 },
+  switchLabel: { marginBottom: 0, flex: 1, paddingRight: 12 },
   gstLabelDisabled: { color: colors.gray400 },
   gstInput: {
     borderWidth: 1,

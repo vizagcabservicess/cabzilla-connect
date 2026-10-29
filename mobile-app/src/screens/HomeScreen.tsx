@@ -30,7 +30,7 @@ import { colors, fonts } from '../theme/colors';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MAX_WIDTH = Math.min(420, SCREEN_WIDTH - 32);
 import { calculateDistanceMatrix } from '../services/distanceService';
-import { isLocationInVizag, getDistanceBetween } from '../lib/locationUtils';
+import { inferOutstationOrAirport } from '../lib/locationUtils';
 import { tourAPI } from '../services/tourAPI';
 import { useAuth } from '../providers/AuthProvider';
 import { useTripCart } from '../lib/tripCart';
@@ -266,30 +266,13 @@ export function HomeScreen() {
     return () => { cancelled = true; };
   }, [tripType, tripMode, pickupLocation, dropLocation, pickupDate]);
 
-  // Reactive tab switch: runs after dropLocation updates (avoids stale closure in onLocationChange)
+  // Pick Airport or Outstation once from the two places. The previous rules could both be
+  // true at once (airport outside 35 km, or a short trip flagged outside Vizag) and flip forever.
   React.useEffect(() => {
-    if (!dropLocation || (tripType !== 'outstation' && tripType !== 'airport')) return;
-    const coordOk = (n: unknown) => typeof n === 'number' && !isNaN(n) && n !== 0;
-    const hasCoords =
-      pickupLocation &&
-      coordOk(pickupLocation.lat) &&
-      coordOk(pickupLocation.lng) &&
-      coordOk(dropLocation.lat) &&
-      coordOk(dropLocation.lng);
-    const distanceKm = hasCoords
-      ? getDistanceBetween(
-          pickupLocation!.lat as number,
-          pickupLocation!.lng as number,
-          dropLocation.lat as number,
-          dropLocation.lng as number
-        )
-      : 0;
-    const dropInVizag = isLocationInVizag(dropLocation) || dropLocation.isInVizag === true;
-
-    if (tripType === 'outstation' && ((hasCoords && distanceKm <= 35) || dropInVizag)) {
-      setTripType('airport');
-    } else if (tripType === 'airport' && ((hasCoords && distanceKm > 35) || !dropInVizag)) {
-      setTripType('outstation');
+    if (tripType !== 'outstation' && tripType !== 'airport') return;
+    const inferred = inferOutstationOrAirport(pickupLocation, dropLocation);
+    if (inferred && inferred !== tripType) {
+      setTripType(inferred);
     }
   }, [dropLocation, pickupLocation, tripType]);
 
@@ -415,76 +398,31 @@ export function HomeScreen() {
     const drop = tripType === 'tour' ? pickupLocation : dropLocation;
     if (tripType !== 'tour' && !drop) return;
 
-    let effectiveTripType: TripType = tripType;
+    const inferred = drop ? inferOutstationOrAirport(pickupLocation, drop) : null;
+    const effectiveTripType: TripType =
+      (tripType === 'outstation' || tripType === 'airport') && inferred ? inferred : tripType;
 
-    // Trip type auto-switch - matches web app Hero logic exactly
-    // Web uses (lat && lng) so 0 is treated as missing - we do the same
-    const validCoord = (n: unknown) =>
-      typeof n === 'number' && !isNaN(n) && n !== 0;
-    const hasCoords =
-      drop &&
-      validCoord(pickupLocation.lat) &&
-      validCoord(pickupLocation.lng) &&
-      validCoord(drop.lat) &&
-      validCoord(drop.lng);
-    const distanceKm = hasCoords
-      ? getDistanceBetween(
-          pickupLocation.lat as number,
-          pickupLocation.lng as number,
-          drop.lat as number,
-          drop.lng as number
-        )
-      : 0;
-
-    if (tripType === 'airport' && drop) {
-      const dropInVizag = hasCoords ? isLocationInVizag(drop) : (drop.isInVizag === true);
-      const shouldSwitchOutstation = hasCoords ? distanceKm > 35 : !dropInVizag;
-      if (shouldSwitchOutstation) {
-        effectiveTripType = 'outstation';
-        Alert.alert(
-          'Switching to Outstation',
-          hasCoords
-            ? `Distance is ${distanceKm.toFixed(1)}km (beyond 35km). We'll use Outstation fares for this trip.`
-            : "Selected drop is outside Visakhapatnam. We'll use Outstation fares for this trip.",
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                const ep = resolvePickupForSearch(pickupDateRef.current);
-                setPickupDate(ep);
-                pickupDateRef.current = ep;
-                void performSearch(effectiveTripType, ep);
-              },
+    if (effectiveTripType !== tripType && (effectiveTripType === 'airport' || effectiveTripType === 'outstation')) {
+      const switchingToAirport = effectiveTripType === 'airport';
+      Alert.alert(
+        switchingToAirport ? 'Switching to Airport' : 'Switching to Outstation',
+        switchingToAirport
+          ? "This route uses Airport Transfer fares."
+          : "This route is outside the airport area. We'll use Outstation fares.",
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              const ep = resolvePickupForSearch(pickupDateRef.current);
+              setPickupDate(ep);
+              pickupDateRef.current = ep;
+              setTripType(effectiveTripType);
+              void performSearch(effectiveTripType, ep);
             },
-          ]
-        );
-        return;
-      }
-    } else if (tripType === 'outstation' && pickupLocation && drop) {
-      const shouldSwitchAirport = hasCoords
-        ? distanceKm <= 35
-        : isLocationInVizag(drop) || drop.isInVizag === true;
-      if (shouldSwitchAirport) {
-        effectiveTripType = 'airport';
-        Alert.alert(
-          'Switching to Airport',
-          hasCoords
-            ? `Distance is ${distanceKm.toFixed(1)}km (within 35km). We'll use Airport Transfer fares for this trip.`
-            : "Drop location is within Visakhapatnam. We'll use Airport Transfer fares for this trip.",
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                const ep = resolvePickupForSearch(pickupDateRef.current);
-                setPickupDate(ep);
-                pickupDateRef.current = ep;
-                void performSearch(effectiveTripType, ep);
-              },
-            },
-          ]
-        );
-        return;
-      }
+          },
+        ]
+      );
+      return;
     }
 
     await performSearch(effectiveTripType, effectivePickup);

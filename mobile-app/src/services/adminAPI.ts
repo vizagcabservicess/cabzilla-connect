@@ -24,6 +24,40 @@ class ServerResponseError extends Error {
   }
 }
 
+export interface InvoiceTripSummaryInput {
+  tripType?: string;
+  vehicleType?: string;
+  vehicleNumber?: string;
+  tripDate?: string;
+  noOfHours?: string;
+  noOfKilometers?: string;
+}
+
+export interface InvoiceRequestOptions {
+  gstEnabled?: boolean;
+  isIGST?: boolean;
+  includeTax?: boolean;
+  lockedBaseFare?: number;
+  adminNotes?: string;
+  gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string; lockedBaseFare?: number };
+  customInvoiceNumber?: string;
+  billingAddress?: string;
+  tripSummary?: InvoiceTripSummaryInput;
+}
+
+function appendInvoiceBillingParams(params: URLSearchParams, options?: InvoiceRequestOptions): void {
+  const billing = (options?.billingAddress ?? '').trim();
+  if (billing) params.append('billingAddress', billing);
+  const trip = options?.tripSummary;
+  if (!trip) return;
+  if ((trip.tripType ?? '').trim()) params.append('tripType', trip.tripType!.trim());
+  if ((trip.vehicleType ?? '').trim()) params.append('vehicleType', trip.vehicleType!.trim());
+  if ((trip.tripDate ?? '').trim()) params.append('tripDate', trip.tripDate!.trim());
+  if ((trip.noOfHours ?? '').trim()) params.append('noOfHours', trip.noOfHours!.trim());
+  if ((trip.noOfKilometers ?? '').trim()) params.append('noOfKm', trip.noOfKilometers!.trim());
+  params.append('vehicleNumber', (trip.vehicleNumber ?? '').trim());
+}
+
 export type MetricsPeriod = '7days' | '30days' | '90days' | 'year';
 
 export interface AdminMetrics {
@@ -591,19 +625,81 @@ export const adminAPI = {
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
     const url = `${base}/api/admin/assign-driver.php`;
-    const response = await axios.post(
-      url,
-      { bookingId: Number(bookingId), driverId: Number(driverId) },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 15000,
+    try {
+      const response = await axios.post(
+        url,
+        { bookingId: Number(bookingId), driverId: Number(driverId) },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 15000,
+        }
+      );
+      if (response.data?.status === 'error') {
+        throw new Error(response.data?.message || 'Failed to assign driver');
       }
-    );
-    if (response.data?.status === 'error') {
-      throw new Error(response.data?.message || 'Failed to assign driver');
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const serverMessage = error.response?.data?.message;
+        if (typeof serverMessage === 'string' && serverMessage.trim() !== '') {
+          throw new Error(serverMessage.trim());
+        }
+      }
+      throw error;
+    }
+  },
+
+  getDutyAssignment: async (bookingId: number): Promise<{
+    tripCode: string;
+    days: Array<{
+      id: number;
+      dayIndex: number;
+      dutyDate: string;
+      status: string;
+      segments: Array<{
+        status: string;
+        driverName: string;
+        vehicleNumber: string;
+        vehicleModel: string;
+        openingKm: number | null;
+        closingKm: number | null;
+      }>;
+    }>;
+  }> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    const response = await axios.get(`${base}/api/admin/duty-assignment.php`, {
+      params: { bookingId },
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 15000,
+    });
+    if (response.data?.status !== 'success') {
+      throw new Error(response.data?.message || 'Could not load duty days');
+    }
+    return response.data;
+  },
+
+  changeDutyAssignment: async (payload: {
+    bookingId: number;
+    effectiveDate: string;
+    newDriverId: number;
+    newVehicleId: number;
+    reason: string;
+    note: string;
+    closingKm: number | null;
+  }): Promise<void> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    const response = await axios.post(`${base}/api/admin/duty-assignment.php`, payload, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      timeout: 20000,
+    });
+    if (response.data?.status !== 'success') {
+      throw new Error(response.data?.message || 'Could not change the assignment');
     }
   },
 
@@ -640,15 +736,7 @@ export const adminAPI = {
    */
   getInvoicePdfUrl: (
     bookingId: number,
-    options?: {
-      gstEnabled?: boolean;
-      isIGST?: boolean;
-      includeTax?: boolean;
-      lockedBaseFare?: number;
-      adminNotes?: string;
-      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string; lockedBaseFare?: number };
-      customInvoiceNumber?: string;
-    }
+    options?: InvoiceRequestOptions
   ): string => {
     const base = getBase();
     const params = new URLSearchParams({
@@ -674,6 +762,7 @@ export const adminAPI = {
       if (options.gstDetails.companyName) params.append('companyName', options.gstDetails.companyName);
       if (options.gstDetails.companyAddress) params.append('companyAddress', options.gstDetails.companyAddress || '');
     }
+    appendInvoiceBillingParams(params, options);
     return `${base}/api/download-invoice.php?${params.toString()}`;
   },
 
@@ -683,15 +772,7 @@ export const adminAPI = {
    */
   getInvoicePdfBlob: async (
     bookingId: number,
-    options?: {
-      gstEnabled?: boolean;
-      isIGST?: boolean;
-      includeTax?: boolean;
-      lockedBaseFare?: number;
-      adminNotes?: string;
-      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string; lockedBaseFare?: number };
-      customInvoiceNumber?: string;
-    }
+    options?: InvoiceRequestOptions
   ): Promise<{ data: ArrayBuffer; isPdf: boolean }> => {
     const url = adminAPI.getInvoicePdfUrl(bookingId, options);
     const token = await authAPI.getStoredToken();
@@ -739,15 +820,7 @@ export const adminAPI = {
    */
   getInvoiceHtml: async (
     bookingId: number,
-    options?: {
-      gstEnabled?: boolean;
-      isIGST?: boolean;
-      includeTax?: boolean;
-      lockedBaseFare?: number;
-      adminNotes?: string;
-      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string; lockedBaseFare?: number };
-      customInvoiceNumber?: string;
-    }
+    options?: InvoiceRequestOptions
   ): Promise<string> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
@@ -774,6 +847,7 @@ export const adminAPI = {
       if (options.gstDetails.companyName) params.append('companyName', options.gstDetails.companyName);
       if (options.gstDetails.companyAddress) params.append('companyAddress', options.gstDetails.companyAddress || '');
     }
+    appendInvoiceBillingParams(params, options);
     const url = `${base}/api/download-invoice.php?${params.toString()}`;
     const response = await axios.get(url, {
       headers: {
@@ -832,15 +906,7 @@ export const adminAPI = {
   /** Generate invoice for booking - normalizes response (data.data or data.invoice). Matches web: passes lockedBaseFare for GST-inclusive. */
   generateInvoice: async (
     bookingId: number,
-    options?: {
-      gstEnabled?: boolean;
-      isIGST?: boolean;
-      includeTax?: boolean;
-      lockedBaseFare?: number;
-      adminNotes?: string;
-      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string; lockedBaseFare?: number };
-      customInvoiceNumber?: string;
-    }
+    options?: InvoiceRequestOptions
   ): Promise<AdminInvoice> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
@@ -867,6 +933,20 @@ export const adminAPI = {
     }
     if ((options?.adminNotes ?? '').trim()) {
       requestBody.adminNotes = (options?.adminNotes ?? '').trim();
+    }
+    if ((options?.billingAddress ?? '').trim()) {
+      requestBody.billingAddress = (options?.billingAddress ?? '').trim();
+    }
+    if (options?.tripSummary) {
+      const trip = options.tripSummary;
+      requestBody.tripSummary = {
+        tripType: (trip.tripType ?? '').trim(),
+        vehicleType: (trip.vehicleType ?? '').trim(),
+        vehicleNumber: (trip.vehicleNumber ?? '').trim(),
+        tripDate: (trip.tripDate ?? '').trim(),
+        noOfHours: (trip.noOfHours ?? '').trim(),
+        noOfKilometers: (trip.noOfKilometers ?? '').trim(),
+      };
     }
     const response = await axios.post(url, requestBody, {
       headers: {

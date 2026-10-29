@@ -503,9 +503,12 @@ export function coalesceTourItinerary(booking: Booking): TourItineraryDay[] {
 
 export function formatTourItineraryForWhatsApp(days: TourItineraryDay[]): string {
   if (!days.length) return '';
+  let lastDay = 0;
   return days
     .map((d) => {
-      const labelDay = d.day < 1 ? 1 : d.day;
+      const stated = d.day < 1 ? 1 : d.day;
+      const labelDay = stated > lastDay ? stated : lastDay + 1;
+      lastDay = labelDay;
       const titleLine = d.title ? `: *${d.title}*` : '';
       const desc = d.description ? `\n${d.description}` : '';
       const actLine =

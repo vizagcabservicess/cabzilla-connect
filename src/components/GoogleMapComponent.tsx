@@ -10,7 +10,7 @@ interface GoogleMapComponentProps {
   dropLocation: Location;
   tripType: string;
   waypoints?: Location[];
-  /** Outstation one-way: route drop then return to pickup (garage-to-garage). */
+  /** When set, the drawn route ends back at pickup. One-way booking distance does not use this. */
   returnToPickup?: boolean;
   onDistanceCalculated?: (distance: number, duration: number) => void;
   mapHeight?: string;

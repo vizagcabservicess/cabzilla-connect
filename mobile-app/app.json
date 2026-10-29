@@ -16,8 +16,8 @@
       "bundleIdentifier": "com.vizagtaxihub.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Vizag Taxi Hub uses your location for live trip and event duty tracking.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "During an event duty, Vizag Taxi Hub shares your location so the event manager can see the vehicle. You can lock the screen; a notification stays until you end duty.",
-        "NSLocationAlwaysUsageDescription": "During an event duty, Vizag Taxi Hub shares your location so the event manager can see the vehicle. You can lock the screen; a notification stays until you end duty.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "During a trip or event duty, Vizag Taxi Hub shares your location with the office. You can lock the screen; a notification stays until tracking stops.",
+        "NSLocationAlwaysUsageDescription": "During a trip or event duty, Vizag Taxi Hub shares your location with the office. You can lock the screen; a notification stays until tracking stops.",
         "UIBackgroundModes": ["location"],
         "NSCameraUsageDescription": "Vizag Taxi Hub uses the camera to photograph odometer readings and fuel receipts.",
         "NSPhotoLibraryUsageDescription": "Vizag Taxi Hub may access photos you select for receipts."
@@ -47,6 +47,7 @@
       "blockedPermissions": [
         "android.permission.ACTIVITY_RECOGNITION"
       ],
+      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "pan"
     },
@@ -59,7 +60,7 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Vizag Taxi Hub uses your location for live trip and event duty tracking.",
-          "locationAlwaysAndWhenInUsePermission": "During an event duty, Vizag Taxi Hub shares your location so the event manager can see the vehicle. You can lock the screen; a notification stays until you end duty.",
+          "locationAlwaysAndWhenInUsePermission": "During a trip or event duty, Vizag Taxi Hub shares your location with the office. You can lock the screen; a notification stays until tracking stops.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
@@ -91,7 +92,18 @@
       "expo-secure-store",
       "expo-task-manager",
       "expo-web-browser",
-      "./plugins/withOptionalAndroidHardware.js"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class com.razorpay.** { *; }\n-keep class com.google.mlkit.** { *; }\n-dontwarn com.razorpay.**\n-dontwarn com.google.mlkit.**"
+          }
+        }
+      ],
+      "./plugins/withOptionalAndroidHardware.js",
+      "./plugins/withPlayLargeScreens.js"
     ],
     "extra": {
       "eas": {

@@ -31,6 +31,7 @@ import {
   type TrackVehicle,
 } from '../../services/eventDutyAPI';
 import { fonts } from '../../theme/colors';
+import { resolveVehicleImageUrl } from '../../utils/mediaUrl';
 
 type Tab = 'dashboard' | 'vehicles' | 'map' | 'more';
 type Chip = 'all' | 'trip' | 'parking' | 'completed';
@@ -813,15 +814,17 @@ export function EventManagerBoard({
                         </TouchableOpacity>
                       </>
                     ) : (
-                      {isCompleted(row) && row.dutyId ? (
-                        <TouchableOpacity style={styles.continueBtn} disabled={busyId === row.dutyId} onPress={() => continueDuty(row)}>
-                          <Text style={styles.continueText}>Continue</Text>
+                      <>
+                        {isCompleted(row) && row.dutyId ? (
+                          <TouchableOpacity style={styles.continueBtn} disabled={busyId === row.dutyId} onPress={() => continueDuty(row)}>
+                            <Text style={styles.continueText}>Continue</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        <TouchableOpacity style={styles.viewBtn} onPress={() => { setSelected(row); setPicker('details'); }}>
+                          <Ionicons name="eye-outline" size={16} color="#16a34a" />
+                          <Text style={styles.viewText}>View</Text>
                         </TouchableOpacity>
-                      ) : null}
-                      <TouchableOpacity style={styles.viewBtn} onPress={() => { setSelected(row); setPicker('details'); }}>
-                        <Ionicons name="eye-outline" size={16} color="#16a34a" />
-                        <Text style={styles.viewText}>View</Text>
-                      </TouchableOpacity>
+                      </>
                     )}
                   </View>
                 </View>
@@ -1075,15 +1078,7 @@ function placeDurations(row: ShareVehicle, nowMs: number, taps?: PlaceTap[]): { 
 }
 
 function fleetPhoto(type: string): string {
-  const name = type.toLowerCase();
-  const origin = 'https://www.vizagtaxihub.com/uploads';
-  if (name.includes('urban')) return `${origin}/og-image-urbania.jpg`;
-  if (name.includes('fortun')) return `${origin}/taxi-services--visakhapatnam-fortuner.png`;
-  if (name.includes('hycross')) return `${origin}/taxi-services--visakhapatnam-innova-hycross.png`;
-  if (name.includes('innova') || name.includes('crysta')) return `${origin}/taxi-services--visakhapatnam-innova-crysta.png`;
-  if (name.includes('ertiga')) return `${origin}/ertiga-taxi-services-in-visakhapatnam-vizagtaxihub.png`;
-  if (name.includes('tempo') || name.includes('traveller')) return `${origin}/taxi-services--visakhapatnam-tempo-traveller.png`;
-  return `${origin}/taxi-services--visakhapatnam-sedan.png`;
+  return resolveVehicleImageUrl({ name: type });
 }
 
 function startLocation(row: ShareVehicle): string {

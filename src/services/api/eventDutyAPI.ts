@@ -13,6 +13,7 @@ import type {
   EventDuty,
   EventFleetOption,
   EventSavePayload,
+  EventVehicleRateInput,
   EventSharePayload,
   EventShareView,
   EventSummary,
@@ -27,10 +28,22 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function messageFromBody(data: unknown): string {
+  if (data && typeof data === 'object' && 'message' in data) {
+    const message = (data as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message.trim();
+  }
+  if (typeof data !== 'string') return '';
+  const plain = data.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const fatal = /(?:Fatal error|Uncaught [^:]+:)\s*(.+?)(?:\s+in\s+\/|\s+thrown|$)/i.exec(plain);
+  if (fatal?.[1]) return fatal[1].trim().slice(0, 240);
+  if (plain && plain !== 'null') return plain.slice(0, 240);
+  return '';
+}
+
 function apiError(err: unknown): Error {
   if (axios.isAxiosError(err)) {
-    const payload = err.response?.data as { message?: string } | undefined;
-    return new Error(payload?.message || err.message);
+    return new Error(messageFromBody(err.response?.data) || err.message);
   }
   return err instanceof Error ? err : new Error('Request failed');
 }
@@ -213,6 +226,19 @@ export const eventDutyAPI = {
       '/api/admin/events.php',
       { action: 'daily_report', id, date },
     ),
+  saveBillingPackage: (eventId: number, includedHours: number, includedKm: number) =>
+    adminPost<{ event: VthEvent }>('/api/admin/events.php', {
+      action: 'save_billing_package',
+      eventId,
+      includedHours,
+      includedKm,
+    }),
+  saveVehicleRates: (eventId: number, vehicles: EventVehicleRateInput[]) =>
+    adminPost<{ vehicles: EventFleetOption[] }>('/api/admin/events.php', {
+      action: 'save_vehicle_rates',
+      eventId,
+      vehicles,
+    }),
   fleetOptions: (eventId: number) =>
     adminPost<{ vehicles: EventFleetOption[]; drivers: EventDriverOption[]; eventDrivers?: EventDriverOption[] }>('/api/admin/events.php', {
       action: 'fleet_options',
@@ -272,6 +298,8 @@ export const eventDutyAPI = {
     adminPost<{ duty: EventDuty }>('/api/admin/event-duties.php', { action: 'set_status', id, status }),
   setDutyNotes: (id: number, notes: string) =>
     adminPost<{ duty: EventDuty }>('/api/admin/event-duties.php', { action: 'set_notes', id, notes }),
+  setTollParking: (id: number, tollParking: number) =>
+    adminPost<{ duty: EventDuty }>('/api/admin/event-duties.php', { action: 'set_toll_parking', id, tollParking }),
   deleteDuty: (id: number) =>
     adminPost('/api/admin/event-duties.php', { action: 'delete', id }),
   resetDutyReading: (id: number, side: 'opening' | 'closing') =>

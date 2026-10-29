@@ -14,13 +14,13 @@ import { Spinner } from "@/components/ui/spinner";
 import { patchInvoiceHtmlTripTypeCell, patchInvoiceHtmlTripSummary, patchInvoiceHtmlBillingAddress, patchInvoiceHtmlInvoiceNumber } from '@/utils/invoiceTripTypeDisplay';
 import {
   appendTripSummaryParams,
-  getDefaultTripSummary,
   getDefaultBillingAddress,
   mergeTripSummary,
   readStoredInvoiceSettings,
   type TripSummaryOverrides,
   tripSummaryForApiBody,
 } from '@/utils/invoiceTripSummaryDefaults';
+import { extraCollectedAmount, extraCollectedCategoryLabel } from '@/lib/bookingExtra';
 import { FleetVehicle } from '@/types/cab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -175,7 +175,7 @@ export function BookingInvoice({
     billingAddress: storedBillingAddress,
     tripSummary: storedTripSummary,
   } = invoiceState;
-  const tripSummary = storedTripSummary ?? getDefaultTripSummary(booking);
+  const tripSummary = mergeTripSummary(storedTripSummary, booking);
   const billingAddress = storedBillingAddress ?? getDefaultBillingAddress(booking);
   const displayInvoiceNumber =
     customInvoiceNumber.trim() ||
@@ -693,6 +693,11 @@ export function BookingInvoice({
   ]);
 
   const { summaryBaseFare, summaryTaxes, summaryTotal } = summaryValues;
+  const driverExtraAmount = extraCollectedAmount(booking);
+  const driverExtraLabel = extraCollectedCategoryLabel(
+    booking.extraCollectedCategory ?? booking.extra_collected_category
+  ) || 'Driver extra';
+  const invoiceTotal = Number((summaryTotal + driverExtraAmount).toFixed(2));
   
   // CRITICAL FIX: Use summaryTaxes (which is calculated correctly for the current mode) for display
   // Don't use backendTaxAmount directly as it might be from the wrong mode (tax-inclusive vs tax-exclusive)
@@ -992,9 +997,34 @@ export function BookingInvoice({
             genericGstCells.forEach(cell => updateAmountCell(cell, summaryTaxes, 'GST (18%)'));
           }
         }
-        totalCells.forEach(cell => updateAmountCell(cell, summaryTotal));
+        totalCells.forEach(cell => updateAmountCell(cell, invoiceTotal));
       } else {
-        totalCells.forEach(cell => updateAmountCell(cell, summaryTotal));
+        totalCells.forEach(cell => updateAmountCell(cell, invoiceTotal));
+      }
+
+      if (driverExtraAmount > 0) {
+        const extraLabel = driverExtraLabel.toLowerCase();
+        const alreadyListed = Array.from(doc.querySelectorAll('tr')).some((row) => {
+          const label = (row.querySelector('td,th')?.textContent || '').trim().toLowerCase();
+          return label === extraLabel;
+        });
+        if (!alreadyListed) {
+          const totalRow = Array.from(doc.querySelectorAll('tr')).find((row) => {
+            const label = (row.querySelector('td,th')?.textContent || '').trim().toLowerCase();
+            return (/total amount|grand total/.test(label)) && !label.includes('extra');
+          });
+          if (totalRow?.parentElement) {
+            const extraRow = doc.createElement('tr');
+            const labelCell = doc.createElement('td');
+            labelCell.textContent = driverExtraLabel;
+            const amountCell = doc.createElement('td');
+            amountCell.setAttribute('style', 'text-align: right;');
+            amountCell.textContent = formatCurrencyValue(driverExtraAmount);
+            extraRow.appendChild(labelCell);
+            extraRow.appendChild(amountCell);
+            totalRow.parentElement.insertBefore(extraRow, totalRow);
+          }
+        }
       }
 
       let out = doc.documentElement.outerHTML;
@@ -1019,7 +1049,7 @@ export function BookingInvoice({
       }
       return out;
     }
-  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData, summaryBaseFare, summaryTaxes, summaryTotal, originalTotalAmount, backendTaxAmount, backendCgstAmount, backendSgstAmount, booking, tripSummary, billingAddress, customInvoiceNumber]);
+  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData, summaryBaseFare, summaryTaxes, summaryTotal, invoiceTotal, driverExtraAmount, driverExtraLabel, originalTotalAmount, backendTaxAmount, backendCgstAmount, backendSgstAmount, booking, tripSummary, billingAddress, customInvoiceNumber]);
 
   const htmlContent = useMemo(
     () => sanitizeInvoiceHtml(rawHtmlContent),
@@ -2040,7 +2070,7 @@ export function BookingInvoice({
         style={{ height: '400px', overflow: 'auto' }}
       >
         <iframe 
-          srcDoc={invoiceData.invoiceHtml}
+          srcDoc={htmlContent || invoiceData.invoiceHtml}
           title="Invoice Preview" 
           className="w-full h-full"
           style={{ border: 'none' }}
@@ -2202,7 +2232,7 @@ export function BookingInvoice({
               <>
                 <div className="flex justify-between font-bold border-b pb-2 mb-2 text-base">
                   <span>Total Amount (including GST)</span>
-                  <span>₹{formatCurrency(summaryTotal)}</span>
+                  <span>₹{formatCurrency(invoiceTotal)}</span>
                 </div>
             <div className="flex justify-between">
                   <span>Base Fare (excluding GST)</span>
@@ -2212,6 +2242,12 @@ export function BookingInvoice({
                   <div className="flex justify-between">
                     <span>Extra Charges</span>
                     <span className="font-semibold">₹{formatCurrency(summaryExtras)}</span>
+                  </div>
+                )}
+                {driverExtraAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span>{driverExtraLabel}</span>
+                    <span className="font-semibold">₹{formatCurrency(driverExtraAmount)}</span>
                   </div>
                 )}
                 {displayTaxAmount > 0 && (
@@ -2234,6 +2270,12 @@ export function BookingInvoice({
                 <span className="font-semibold">₹{formatCurrency(summaryExtras)}</span>
               </div>
             )}
+            {driverExtraAmount > 0 && (
+              <div className="flex justify-between">
+                <span>{driverExtraLabel}</span>
+                <span className="font-semibold">₹{formatCurrency(driverExtraAmount)}</span>
+              </div>
+            )}
             {gstEnabled && displayTaxAmount > 0 && (
               <div className="flex justify-between">
                     <span>{summaryIsIGST ? 'GST @ 18%' : 'GST @ 18%'}</span>
@@ -2242,7 +2284,7 @@ export function BookingInvoice({
             )}
             <div className="flex justify-between font-bold border-t pt-2 mt-2 text-base">
                   <span>{gstEnabled ? 'Total Amount (including GST)' : 'Total Amount'}</span>
-              <span>₹{formatCurrency(summaryTotal)}</span>
+              <span>₹{formatCurrency(invoiceTotal)}</span>
             </div>
               </>
             )}

@@ -709,6 +709,13 @@ export function BookingDetailScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.adminFlowBtn}
+              onPress={() => navigation.navigate('ChangeAssignment', { bookingId, booking: bookingForNav })}
+            >
+              <Feather name="refresh-cw" size={18} color={colors.primary} />
+              <Text style={styles.adminFlowText}>Change Driver / Vehicle</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.adminFlowBtn}
               onPress={() => navigation.navigate('AssignVehicle', { bookingId, booking: bookingForNav })}
             >
               <Feather name="truck" size={18} color={colors.primary} />
@@ -719,7 +726,7 @@ export function BookingDetailScreen() {
               onPress={() => navigation.navigate('BookingInvoice', { bookingId, booking: bookingForNav })}
             >
               <Feather name="file-text" size={18} color={colors.primary} />
-              <Text style={styles.adminFlowText}>View Invoice</Text>
+              <Text style={styles.adminFlowText}>Invoice & Billing</Text>
             </TouchableOpacity>
           </View>
         )}

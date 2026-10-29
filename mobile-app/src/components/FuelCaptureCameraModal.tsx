@@ -19,7 +19,7 @@ import { colors } from '../theme/colors';
 import type { FuelCapturePhase } from '../services/fuelGeminiVisionUnified';
 import { cropPumpStencilForGemini, type StencilLayout } from '../utils/fuelPumpStencilCrop';
 
-const STABLE_MS = 1600;
+const STABLE_MS = 700;
 const ACCEL_SAMPLE_MS = 100;
 const MAX_ACCEL_DEV = 0.32;
 const TILT_X = 0.4;

@@ -16,14 +16,16 @@ import {
 import { colors } from '../theme/colors';
 
 export type DriverEndTripPaymentType =
+  | 'company_paid'
   | 'company_phonepe'
   | 'self_paid'
   | 'agent_booking'
   | 'corporate_booking';
 
 const OPTIONS: { value: DriverEndTripPaymentType; label: string }[] = [
+  { value: 'company_paid', label: 'Payment received to company A/C' },
+  { value: 'self_paid', label: 'Payment received to self' },
   { value: 'company_phonepe', label: 'Received — company PhonePe' },
-  { value: 'self_paid', label: 'Self (collected by driver)' },
   { value: 'agent_booking', label: 'Agent booking' },
   { value: 'corporate_booking', label: 'Corporate' },
 ];
@@ -31,11 +33,12 @@ const OPTIONS: { value: DriverEndTripPaymentType; label: string }[] = [
 interface Props {
   visible: boolean;
   suggestedAmount: number;
+  initialPaymentType?: DriverEndTripPaymentType;
   onConfirm: (collectedAmount: number, paymentType: DriverEndTripPaymentType) => void;
   onCancel: () => void;
 }
 
-export function EndTripPaymentModal({ visible, suggestedAmount, onConfirm, onCancel }: Props) {
+export function EndTripPaymentModal({ visible, suggestedAmount, initialPaymentType, onConfirm, onCancel }: Props) {
   const [amountText, setAmountText] = useState('');
   const [paymentType, setPaymentType] = useState<DriverEndTripPaymentType>('self_paid');
   const [error, setError] = useState('');
@@ -44,10 +47,10 @@ export function EndTripPaymentModal({ visible, suggestedAmount, onConfirm, onCan
     if (visible) {
       const s = Number.isFinite(suggestedAmount) && suggestedAmount > 0 ? Math.round(suggestedAmount) : 0;
       setAmountText(s > 0 ? String(s) : '');
-      setPaymentType('self_paid');
+      setPaymentType(initialPaymentType ?? 'self_paid');
       setError('');
     }
-  }, [visible, suggestedAmount]);
+  }, [visible, suggestedAmount, initialPaymentType]);
 
   const submit = () => {
     const digits = amountText.replace(/[^\d.]/g, '');

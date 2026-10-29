@@ -131,6 +131,12 @@ switch ($action) {
         vth_admin_remove_event_driver($conn, $admin, $body);
         vth_event_ok([], 'Driver removed from this event');
         break;
+    case 'save_billing_package':
+        vth_event_ok(['event' => vth_admin_save_billing_package($conn, $admin, $body)], 'Billing package saved');
+        break;
+    case 'save_vehicle_rates':
+        vth_event_ok(['vehicles' => vth_admin_save_vehicle_rates($conn, $admin, $body)], 'Vehicle rates saved');
+        break;
     case 'fleet_options':
         $eventId = (int) ($body['eventId'] ?? $_GET['eventId'] ?? 0);
         vth_event_ok([
@@ -235,6 +241,8 @@ function vth_admin_event_row(array $row): array
         'status' => $row['status'],
         'gpsRequired' => (bool) $row['gps_required'],
         'showSerialNo' => !empty($row['show_serial_no']),
+        'billingIncludedHours' => isset($row['billing_included_hours']) ? (float) $row['billing_included_hours'] : 10,
+        'billingIncludedKm' => isset($row['billing_included_km']) ? (float) $row['billing_included_km'] : 100,
         'supportMobile' => $row['support_mobile'] ?? null,
         'assignmentCount' => (int) ($row['assignment_count'] ?? 0),
         'dutyCount' => (int) ($row['duty_count'] ?? 0),
@@ -525,6 +533,12 @@ function vth_admin_duplicate(mysqli $conn, array $admin, int $id): array
             $ds->close();
         }
     }
+    $hours = isset($src['billingIncludedHours']) ? (float) $src['billingIncludedHours'] : 10.0;
+    $km = isset($src['billingIncludedKm']) ? (float) $src['billingIncludedKm'] : 100.0;
+    $bill = $conn->prepare('UPDATE vth_events SET billing_included_hours = ?, billing_included_km = ? WHERE id = ?');
+    $bill->bind_param('ddi', $hours, $km, $newId);
+    $bill->execute();
+    $bill->close();
     vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'event_duplicated', 'event', $newId, $newId, ['from' => $id], $copy);
     return vth_admin_get_event($conn, $newId) ?: $copy;
 }
@@ -1300,17 +1314,194 @@ function vth_admin_create_driver(mysqli $conn, array $admin, array $body): array
     ];
 }
 
+function vth_admin_table_has_column(mysqli $conn, string $table, string $column): bool
+{
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $table) || !preg_match('/^[A-Za-z0-9_]+$/', $column)) {
+        return false;
+    }
+    $res = @$conn->query("SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
+    return $res instanceof mysqli_result && $res->num_rows > 0;
+}
+
+function vth_admin_money_value($value): ?float
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+    return round((float) $value, 2);
+}
+
+function vth_admin_vehicle_rate_fields(array $row): array
+{
+    return [
+        'vendorPackagePrice' => vth_admin_money_value($row['vendor_package_price'] ?? null),
+        'vendorExtraHour' => vth_admin_money_value($row['vendor_extra_hour'] ?? null),
+        'vendorExtraKm' => vth_admin_money_value($row['vendor_extra_km'] ?? null),
+        'vthPackagePrice' => vth_admin_money_value($row['vth_package_price'] ?? null),
+        'vthExtraHour' => vth_admin_money_value($row['vth_extra_hour'] ?? null),
+        'vthExtraKm' => vth_admin_money_value($row['vth_extra_km'] ?? null),
+    ];
+}
+
+function vth_admin_positive_amount($value, string $label): float
+{
+    if (!is_numeric($value) || (float) $value <= 0) {
+        vth_event_error($label . ' must be greater than zero');
+    }
+    return round((float) $value, 2);
+}
+
+function vth_admin_optional_rate($value, string $label): ?float
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+    if (!is_numeric($value)) {
+        vth_event_error($label . ' must be a number');
+    }
+    $amount = round((float) $value, 2);
+    if ($amount < 0) {
+        vth_event_error($label . ' cannot be negative');
+    }
+    return $amount;
+}
+
+function vth_admin_rate_sql(?float $amount): ?string
+{
+    return $amount === null ? null : number_format($amount, 2, '.', '');
+}
+
+function vth_admin_save_billing_package(mysqli $conn, array $admin, array $body): array
+{
+    $id = (int) ($body['eventId'] ?? $body['id'] ?? 0);
+    if ($id < 1 || !vth_event_get($conn, $id)) {
+        vth_event_error('Event not found', 404);
+    }
+    $hours = vth_admin_positive_amount($body['includedHours'] ?? $body['billingIncludedHours'] ?? null, 'Included hours');
+    $km = vth_admin_positive_amount($body['includedKm'] ?? $body['billingIncludedKm'] ?? null, 'Included km');
+    $stmt = $conn->prepare('UPDATE vth_events SET billing_included_hours = ?, billing_included_km = ? WHERE id = ?');
+    $stmt->bind_param('ddi', $hours, $km, $id);
+    $stmt->execute();
+    $stmt->close();
+    vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'billing_package_saved', 'event', $id, $id, null, [
+        'includedHours' => $hours,
+        'includedKm' => $km,
+    ]);
+    return vth_admin_get_event($conn, $id) ?: ['id' => $id];
+}
+
+function vth_admin_save_vehicle_rates(mysqli $conn, array $admin, array $body): array
+{
+    $eventId = (int) ($body['eventId'] ?? 0);
+    if ($eventId < 1 || !vth_event_get($conn, $eventId)) {
+        vth_event_error('Event is required');
+    }
+    $rows = $body['vehicles'] ?? null;
+    if (!is_array($rows)) {
+        if (!isset($body['id'])) {
+            vth_event_error('Vehicle rates are required');
+        }
+        $rows = [$body];
+    }
+    if (!$rows) {
+        vth_event_error('Vehicle rates are required');
+    }
+    $parsed = [];
+    foreach ($rows as $item) {
+        if (!is_array($item)) {
+            vth_event_error('Vehicle rates are required');
+        }
+        $id = (int) ($item['id'] ?? 0);
+        if ($id < 1) {
+            vth_event_error('Vehicle is required');
+        }
+        $parsed[] = [
+            'id' => $id,
+            'vendorPackagePrice' => vth_admin_optional_rate($item['vendorPackagePrice'] ?? null, 'Vendor package price'),
+            'vendorExtraHour' => vth_admin_optional_rate($item['vendorExtraHour'] ?? null, 'Vendor extra hour'),
+            'vendorExtraKm' => vth_admin_optional_rate($item['vendorExtraKm'] ?? null, 'Vendor extra km'),
+            'vthPackagePrice' => vth_admin_optional_rate($item['vthPackagePrice'] ?? null, 'VTH package price'),
+            'vthExtraHour' => vth_admin_optional_rate($item['vthExtraHour'] ?? null, 'VTH extra hour'),
+            'vthExtraKm' => vth_admin_optional_rate($item['vthExtraKm'] ?? null, 'VTH extra km'),
+        ];
+    }
+    $check = $conn->prepare('SELECT id FROM vth_event_vehicles WHERE id = ? AND event_id = ? LIMIT 1');
+    foreach ($parsed as $rate) {
+        $id = $rate['id'];
+        $check->bind_param('ii', $id, $eventId);
+        $check->execute();
+        if (!$check->get_result()->fetch_assoc()) {
+            $check->close();
+            vth_event_error('Vehicle is not on this event', 404);
+        }
+        $assignments = [
+            vth_admin_rate_sql($rate['vendorPackagePrice']),
+            vth_admin_rate_sql($rate['vendorExtraHour']),
+            vth_admin_rate_sql($rate['vendorExtraKm']),
+            vth_admin_rate_sql($rate['vthPackagePrice']),
+            vth_admin_rate_sql($rate['vthExtraHour']),
+            vth_admin_rate_sql($rate['vthExtraKm']),
+        ];
+        $sql = 'UPDATE vth_event_vehicles SET '
+            . 'vendor_package_price = ' . ($assignments[0] === null ? 'NULL' : $assignments[0]) . ', '
+            . 'vendor_extra_hour = ' . ($assignments[1] === null ? 'NULL' : $assignments[1]) . ', '
+            . 'vendor_extra_km = ' . ($assignments[2] === null ? 'NULL' : $assignments[2]) . ', '
+            . 'vth_package_price = ' . ($assignments[3] === null ? 'NULL' : $assignments[3]) . ', '
+            . 'vth_extra_hour = ' . ($assignments[4] === null ? 'NULL' : $assignments[4]) . ', '
+            . 'vth_extra_km = ' . ($assignments[5] === null ? 'NULL' : $assignments[5]) . ' '
+            . 'WHERE id = ' . $id . ' AND event_id = ' . $eventId;
+        if (!$conn->query($sql)) {
+            $check->close();
+            vth_event_error('Could not save vehicle rates');
+        }
+    }
+    $check->close();
+    vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'vehicle_rates_saved', 'event', $eventId, $eventId, null, [
+        'vehicles' => count($parsed),
+    ]);
+    return vth_admin_event_vehicle_options($conn, $eventId);
+}
+
+function vth_admin_ensure_vehicle_rate_columns(mysqli $conn): void
+{
+    $alters = [
+        'ALTER TABLE vth_event_vehicles ADD COLUMN vendor_package_price DECIMAL(10,2) NULL',
+        'ALTER TABLE vth_event_vehicles ADD COLUMN vendor_extra_hour DECIMAL(10,2) NULL',
+        'ALTER TABLE vth_event_vehicles ADD COLUMN vendor_extra_km DECIMAL(10,2) NULL',
+        'ALTER TABLE vth_event_vehicles ADD COLUMN vth_package_price DECIMAL(10,2) NULL',
+        'ALTER TABLE vth_event_vehicles ADD COLUMN vth_extra_hour DECIMAL(10,2) NULL',
+        'ALTER TABLE vth_event_vehicles ADD COLUMN vth_extra_km DECIMAL(10,2) NULL',
+    ];
+    foreach ($alters as $sql) {
+        try {
+            @$conn->query($sql);
+        } catch (Throwable $e) {
+            // column already exists
+        }
+    }
+}
+
 function vth_admin_event_vehicle_options(mysqli $conn, int $eventId): array
 {
     if ($eventId < 1) {
         return [];
     }
+    vth_admin_ensure_vehicle_rate_columns($conn);
+    $rateColumns = vth_admin_table_has_column($conn, 'vth_event_vehicles', 'vendor_package_price')
+        && vth_admin_table_has_column($conn, 'vth_event_vehicles', 'vth_extra_km');
+    $rateSql = $rateColumns
+        ? ', vendor_package_price, vendor_extra_hour, vendor_extra_km, vth_package_price, vth_extra_hour, vth_extra_km'
+        : '';
     $stmt = $conn->prepare(
-        'SELECT id, registration_number, vehicle_type, make, model, seating_capacity, owner_name, owner_mobile, status
+        'SELECT id, registration_number, vehicle_type, make, model, seating_capacity, owner_name, owner_mobile, status'
+        . $rateSql . '
          FROM vth_event_vehicles
          WHERE event_id = ? AND status = \'active\'
          ORDER BY registration_number'
     );
+    if (!$stmt) {
+        vth_event_error('Could not load event vehicles: ' . $conn->error, 500);
+    }
     $stmt->bind_param('i', $eventId);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -1325,7 +1516,7 @@ function vth_admin_event_vehicle_options(mysqli $conn, int $eventId): array
     $out = [];
     foreach ($rows as $row) {
         $vid = (int) $row['id'];
-        $out[] = [
+        $vehicle = [
             'id' => $vid,
             'vehicleNumber' => $row['registration_number'],
             'name' => trim(($row['make'] ?? '') . ' ' . ($row['model'] ?? '')) ?: $row['registration_number'],
@@ -1338,6 +1529,7 @@ function vth_admin_event_vehicle_options(mysqli $conn, int $eventId): array
             'status' => $row['status'],
             'documents' => !empty($docs[$vid]) ? $docs[$vid] : new stdClass(),
         ];
+        $out[] = array_merge($vehicle, vth_admin_vehicle_rate_fields($row));
     }
     return $out;
 }

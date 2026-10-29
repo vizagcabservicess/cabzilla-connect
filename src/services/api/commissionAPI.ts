@@ -88,13 +88,21 @@ export const commissionAPI = {
     }
   },
 
-  // Calculate commission for a booking
-  calculateCommission: async (bookingId: string) => {
+  // Calculate commission for a booking.
+  // A vehicle chosen on the assign form is not saved yet, so pass that vehicle and the fare.
+  // Sending booking_id alone makes the server look up bookings.vehicle_number and return 400.
+  calculateCommission: async (
+    bookingId: string,
+    options?: { vehicleId?: string | number; amount?: number }
+  ) => {
+    const vehicleId = options?.vehicleId;
+    const amount = options?.amount;
+    const fare = Number(amount);
+    const useSelectedVehicle = vehicleId != null && vehicleId !== '' && Number.isFinite(fare);
     try {
-      const response = await axios.post(getApiUrl('/api/admin/vehicle-commissions.php'), {
-        action: 'calculate',
-        booking_id: bookingId
-      }, {
+      const response = await axios.post(getApiUrl('/api/admin/vehicle-commissions.php'), useSelectedVehicle
+        ? { action: 'calculate', vehicle_id: vehicleId, amount: fare }
+        : { action: 'calculate', booking_id: bookingId }, {
         headers: {
           'Content-Type': 'application/json',
           ...forceRefreshHeaders

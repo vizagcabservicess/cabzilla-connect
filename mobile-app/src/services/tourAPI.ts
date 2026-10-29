@@ -2,9 +2,9 @@
  * Tour API - same endpoint as web app
  */
 import axios from 'axios';
-import { API_BASE_URL } from '../config';
-
 import { Platform } from 'react-native';
+import { API_BASE_URL } from '../config';
+import { resolveMediaUrl } from '../utils/mediaUrl';
 
 // On web use relative /api for proxy; native uses full URL
 const BASE =
@@ -71,7 +71,7 @@ export const tourAPI = {
       name: tour.tourName || tour.name,
       distance: tour.distance ?? 120,
       days: tour.days ?? 1,
-      image: tour.imageUrl || tour.image,
+      image: resolveMediaUrl(tour.imageUrl || tour.image) || undefined,
       timeDuration: tour.timeDuration ?? '',
       description: tour.description ?? '',
       pricing: tour.pricing ?? {},
@@ -97,8 +97,20 @@ export const tourAPI = {
         difficulty: data.difficulty,
         category: data.category,
         timeDuration: data.timeDuration,
-        imageUrl: data.imageUrl || data.image,
-        gallery: Array.isArray(data.gallery) ? data.gallery : undefined,
+        imageUrl: resolveMediaUrl(data.imageUrl || data.image) || undefined,
+        gallery: Array.isArray(data.gallery)
+          ? data.gallery
+              .map((item: { id?: string | number; url?: string; image_url?: string; imageUrl?: string; alt?: string; caption?: string } | string, index: number) => {
+                const raw = typeof item === 'string' ? item : item?.url || item?.image_url || item?.imageUrl;
+                return {
+                  id: String(typeof item === 'string' ? index + 1 : item?.id ?? index + 1),
+                  url: resolveMediaUrl(raw),
+                  alt: typeof item === 'string' ? data.tourName || data.name || '' : item?.alt || data.tourName || data.name || '',
+                  caption: typeof item === 'string' ? undefined : item?.caption,
+                };
+              })
+              .filter((item: TourGalleryImage) => item.url)
+          : undefined,
         highlights: Array.isArray(data.highlights) ? data.highlights : undefined,
         itinerary: Array.isArray(data.itinerary) ? data.itinerary : undefined,
         inclusions: Array.isArray(data.inclusions) ? data.inclusions : undefined,

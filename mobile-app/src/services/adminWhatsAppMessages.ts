@@ -279,6 +279,7 @@ function coalesceTourItineraryMobile(booking: Booking): TourDay[] {
 
 function formatTourItineraryMobile(days: TourDay[]): string {
   if (!days.length) return '';
+  let lastItineraryDay = 0;
   return days
     .map((d) => {
       const titleLine = d.title ? `: *${d.title}*` : '';
@@ -287,7 +288,10 @@ function formatTourItineraryMobile(days: TourDay[]): string {
         d.activities?.length && d.activities.some((a) => String(a).trim())
           ? `\n${d.activities.map((a) => `• ${String(a).trim()}`).filter(Boolean).join('\n')}`
           : '';
-      return `📅 *Day ${d.day < 1 ? 1 : d.day}*${titleLine}${desc}${actLine}`;
+      const stated = d.day < 1 ? 1 : d.day;
+      const labelDay = stated > lastItineraryDay ? stated : lastItineraryDay + 1;
+      lastItineraryDay = labelDay;
+      return `📅 *Day ${labelDay}*${titleLine}${desc}${actLine}`;
     })
     .join('\n\n');
 }

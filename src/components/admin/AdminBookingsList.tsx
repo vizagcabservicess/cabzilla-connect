@@ -53,6 +53,7 @@ import {
 } from '@/utils/bookingUtils';
 import { getApiUrl } from '@/config/api';
 import { formatPrice } from '@/lib/utils';
+import { bookingAmountWithExtra, extraCollectedAmount, extraCollectedCategoryLabel } from '@/lib/bookingExtra';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { formatLocationForDisplay } from '@/utils/locationUtils';
 
@@ -75,6 +76,7 @@ export function AdminBookingsList() {
   const [responseDebug, setResponseDebug] = useState<string | null>(null);
   
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [detailsTab, setDetailsTab] = useState('details');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -212,14 +214,20 @@ export function AdminBookingsList() {
     }
   };
   
-  const handleViewDetails = async (booking: Booking) => {
-    // Fetch full booking details including tour itinerary
+  const handleViewDetails = async (booking: Booking, tab = 'details') => {
+    // Open after the actions menu finishes closing, otherwise the same click dismisses the dialog.
+    setDetailsTab(tab);
+    window.setTimeout(() => {
+      void loadBookingDetails(booking);
+    }, 0);
+  };
+
+  const loadBookingDetails = async (booking: Booking) => {
     try {
       const fullBooking = await bookingAPI.getBookingById(booking.id);
       setSelectedBooking(fullBooking);
     } catch (error) {
       console.error('Error fetching full booking details:', error);
-      // Fallback to using the list data if fetch fails
       setSelectedBooking(booking);
       uiToast({
         title: "Warning",
@@ -349,7 +357,16 @@ export function AdminBookingsList() {
       if (!directResponse.ok) {
         const errorText = await directResponse.text();
         console.error('Driver assignment error response:', errorText);
-        throw new Error(`Failed to assign driver: ${directResponse.status} ${directResponse.statusText}`);
+        let serverMessage = '';
+        try {
+          const parsed = JSON.parse(errorText) as { message?: unknown };
+          if (typeof parsed.message === 'string' && parsed.message.trim() !== '') {
+            serverMessage = parsed.message.trim();
+          }
+        } catch {
+          serverMessage = '';
+        }
+        throw new Error(serverMessage || `Failed to assign driver: ${directResponse.status} ${directResponse.statusText}`);
       }
       
       const contentType = directResponse.headers.get('content-type');
@@ -783,7 +800,7 @@ export function AdminBookingsList() {
         drop: formatLocationForDisplay(b.dropLocation ?? '').name.slice(0, 200),
         pickupDate: formatDateTime(b.pickupDate ?? ''),
         cabType: b.cabType ?? '',
-        amount: formatPrice(Number(b.totalAmount ?? 0)),
+        amount: formatPrice(bookingAmountWithExtra(b)),
         status: String(b.status ?? ''),
         paymentStatus: String((b as Booking & { payment_status?: string }).payment_status ?? '—'),
       }));
@@ -1077,6 +1094,7 @@ export function AdminBookingsList() {
           onGenerateInvoice={handleGenerateInvoice}
           onStatusChange={(newStatus) => handleStatusChange(newStatus, selectedBooking)}
           isSubmitting={isSubmitting}
+          initialTab={detailsTab}
         />
       )}
 
@@ -1177,9 +1195,17 @@ export function AdminBookingsList() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center font-semibold text-lg">
-                        {formatPrice(booking.totalAmount)}
+                      <div className="font-semibold text-lg">
+                        {formatPrice(bookingAmountWithExtra(booking))}
                       </div>
+                      {extraCollectedAmount(booking) > 0 ? (
+                        <div className="text-xs text-muted-foreground">
+                          +{formatPrice(extraCollectedAmount(booking))}
+                          {extraCollectedCategoryLabel(booking.extraCollectedCategory ?? booking.extra_collected_category)
+                            ? ` · ${extraCollectedCategoryLabel(booking.extraCollectedCategory ?? booking.extra_collected_category)}`
+                            : ''}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <Badge className={getStatusColorClass(rowStatus)}>
@@ -1201,23 +1227,28 @@ export function AdminBookingsList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <DropdownMenu>
+                      <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                             <span className="sr-only">Open menu</span>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuContent align="end" className="z-[80] w-48">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
+                          <DropdownMenuItem onSelect={() => handleViewDetails(booking, 'details')}>
                             View details
                           </DropdownMenuItem>
+                          {rowStatus !== 'cancelled' && rowStatus !== 'completed' && (
+                            <DropdownMenuItem onSelect={() => handleViewDetails(booking, 'driver')}>
+                              Assign driver
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator />
                           {(rowStatus === 'pending' ||
                             rowStatus === 'admin_created' ||
                             rowStatus === 'pending_offline_booking') && (
-                            <DropdownMenuItem onClick={() => {
+                            <DropdownMenuItem onSelect={() => {
                               handleStatusChange('confirmed', booking);
                             }}>
                               Confirm booking
@@ -1227,7 +1258,7 @@ export function AdminBookingsList() {
                             rowStatus === 'admin_created' ||
                             rowStatus === 'pending_offline_booking' ||
                             rowStatus === 'confirmed') && (
-                            <DropdownMenuItem onClick={() => {
+                            <DropdownMenuItem onSelect={() => {
                               handleCancelBooking(booking);
                             }}>
                               Cancel booking
@@ -1236,8 +1267,8 @@ export function AdminBookingsList() {
                           {isSuperAdmin() && (
                             <>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                onClick={() => handleDeleteBooking(booking)}
+                              <DropdownMenuItem
+                                onSelect={() => handleDeleteBooking(booking)}
                                 className="text-red-600 focus:text-red-600"
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />

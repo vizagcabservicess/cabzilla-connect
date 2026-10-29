@@ -62,6 +62,86 @@ function safeIncludes(s: string | undefined | null, sub: string): boolean {
   return s.toLowerCase().includes(sub.toLowerCase());
 }
 
+const BHOGAPURAM_AIRPORT = { lat: 17.97611, lng: 83.50389 };
+const BHOGAPURAM_CATCHMENT_KM = 80;
+const AIRPORT_CATCHMENT_NAME_RE =
+  /\b(vizianagaram|vijayanagaram|vizianagarm|srikakulam|bhogapuram|nellimarla|denkada)\b/i;
+
+function hasReliableCoords(loc: Location | null): boolean {
+  if (!loc) return false;
+  if (typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return false;
+  if (!Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) return false;
+  return !(loc.lat === 0 && loc.lng === 0);
+}
+
+function locationBlob(loc: Location): string {
+  return [loc.id, loc.name, loc.address, loc.city, loc.state].filter(Boolean).join(' ').toLowerCase();
+}
+
+/** Vizag city airport or Bhogapuram (Alluri Sitarama Raju). Ignores a stale isInVizag flag. */
+export function isVizagAirportLocation(loc: Location | null): boolean {
+  if (!loc) return false;
+  const id = (loc.id || '').toLowerCase();
+  if (id === 'vizag_airport' || id === 'vizag_city_airport') return true;
+  const blob = locationBlob(loc);
+  if (
+    blob.includes('alluri') ||
+    blob.includes('alluru') ||
+    blob.includes('sitaram') ||
+    blob.includes('bhogapuram') ||
+    /\bvtz\b/.test(blob)
+  ) {
+    return true;
+  }
+  const looksLikeAirport = loc.type === 'airport' || blob.includes('airport');
+  if (!looksLikeAirport) return false;
+  return blob.includes('vizag') || blob.includes('visakhapatnam');
+}
+
+function isAirportTransferEnd(loc: Location): boolean {
+  if (isVizagAirportLocation(loc)) return true;
+  if (isLocationInVizag(loc)) return true;
+  if (AIRPORT_CATCHMENT_NAME_RE.test(locationBlob(loc))) return true;
+  if (
+    hasReliableCoords(loc) &&
+    getDistanceBetween(loc.lat, loc.lng, BHOGAPURAM_AIRPORT.lat, BHOGAPURAM_AIRPORT.lng) <=
+      BHOGAPURAM_CATCHMENT_KM
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * One stable tab for a From/To pair. Does not depend on the tab already selected,
+ * so Outstation and Airport cannot flip each other.
+ * City hops and airport trips inside the catchment use Airport. Anything farther is Outstation.
+ */
+export function inferOutstationOrAirport(
+  pickup: Location | null,
+  drop: Location | null,
+): 'airport' | 'outstation' | null {
+  if (!pickup || !drop) return null;
+
+  const pickupIsAirport = isVizagAirportLocation(pickup);
+  const dropIsAirport = isVizagAirportLocation(drop);
+  if (pickupIsAirport || dropIsAirport) {
+    const otherEnd = pickupIsAirport ? drop : pickup;
+    return isAirportTransferEnd(otherEnd) ? 'airport' : 'outstation';
+  }
+
+  if (hasReliableCoords(pickup) && hasReliableCoords(drop)) {
+    const km = getDistanceBetween(pickup.lat, pickup.lng, drop.lat, drop.lng);
+    return km <= VIZAG_RADIUS_KM ? 'airport' : 'outstation';
+  }
+
+  const pickupInVizag = isLocationInVizag(pickup);
+  const dropInVizag = isLocationInVizag(drop);
+  if (pickupInVizag && dropInVizag) return 'airport';
+  if (!pickupInVizag || !dropInVizag) return 'outstation';
+  return null;
+}
+
 export function isLocationInVizag(loc: Location | null, maxKm = VIZAG_RADIUS_KM): boolean {
   if (!loc) return false;
   if (typeof loc.isInVizag === 'boolean') return loc.isInVizag;

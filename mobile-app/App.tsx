@@ -22,6 +22,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { EventDutyScreen } from './src/screens/EventDutyScreen';
 import { EventShareScreen } from './src/screens/EventShareScreen';
 import { resumeEventDutyTrackingIfNeeded } from './src/lib/eventDutyLocationTask';
+import { resumeDriverTripTrackingIfNeeded } from './src/lib/driverTripLocationTask';
 import * as Notifications from 'expo-notifications';
 import type { AppRootParamList } from './src/navigation/appRootTypes';
 
@@ -58,6 +59,7 @@ export default function App() {
 
   useEffect(() => {
     void resumeEventDutyTrackingIfNeeded();
+    void resumeDriverTripTrackingIfNeeded();
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as { type?: string; token?: string };
       if (data?.type === 'event_duty' && data.token && navigationRef.isReady()) {

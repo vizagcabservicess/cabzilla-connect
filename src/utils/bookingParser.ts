@@ -1,12 +1,15 @@
-import { AI_VEHICLE_TYPES, type ParsedBooking } from '@/services/api/aiBookingAPI';
+import { AI_VEHICLE_TYPES, emptyTripTerms, type ParsedBooking } from '@/services/api/aiBookingAPI';
+import { applyExplicitFare, applyTripTerms, parseAgentBookings, splitPickup } from '@/utils/bookingTripTerms';
 
 export type ParseResult = {
   data: ParsedBooking;
+  bookings: ParsedBooking[];
   parse_errors: string[];
 };
 
 const EMPTY_BOOKING = (): ParsedBooking => ({
   pickup_date: '',
+  return_date: '',
   pickup_time: '',
   pickup_location: '',
   drop_location: '',
@@ -21,6 +24,13 @@ const EMPTY_BOOKING = (): ParsedBooking => ({
   vehicle_type: '',
   seating_capacity: 0,
   payment_mode: '',
+  driver_collects_payment: true,
+  pickup_map_url: '',
+  pickup_lat: null,
+  pickup_lng: null,
+  hourly_package: '',
+  additional_requirements: '',
+  trip_terms: emptyTripTerms(),
 });
 
 function cleanFieldValue(raw: string): string {
@@ -40,12 +50,12 @@ function dedupeLocation(raw: string): string {
   const v = cleanFieldValue(raw);
   if (!v) return '';
   const parts = v.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length >= 2 && parts[0] === parts[1]) return parts[0];
-  return v.replace(/\s*\(?\s*https?:\/\/\S+/gi, '').trim();
+  if (parts.length >= 2 && parts[0] === parts[1] && !/https?:/i.test(v)) return parts[0];
+  return splitPickup(v).name;
 }
 
 function parseDate(raw: string): string {
-  const t = cleanFieldValue(raw);
+  const t = cleanFieldValue(raw).replace(/\*/g, '').trim();
   if (!t) return '';
   const dmY = t.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (dmY) {
@@ -58,6 +68,23 @@ function parseDate(raw: string): string {
   const ts = Date.parse(t);
   if (!Number.isNaN(ts)) return new Date(ts).toISOString().slice(0, 10);
   return '';
+}
+
+/** "13-11-2026 to 17-11-2026" → first day and last duty day. */
+function parseDateRange(raw: string): { pickup: string; returnDate: string } {
+  const t = cleanFieldValue(raw).replace(/\*/g, '').replace(/\u00a0/g, ' ').trim();
+  if (!t) return { pickup: '', returnDate: '' };
+  const range = t.match(
+    /(\d{1,2}[-\/]\d{1,2}[-\/]\d{4})\s*(?:to|until|–|—|-)\s*(\d{1,2}[-\/]\d{1,2}[-\/]\d{4})/i
+  );
+  if (range) {
+    const pickup = parseDate(range[1]);
+    const returnDate = parseDate(range[2]);
+    if (pickup && returnDate && returnDate >= pickup) {
+      return { pickup, returnDate: returnDate === pickup ? '' : returnDate };
+    }
+  }
+  return { pickup: parseDate(t), returnDate: '' };
 }
 
 function parseTime(raw: string): string {
@@ -214,7 +241,7 @@ function collectErrors(data: ParsedBooking, optionalFields = false): string[] {
   if (!data.drop_location) errors.push('drop_location');
   if (!data.customer_name) errors.push('customer_name');
   if (!data.customer_mobile) errors.push('customer_mobile');
-  if (data.cost <= 0) errors.push('cost');
+  if (data.driver_collects_payment !== false && data.cost <= 0) errors.push('cost');
   if (!data.vehicle_type || !isAllowedVehicle(data.vehicle_type)) errors.push('vehicle_type');
   if (!optionalFields) {
     if (data.seating_capacity <= 0) errors.push('seating_capacity');
@@ -232,10 +259,15 @@ function finalizeResult(data: ParsedBooking, errors: string[]): ParseResult {
       if (vi >= 0) errors.splice(vi, 1);
     }
   }
-  data.pickup_location = dedupeLocation(data.pickup_location);
+  const pickup = splitPickup(data.pickup_location);
+  data.pickup_location = pickup.name || dedupeLocation(data.pickup_location);
+  if (pickup.url) {
+    data.pickup_map_url = pickup.url;
+    data.pickup_lat = pickup.lat;
+    data.pickup_lng = pickup.lng;
+  }
   data.drop_location = dedupeLocation(data.drop_location);
-  data.advance_received = 0;
-  return { data, parse_errors: [...new Set(errors)] };
+  return { data, bookings: [data], parse_errors: [...new Set(errors)] };
 }
 
 /** Manager / Driver WhatsApp format */
@@ -244,7 +276,9 @@ function parseManagerDriverFormat(text: string): ParseResult {
   const data = EMPTY_BOOKING();
 
   const pickupDateRaw = matchLine(text, /Pick-up Date:\s*(.+)/i);
-  data.pickup_date = parseDate(pickupDateRaw);
+  const dateRange = parseDateRange(pickupDateRaw);
+  data.pickup_date = dateRange.pickup;
+  data.return_date = dateRange.returnDate;
   if (!data.pickup_date) errors.push('pickup_date');
 
   const pickupTimeRaw = matchLine(text, /Pick-up Time:\s*(.+)/i);
@@ -260,6 +294,7 @@ function parseManagerDriverFormat(text: string): ParseResult {
 
   const costRaw = matchLine(text, /Cost:\s*(.+)/i);
   data.cost = parseMoney(costRaw);
+  data.advance_received = parseMoney(matchLine(text, /Advance Received:\s*(.+)/i));
   if (data.cost <= 0) errors.push('cost');
 
   data.customer_name = parseCustomerName(matchLine(text, /Passenger name:\s*(.+)/i));
@@ -287,6 +322,12 @@ function parseManagerDriverFormat(text: string): ParseResult {
   data.payment_mode = matchLine(text, /Mode of Payment:\s*(.+)/i);
   if (!data.payment_mode) errors.push('payment_mode');
 
+  applyTripTerms(data, text);
+  if (data.driver_collects_payment === false) {
+    const costError = errors.indexOf('cost');
+    if (costError >= 0) errors.splice(costError, 1);
+  }
+
   return finalizeResult(data, errors);
 }
 
@@ -298,9 +339,7 @@ function parseVizagConfirmation(text: string): ParseResult {
   const hello = text.match(/Hello\s+([^!\n*]+)!/i);
   if (hello) data.customer_name = cleanFieldValue(hello[1]);
 
-  data.pickup_location = dedupeLocation(
-    matchLine(text, /\*Pickup:\*\s*(.+)/i) || matchLine(text, /Pickup:\s*(.+)/i)
-  );
+  data.pickup_location = matchLine(text, /\*Pickup:\*\s*(.+)/i) || matchLine(text, /Pickup:\s*(.+)/i);
   if (!data.pickup_location) errors.push('pickup_location');
 
   data.drop_location = dedupeLocation(
@@ -363,10 +402,11 @@ function parseVizagConfirmation(text: string): ParseResult {
 function mergePreferPrimary(primary: ParseResult, secondary: ParseResult): ParseResult {
   const data = { ...secondary.data };
   const fields: (keyof ParsedBooking)[] = [
-    'pickup_date', 'pickup_time', 'pickup_location', 'drop_location', 'trip_type',
-    'cost', 'customer_name', 'customer_mobile',
+    'pickup_date', 'return_date', 'pickup_time', 'pickup_location', 'drop_location', 'trip_type',
+    'cost', 'advance_received', 'customer_name', 'customer_mobile',
     'manager_name', 'manager_mobile', 'driver_name', 'vehicle_type',
-    'seating_capacity', 'payment_mode',
+    'seating_capacity', 'payment_mode', 'driver_collects_payment',
+    'pickup_map_url', 'hourly_package', 'additional_requirements', 'trip_terms',
   ];
   for (const key of fields) {
     const pv = primary.data[key];
@@ -375,49 +415,73 @@ function mergePreferPrimary(primary: ParseResult, secondary: ParseResult): Parse
       if (sv === '' || sv === 0) data[key] = pv as never;
     }
   }
+  if (primary.data.pickup_map_url) {
+    data.pickup_location = primary.data.pickup_location;
+    data.pickup_map_url = primary.data.pickup_map_url;
+    data.pickup_lat = primary.data.pickup_lat;
+    data.pickup_lng = primary.data.pickup_lng;
+  }
+  if (primary.data.hourly_package || primary.data.trip_terms.places.length > 0 || primary.data.trip_terms.notes.length > 0) {
+    data.trip_terms = primary.data.trip_terms;
+    data.hourly_package = primary.data.hourly_package;
+    data.additional_requirements = primary.data.additional_requirements;
+    data.driver_collects_payment = primary.data.driver_collects_payment;
+  }
   const errors = collectErrors(data, !data.payment_mode);
   return finalizeResult(data, errors);
 }
 
-/** Regex parser — Manager, Driver, Vizag confirmation, and pricing formats. */
+/** Regex parser — Manager, Driver, Vizag confirmation, pricing, and agent formats. */
 export function parseBookingText(input: string): ParseResult {
   const text = input.replace(/\r\n/g, '\n').trim();
   if (!text) {
-    return { data: EMPTY_BOOKING(), parse_errors: ['input'] };
+    const empty = EMPTY_BOOKING();
+    return { data: empty, bookings: [empty], parse_errors: ['input'] };
+  }
+
+  const agentBookings = parseAgentBookings(text, EMPTY_BOOKING());
+  if (agentBookings && agentBookings.length > 0) {
+    const first = agentBookings[0];
+    const errors = collectErrors(first, true).filter((code) => code !== 'cost' && code !== 'vehicle_type');
+    return { data: first, bookings: agentBookings, parse_errors: errors };
   }
 
   const managerBlock = extractManagerBlock(text);
   const hasManager = isManagerOrDriverFormat(managerBlock);
   const hasConfirmation = isVizagConfirmationFormat(text);
 
+  let result: ParseResult;
   if (hasManager && hasConfirmation) {
-    if (managerBlock.trim() !== text) {
-      return parseManagerDriverFormat(managerBlock);
-    }
-    return mergePreferPrimary(
-      parseManagerDriverFormat(managerBlock),
-      parseVizagConfirmation(text)
-    );
-  }
-  if (hasManager) {
-    return parseManagerDriverFormat(managerBlock);
-  }
-  if (hasConfirmation) {
-    return parseVizagConfirmation(text);
-  }
-
-  let result = parseManagerDriverFormat(text);
-  if (result.parse_errors.length > 3) {
-    const pricing = parsePricingBlock(text);
-    if (pricing) {
-      if (!result.data.vehicle_type || !isAllowedVehicle(result.data.vehicle_type)) {
-        result.data.vehicle_type = pricing.vehicle_type;
+    result = managerBlock.trim() !== text
+      ? parseManagerDriverFormat(managerBlock)
+      : mergePreferPrimary(
+          parseManagerDriverFormat(managerBlock),
+          parseVizagConfirmation(text)
+        );
+  } else if (hasManager) {
+    result = parseManagerDriverFormat(managerBlock);
+  } else if (hasConfirmation) {
+    result = parseVizagConfirmation(text);
+  } else {
+    result = parseManagerDriverFormat(text);
+    if (result.parse_errors.length > 3) {
+      const pricing = parsePricingBlock(text);
+      if (pricing) {
+        if (!result.data.vehicle_type || !isAllowedVehicle(result.data.vehicle_type)) {
+          result.data.vehicle_type = pricing.vehicle_type;
+        }
+        if (result.data.cost <= 0) result.data.cost = pricing.cost;
+        result = finalizeResult(result.data, collectErrors(result.data, true));
       }
-      if (result.data.cost <= 0) result.data.cost = pricing.cost;
-      result = finalizeResult(result.data, collectErrors(result.data, true));
     }
   }
 
+  applyTripTerms(result.data, text);
+  applyExplicitFare(result.data, text);
+  if (result.data.driver_collects_payment === false) {
+    result.parse_errors = result.parse_errors.filter((code) => code !== 'cost' && code !== 'vehicle_type');
+  }
+  result.bookings = [result.data];
   return result;
 }
 

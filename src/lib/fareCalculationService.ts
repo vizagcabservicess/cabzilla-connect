@@ -5,23 +5,19 @@ import { getLocalPackagePrice } from './packageData';
 import axios from 'axios';
 import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 
-/** Outstation min km per calendar day (round-trip, and one-way only when via-stops are billed garage-to-garage). */
+/** Outstation min km per calendar day for round-trip. */
 export const OUTSTATION_INCLUDED_KM_PER_DAY = 300;
-/** Direct one-way (no stops): extra km after this base, then × 2 for empty return. */
+/** One-way outward km included before extra km. Extra km is then doubled for the empty return. Stops are already part of `distance`. */
 export const OUTSTATION_ONE_WAY_TRADITIONAL_BASE_KM = 150;
 
 export function oneWayOutstationExtra(
   distance: number,
   extraKmCharge: number,
-  viaStops: boolean
+  _viaStops = false
 ): { extraKm: number; extraDistanceFare: number } {
-  if (viaStops) {
-    const extraKm = Math.max(0, distance - OUTSTATION_INCLUDED_KM_PER_DAY);
-    return { extraKm, extraDistanceFare: extraKm * extraKmCharge };
-  }
-  const extraKm = Math.max(0, distance - OUTSTATION_ONE_WAY_TRADITIONAL_BASE_KM);
-  const billedKm = extraKm * 2;
-  return { extraKm: billedKm, extraDistanceFare: billedKm * extraKmCharge };
+  const outwardExtra = Math.max(0, distance - OUTSTATION_ONE_WAY_TRADITIONAL_BASE_KM);
+  const extraKm = outwardExtra * 2;
+  return { extraKm, extraDistanceFare: extraKm * extraKmCharge };
 }
 
 // Create a fare cache with expiration and strict validation

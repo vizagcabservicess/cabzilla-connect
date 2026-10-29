@@ -14,6 +14,7 @@ interface BookingDetailsModalProps {
   onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any) => Promise<any>;
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
   isSubmitting: boolean;
+  initialTab?: string;
 }
 
 export function BookingDetailsModal({
@@ -25,11 +26,13 @@ export function BookingDetailsModal({
   onCancel,
   onGenerateInvoice,
   onStatusChange,
-  isSubmitting
+  isSubmitting,
+  initialTab = 'details',
 }: BookingDetailsModalProps) {
   // Control body scroll when modal is open and track switch interactions
   useEffect(() => {
     if (isOpen) {
+      openedAt.current = Date.now();
       // Prevent body scrolling when modal is open
       document.body.style.overflow = 'hidden';
       
@@ -161,6 +164,7 @@ export function BookingDetailsModal({
 
   // Track if close button was clicked
   const closeButtonClicked = useRef(false);
+  const openedAt = useRef(0);
   
   // Add global listener to detect close button clicks
   useEffect(() => {
@@ -208,6 +212,10 @@ export function BookingDetailsModal({
     // #endregion
     // If trying to close, check if we should allow it
     if (!open) {
+      // The actions menu click that opened this dialog can also be seen as an outside click.
+      if (Date.now() - openedAt.current < 400 && !closeButtonClicked.current) {
+        return;
+      }
       // CRITICAL: Always allow close if close button was clicked
       if (closeButtonClicked.current) {
         // #region agent log
@@ -248,7 +256,7 @@ export function BookingDetailsModal({
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent 
-        className="max-w-4xl max-h-[85vh] overflow-y-auto booking-details-modal-content bg-background"
+        className="w-[min(56rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto booking-details-modal-content bg-background"
         onInteractOutside={(e) => {
           const target = e.target as HTMLElement;
           const isSwitch = target.closest('button[role="switch"]') || target.closest('[id*="toggle"]');
@@ -295,7 +303,7 @@ export function BookingDetailsModal({
         <DialogHeader className="sticky top-0 z-[51] bg-white pb-2 border-b">
           <DialogTitle className="text-sm font-semibold">Booking #{booking.bookingNumber}</DialogTitle>
         </DialogHeader>
-        <div className="pt-2">
+        <div className="min-w-0 pt-2">
           <BookingDetails
             booking={booking}
             onClose={onClose}
@@ -305,6 +313,7 @@ export function BookingDetailsModal({
             onGenerateInvoice={onGenerateInvoice}
             onStatusChange={onStatusChange}
             isSubmitting={isSubmitting}
+            initialTab={initialTab}
           />
         </div>
       </DialogContent>

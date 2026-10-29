@@ -4,6 +4,8 @@ RewriteEngine On
 # Set the base directory
 RewriteBase /
 
+# Android App Links. Must stay JSON on both www and apex, including for Google's crawler.
+RewriteRule ^\.well-known/assetlinks\.json$ /assetlinks.php [L]
 
 # CRITICAL: Force non-www redirect to prevent duplicate content
 # Redirect www to non-www (301 permanent redirect)
@@ -24,8 +26,8 @@ RewriteRule ^vehicle/tempo-traveller/?$ /index-vehicle-tempo-traveller.html [L]
 # RewriteCond %{HTTPS} off
 # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 RewriteCond %{HTTP_USER_AGENT} (googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|slackbot|discordbot|ahrefsbot|semrushbot|mozbot|rogerbot|dotbot|ia_archiver|archive\.org_bot|ia_archiver-web\.archive\.org|screamingfrog|sitebulb|deepcrawl|botify|oncrawl|seolyzer|seoptimer|seositecheckup|seochecker|seoanalyzer|seotools|seomoz|semrush|ahrefs|majestic|sistrix|searchmetrics|conductor|brightedge|seoclarity|seoprofiler|seopanel|bot|crawler|spider|scraper|indexer|fetcher|Mozilla/5\.0.*compatible.*Googlebot) [NC]
-RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php)$
-RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php)/
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php|\.well-known/assetlinks\.json|assetlinks\.php)$
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php|\.well-known)/
 # Bots: seo-handler.php serves unique HTML for /vehicle/*, tempo URLs, etc. (see seo-handler.php thin-page block)
 RewriteRule ^(.*)$ /seo-handler.php?url=$1 [L,QSA]
 

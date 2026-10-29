@@ -41,7 +41,6 @@ module.exports = ({ config }) => {
   if (androidRev) {
     intentFilters.push({
       action: 'VIEW',
-      autoVerify: true,
       data: [{ scheme: androidRev }],
       category: ['BROWSABLE', 'DEFAULT'],
     });

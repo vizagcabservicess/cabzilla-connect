@@ -83,6 +83,14 @@ try {
             $row = $res->fetch_assoc();
             $total = (float)($row['total_amount'] ?? 0);
             $adv = (float)($row['advance_paid_amount'] ?? 0);
+            $driverExtra = isset($row['extra_collected_amount']) ? (float)$row['extra_collected_amount'] : 0;
+            if ($driverExtra < 0) $driverExtra = 0;
+            $driverCat = isset($row['extra_collected_category']) ? strtolower(trim((string)$row['extra_collected_category'])) : '';
+            $driverLabel = 'Driver extra';
+            if ($driverCat === 'extra_hours') $driverLabel = 'Extra hours';
+            elseif ($driverCat === 'extra_km') $driverLabel = 'Extra km';
+            elseif ($driverCat === 'tolls') $driverLabel = 'Tolls';
+            elseif ($driverCat === 'other') $driverLabel = 'Others';
             $invoiceData = [
                 'booking_number' => $row['booking_number'],
                 'passenger_name' => $row['passenger_name'] ?? '',
@@ -91,7 +99,9 @@ try {
                 'pickup_location' => $row['pickup_location'] ?? '',
                 'drop_location' => $row['drop_location'] ?? '',
                 'pickup_date' => $row['pickup_date'] ?? '',
-                'total_amount' => $total,
+                'total_amount' => $total + $driverExtra,
+                'driver_extra' => $driverExtra,
+                'driver_extra_label' => $driverLabel,
                 'seats' => '-',
                 'trip_type' => $row['trip_type'] ?? '',
                 'payment_method' => $row['payment_method'] ?? 'Pending',
@@ -154,6 +164,10 @@ try {
   <div class="section">
     <div class="section-title">Fare</div>
     <table>
+      <?php if (!empty($inv['driver_extra']) && (float)$inv['driver_extra'] > 0) { ?>
+      <tr><td>Package fare</td><td style="text-align:right">₹ <?php echo number_format((float)$inv['total_amount'] - (float)$inv['driver_extra'], 2); ?></td></tr>
+      <tr><td><?php echo htmlspecialchars($inv['driver_extra_label']); ?></td><td style="text-align:right">₹ <?php echo number_format((float)$inv['driver_extra'], 2); ?></td></tr>
+      <?php } ?>
       <tr><td>Total Amount</td><td style="text-align:right">₹ <?php echo number_format((float)$inv['total_amount'], 2); ?></td></tr>
       <tr><td>Payment</td><td style="text-align:right"><?php echo htmlspecialchars($inv['payment_method']); ?></td></tr>
     </table>

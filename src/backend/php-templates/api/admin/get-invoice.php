@@ -190,6 +190,17 @@ try {
                 $invoiceHtml = '<table><tbody>';
                 $invoiceHtml .= '<tr><td>Base Fare</td><td>₹ ' . number_format(max(0, $total - $adv), 2) . '</td></tr>';
                 if ($adv > 0) $invoiceHtml .= '<tr><td>Advance Paid</td><td>₹ ' . number_format($adv, 2) . '</td></tr>';
+                $driverExtra = isset($booking['extra_collected_amount']) ? (float)$booking['extra_collected_amount'] : 0;
+                if ($driverExtra > 0) {
+                    $driverCat = isset($booking['extra_collected_category']) ? strtolower(trim((string)$booking['extra_collected_category'])) : '';
+                    $driverLabel = 'Driver extra';
+                    if ($driverCat === 'extra_hours') $driverLabel = 'Extra hours';
+                    elseif ($driverCat === 'extra_km') $driverLabel = 'Extra km';
+                    elseif ($driverCat === 'tolls') $driverLabel = 'Tolls';
+                    elseif ($driverCat === 'other') $driverLabel = 'Others';
+                    $invoiceHtml .= '<tr><td>' . htmlspecialchars($driverLabel) . '</td><td>₹ ' . number_format($driverExtra, 2) . '</td></tr>';
+                    $total = round($total + $driverExtra, 2);
+                }
                 $invoiceHtml .= '<tr><td>Total Amount</td><td>₹ ' . number_format($total, 2) . '</td></tr></tbody></table>';
                 $invoiceData = [
                     'id' => $bookingId,

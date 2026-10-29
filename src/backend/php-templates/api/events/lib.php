@@ -1380,7 +1380,7 @@ function vth_event_daily_stats(mysqli $conn, int $eventId, string $date): array
 
 function vth_event_schema_marker(): string
 {
-    return rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'vth_event_schema_v17.ok';
+    return rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'vth_event_schema_v19.ok';
 }
 
 function vth_event_schema_ready(mysqli $conn): bool
@@ -1394,7 +1394,12 @@ function vth_event_schema_ready(mysqli $conn): bool
     $spans = @$conn->query("SHOW TABLES LIKE 'vth_event_duty_spans'");
     $expo = @$conn->query("SHOW TABLES LIKE 'vth_event_driver_expo'");
     $paused = @$conn->query("SHOW COLUMNS FROM `vth_event_duties` LIKE 'paused_seconds'");
+    $tollParking = @$conn->query("SHOW COLUMNS FROM `vth_event_duties` LIKE 'toll_parking'");
     $showSerial = @$conn->query("SHOW COLUMNS FROM `vth_events` LIKE 'show_serial_no'");
+    $billingHours = @$conn->query("SHOW COLUMNS FROM `vth_events` LIKE 'billing_included_hours'");
+    $billingKm = @$conn->query("SHOW COLUMNS FROM `vth_events` LIKE 'billing_included_km'");
+    $vendorRate = @$conn->query("SHOW COLUMNS FROM `vth_event_vehicles` LIKE 'vendor_package_price'");
+    $vthRate = @$conn->query("SHOW COLUMNS FROM `vth_event_vehicles` LIKE 'vth_extra_km'");
     return $duty instanceof mysqli_result && $duty->num_rows > 0
         && $prompt instanceof mysqli_result && $prompt->num_rows > 0
         && $gpsClient instanceof mysqli_result && $gpsClient->num_rows > 0
@@ -1404,7 +1409,12 @@ function vth_event_schema_ready(mysqli $conn): bool
         && $spans instanceof mysqli_result && $spans->num_rows > 0
         && $expo instanceof mysqli_result && $expo->num_rows > 0
         && $paused instanceof mysqli_result && $paused->num_rows > 0
-        && $showSerial instanceof mysqli_result && $showSerial->num_rows > 0;
+        && $tollParking instanceof mysqli_result && $tollParking->num_rows > 0
+        && $showSerial instanceof mysqli_result && $showSerial->num_rows > 0
+        && $billingHours instanceof mysqli_result && $billingHours->num_rows > 0
+        && $billingKm instanceof mysqli_result && $billingKm->num_rows > 0
+        && $vendorRate instanceof mysqli_result && $vendorRate->num_rows > 0
+        && $vthRate instanceof mysqli_result && $vthRate->num_rows > 0;
 }
 
 function vth_event_ensure_optional_columns(mysqli $conn): void
@@ -1519,6 +1529,14 @@ function vth_event_ensure_optional_columns(mysqli $conn): void
         "ALTER TABLE vth_event_duties ADD COLUMN last_gps_address VARCHAR(255) NULL",
         "ALTER TABLE vth_events ADD COLUMN support_mobile VARCHAR(20) NULL",
         "ALTER TABLE vth_events ADD COLUMN show_serial_no TINYINT(1) NOT NULL DEFAULT 0",
+        "ALTER TABLE vth_events ADD COLUMN billing_included_hours DECIMAL(6,2) NOT NULL DEFAULT 10",
+        "ALTER TABLE vth_events ADD COLUMN billing_included_km DECIMAL(8,2) NOT NULL DEFAULT 100",
+        "ALTER TABLE vth_event_vehicles ADD COLUMN vendor_package_price DECIMAL(10,2) NULL",
+        "ALTER TABLE vth_event_vehicles ADD COLUMN vendor_extra_hour DECIMAL(10,2) NULL",
+        "ALTER TABLE vth_event_vehicles ADD COLUMN vendor_extra_km DECIMAL(10,2) NULL",
+        "ALTER TABLE vth_event_vehicles ADD COLUMN vth_package_price DECIMAL(10,2) NULL",
+        "ALTER TABLE vth_event_vehicles ADD COLUMN vth_extra_hour DECIMAL(10,2) NULL",
+        "ALTER TABLE vth_event_vehicles ADD COLUMN vth_extra_km DECIMAL(10,2) NULL",
         "ALTER TABLE vth_event_duties ADD COLUMN end_requested_at DATETIME NULL",
         "ALTER TABLE vth_event_duties ADD COLUMN end_request_seen_at DATETIME NULL",
         "ALTER TABLE vth_event_duties ADD COLUMN end_request_nonce VARCHAR(32) NULL",
@@ -1530,6 +1548,7 @@ function vth_event_ensure_optional_columns(mysqli $conn): void
         "ALTER TABLE vth_event_duties ADD COLUMN parking_seconds INT UNSIGNED NOT NULL DEFAULT 0",
         "ALTER TABLE vth_event_duties ADD COLUMN place_since DATETIME NULL",
         "ALTER TABLE vth_event_duties ADD COLUMN paused_seconds INT UNSIGNED NOT NULL DEFAULT 0",
+        "ALTER TABLE vth_event_duties ADD COLUMN toll_parking DECIMAL(10,2) NOT NULL DEFAULT 0",
         "ALTER TABLE vth_event_duties ADD COLUMN last_gps_client VARCHAR(64) NULL",
         "ALTER TABLE vth_event_tokens ADD COLUMN token_plain VARCHAR(128) NULL",
     ];
@@ -2166,6 +2185,7 @@ function vth_admin_duty_row(array $row, ?mysqli $conn = null, ?array $knownDocId
         'status' => $row['status'],
         'endRequestedAt' => $row['end_requested_at'] ?? null,
         'pausedSeconds' => isset($row['paused_seconds']) ? (int) $row['paused_seconds'] : 0,
+        'tollParking' => isset($row['toll_parking']) ? round((float) $row['toll_parking'], 2) : 0,
         'dutyPlace' => (($row['duty_place'] ?? '') === 'parking') ? 'parking' : 'trip',
         'tripSeconds' => $spanTotals
             ? (int) $spanTotals['tripSeconds']

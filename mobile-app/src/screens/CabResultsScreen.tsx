@@ -310,7 +310,7 @@ export function CabResultsScreen({ route, navigation }: Props) {
                   >
                     {/* Left: Car image */}
                     {v.image ? (
-                      <Image source={{ uri: v.image }} style={styles.cabImage} />
+                      <Image source={{ uri: v.image }} style={styles.cabImage} resizeMode="contain" />
                     ) : (
                       <View style={[styles.cabImage, styles.cabImagePlaceholder]}>
                         <Text style={styles.cabImageText}>🚗</Text>

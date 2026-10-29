@@ -26,6 +26,7 @@ import type { RootStackParamList } from '../navigation/types';
 import type { Location } from '../types';
 import type { TripType } from '../types';
 import { COUNTRY_CODES } from '../data/countryCodes';
+import { resolveVehicleImageUrl } from '../utils/mediaUrl';
 
 export type PassengerInfoParams = {
   pickupLocation: Location;
@@ -42,6 +43,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'PassengerInfo'>;
 
 export function PassengerInfoScreen({ route, navigation }: Props) {
   const { pickupLocation, dropLocation, pickupDate, returnDate, tripType, tripMode, distance, hourlyPackage, tourId, tourName, selectedVehicle, totalPrice, paymentMode: initialPaymentMode } = route.params;
+  const vehiclePhoto = resolveVehicleImageUrl(selectedVehicle);
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -290,13 +292,7 @@ export function PassengerInfoScreen({ route, navigation }: Props) {
                     </View>
                   </View>
                   <View style={styles.bookingDetailsVehicle}>
-                    {selectedVehicle.image ? (
-                      <Image source={{ uri: selectedVehicle.image }} style={styles.bookingDetailsVehicleImage} resizeMode="cover" />
-                    ) : (
-                      <View style={[styles.bookingDetailsVehicleImage, styles.bookingDetailsVehiclePlaceholder]}>
-                        <Text style={styles.bookingDetailsVehiclePlaceholderText}>🚗</Text>
-                      </View>
-                    )}
+                    <Image source={{ uri: vehiclePhoto }} style={styles.bookingDetailsVehicleImage} resizeMode="contain" />
                     <View style={styles.bookingDetailsVehicleInfo}>
                       <Text style={styles.bookingDetailsVehicleName}>{selectedVehicle.name}</Text>
                       <View style={styles.bookingDetailsVehicleMeta}>

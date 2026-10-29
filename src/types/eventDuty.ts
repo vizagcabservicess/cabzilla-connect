@@ -48,6 +48,8 @@ export interface VthEvent {
   status: EventStatus;
   gpsRequired: boolean;
   showSerialNo?: boolean;
+  billingIncludedHours?: number | null;
+  billingIncludedKm?: number | null;
   supportMobile?: string | null;
   assignmentCount?: number;
   dutyCount?: number;
@@ -177,6 +179,7 @@ export interface EventDuty {
   endRequestSeenAt?: string | null;
   endRequestNonce?: string | null;
   pausedSeconds?: number;
+  tollParking?: number | null;
   dutyPlace?: 'trip' | 'parking' | null;
   parkingPromptAt?: string | null;
   parkingPromptNonce?: string | null;
@@ -186,7 +189,20 @@ export interface EventDuty {
   updatedAt?: string;
 }
 
-export interface EventFleetOption {
+export interface EventVehicleRates {
+  vendorPackagePrice?: number | null;
+  vendorExtraHour?: number | null;
+  vendorExtraKm?: number | null;
+  vthPackagePrice?: number | null;
+  vthExtraHour?: number | null;
+  vthExtraKm?: number | null;
+}
+
+export interface EventVehicleRateInput extends EventVehicleRates {
+  id: number;
+}
+
+export interface EventFleetOption extends EventVehicleRates {
   id: number;
   vehicleNumber: string;
   name: string;
@@ -196,6 +212,7 @@ export interface EventFleetOption {
   capacity?: number | null;
   ownerName?: string | null;
   ownerMobile?: string | null;
+  serialNo?: number | null;
   status?: string;
   documents?: Record<string, EventDocumentInfo>;
 }

@@ -53,9 +53,7 @@ export function getEffectiveBookingStatus(booking: EffectiveStatusInput): Bookin
  * @returns Boolean indicating if booking is editable
  */
 export const isBookingEditable = (status: BookingStatus): boolean => {
-  // Bookings can be edited unless they are completed or cancelled
-  const nonEditableStatuses: BookingStatus[] = ['completed', 'cancelled'];
-  return !nonEditableStatuses.includes(status);
+  return status !== 'cancelled';
 };
 
 /**

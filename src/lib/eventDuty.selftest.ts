@@ -143,6 +143,13 @@ check('formats total duty time', () => {
     closingAt: '2026-10-13 20:45:00',
   }), '13 hr 45 min');
   assert.equal(formatReportDutyDuration({
+    dutyDate: '2026-10-20',
+    reportingTime: '09:00',
+    openingAt: '2026-10-20 08:50:15',
+    closingAt: '2026-10-20 21:00:18',
+    endRequestedAt: '2026-10-20 20:58:48',
+  }), '11 hr 58 min');
+  assert.equal(formatReportDutyDuration({
     dutyDate: '2026-10-13',
     openingAt: '2026-10-13 07:51:00',
     closingAt: '2026-10-13 20:45:00',

@@ -15,6 +15,18 @@ const getBase = () => {
   return WEB_APP_BASE_URL || 'https://www.vizagtaxihub.com';
 };
 
+function apiErrorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data;
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const message = (data as { message?: unknown }).message;
+      if (typeof message === 'string' && message.trim() !== '') return message.trim();
+    }
+  }
+  if (error instanceof Error && error.message.trim() !== '') return error.message;
+  return fallback;
+}
+
 function messageFromFuelEntryErrorBody(data: unknown): string | null {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) return null;
   const rec = data as Record<string, unknown>;
@@ -78,6 +90,40 @@ export const uploadImage = async (
   return url;
 };
 
+export interface DriverDutySegment {
+  id: number;
+  segmentIndex: number;
+  driverName: string;
+  driverPhone: string;
+  vehicleNumber: string;
+  vehicleModel: string;
+  status: string;
+  openingKm: number | null;
+  closingKm: number | null;
+  kilometers: number | null;
+  readOnly: boolean;
+}
+
+export interface DriverDutyDay {
+  id: number;
+  dayIndex: number;
+  dutyDate: string;
+  status: string;
+  segments: DriverDutySegment[];
+}
+
+export interface DriverDutyPayload {
+  status: string;
+  tripCode: string;
+  needsReceipt: boolean;
+  canStart: boolean;
+  canEnd: boolean;
+  isLastOpenDay: boolean;
+  currentDayIndex: number | null;
+  currentDutyDate: string | null;
+  days: DriverDutyDay[];
+}
+
 export interface DriverTrip {
   id: number;
   bookingNumber: string;
@@ -85,6 +131,7 @@ export interface DriverTrip {
   dropLocation: string;
   pickupDate: string;
   pickupTime: string;
+  returnDate?: string | null;
   passengerName: string;
   passengerPhone: string;
   /** From bookings.passenger_country_code; used to format display / tel:/WhatsApp */
@@ -115,6 +162,42 @@ export interface DriverTrip {
   endOdometer?: number;
   endOdometerAt?: string;
   endOdometerImageUrl?: string;
+  pickupMapUrl?: string;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  hourlyPackage?: string;
+  /** False on agent jobs: hide the fare and do not collect payment. */
+  driverCollectsPayment?: boolean;
+  /** company_paid, self_paid, or another stored payment channel. */
+  paymentType?: string | null;
+  /** Amount the driver reported when the trip was completed. */
+  driverCollectedAmount?: number | null;
+  /** Cash the driver collected on top of the package fare. */
+  extraCollectedAmount?: number | null;
+  /** extra_hours, extra_km, tolls, or other. */
+  extraCollectedCategory?: string | null;
+  tripTerms?: DriverTripTerms | null;
+}
+
+export interface DriverTripTerms {
+  package_hours?: number | null;
+  package_km?: number | null;
+  day_window?: string | null;
+  extra_hour_rate?: number | null;
+  extra_hour_free_km?: number | null;
+  extra_km_rate?: number | null;
+  garage_to_garage?: boolean;
+  driver_food?: boolean;
+  ac_off_standby_ghat?: boolean;
+  exclusions?: string[];
+  notes?: string[];
+  places?: string[];
+  duty_dates?: string[];
+  flight_number?: string | null;
+  flight_time?: string | null;
+  flight_direction?: string | null;
+  flight_route?: string | null;
+  vehicle_note?: string | null;
 }
 
 /** Map dashboard trip row to `DriverTrip` — same scope as Trips tab (dashboard.php). */
@@ -136,6 +219,7 @@ export function dashboardTripToDriverTrip(d: DriverDashboardTrip): DriverTrip {
     dropLocation: d.dropLocation,
     pickupDate: pickupDateStr,
     pickupTime,
+    returnDate: d.returnDate ?? null,
     passengerName: d.passengerName ?? '',
     passengerPhone: d.passengerPhone ?? '',
     passengerCountryCode: undefined,
@@ -147,14 +231,33 @@ export function dashboardTripToDriverTrip(d: DriverDashboardTrip): DriverTrip {
     tripMode: tripMode || undefined,
     tripType: vehicleType,
     totalAmount: d.tripAmount,
-    advancePaidAmount: 0,
+    advancePaidAmount: d.advancePaidAmount ?? 0,
     status: d.status,
-    additionalRequirements: null,
+    driverCollectsPayment: d.driverCollectsPayment !== false,
+    additionalRequirements: d.additionalRequirements ?? null,
+    pickupMapUrl: d.pickupMapUrl,
+    pickupLat: d.pickupLat,
+    pickupLng: d.pickupLng,
+    hourlyPackage: d.hourlyPackage,
+    tripTerms: d.tripTerms ?? null,
     driverName: d.driverName ?? null,
     driverPhone: null,
     startOdometer: Number.isFinite(startOdo) ? Math.round(startOdo) : undefined,
     endOdometer: Number.isFinite(endOdo) ? Math.round(endOdo) : undefined,
   };
+}
+
+function readTripTerms(raw: unknown): DriverTripTerms | null {
+  let value = raw;
+  if (typeof value === 'string' && value.trim() !== '') {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== 'object') return null;
+  return value as DriverTripTerms;
 }
 
 /** Normalize trip payload from `trips.php` (snake/camel, legacy rows). */
@@ -180,6 +283,7 @@ export function mapApiTripToDriverTrip(raw: Record<string, unknown>): DriverTrip
     dropLocation: String(raw.dropLocation ?? ''),
     pickupDate: String(raw.pickupDate ?? ''),
     pickupTime: String(raw.pickupTime ?? ''),
+    returnDate: optStr(raw.returnDate ?? raw.return_date) ?? null,
     passengerName: String(raw.passengerName ?? ''),
     passengerPhone: String(raw.passengerPhone ?? ''),
     passengerCountryCode: optStr(raw.passengerCountryCode ?? raw.passenger_country_code),
@@ -199,6 +303,26 @@ export function mapApiTripToDriverTrip(raw: Record<string, unknown>): DriverTrip
     advancePaidAmount: Number(raw.advancePaidAmount ?? raw.advance_paid_amount ?? 0),
     status: (raw.status as DriverTrip['status']) ?? 'assigned',
     additionalRequirements: (raw.additionalRequirements as string | null) ?? null,
+    pickupMapUrl: optStr(raw.pickupMapUrl ?? raw.pickup_map_url),
+    pickupLat: raw.pickupLat != null && raw.pickupLat !== '' ? Number(raw.pickupLat) : raw.pickup_lat != null && raw.pickup_lat !== '' ? Number(raw.pickup_lat) : null,
+    pickupLng: raw.pickupLng != null && raw.pickupLng !== '' ? Number(raw.pickupLng) : raw.pickup_lng != null && raw.pickup_lng !== '' ? Number(raw.pickup_lng) : null,
+    hourlyPackage: optStr(raw.hourlyPackage ?? raw.hourly_package),
+    driverCollectsPayment: raw.driverCollectsPayment !== false && raw.driver_collects_payment !== 0 && raw.driver_collects_payment !== false && raw.driver_collects_payment !== '0',
+    paymentType: optStr(raw.paymentType ?? raw.payment_type) ?? null,
+    driverCollectedAmount: (() => {
+      const rawCollected = raw.driverCollectedAmount ?? raw.driver_collected_amount;
+      if (rawCollected === null || rawCollected === undefined || rawCollected === '') return null;
+      const n = Number(rawCollected);
+      return Number.isFinite(n) ? n : null;
+    })(),
+    extraCollectedAmount: (() => {
+      const rawExtra = raw.extraCollectedAmount ?? raw.extra_collected_amount;
+      if (rawExtra === null || rawExtra === undefined || rawExtra === '') return null;
+      const n = Number(rawExtra);
+      return Number.isFinite(n) ? n : null;
+    })(),
+    extraCollectedCategory: optStr(raw.extraCollectedCategory ?? raw.extra_collected_category) ?? null,
+    tripTerms: readTripTerms(raw.tripTerms ?? raw.trip_terms),
     driverName: (raw.driverName as string | null) ?? null,
     driverPhone: (raw.driverPhone as string | null) ?? null,
     startOdometer: optInt(raw.startOdometer ?? raw.start_odometer),
@@ -214,8 +338,8 @@ export const driverTripsAPI = {
   updateTripStatus: async (
     bookingId: number,
     status: 'in_progress' | 'completed',
-    payment?: { collectedAmount: number; paymentType: string }
-  ): Promise<void> => {
+    payment?: { collectedAmount: number; paymentType: string; extraCollectedAmount?: number; extraCollectedCategory?: string | null }
+  ): Promise<{ tripCompleted: boolean }> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
@@ -223,37 +347,108 @@ export const driverTripsAPI = {
     if (status === 'completed' && payment) {
       payload.collectedAmount = payment.collectedAmount;
       payload.paymentType = payment.paymentType;
+      if (payment.extraCollectedAmount != null && Number.isFinite(payment.extraCollectedAmount)) {
+        payload.extraCollectedAmount = payment.extraCollectedAmount;
+        payload.extraCollectedCategory = payment.extraCollectedCategory ?? '';
+      }
     }
-    const response = await axios.request({
-      method: 'PATCH',
-      url: `${base}/api/driver/trip-status.php`,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      data: payload,
-      timeout: 15000,
-    });
+    let response;
+    try {
+      response = await axios.request({
+        method: 'PATCH',
+        url: `${base}/api/driver/trip-status.php`,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        data: payload,
+        timeout: 15000,
+      });
+    } catch (error) {
+      throw new Error(apiErrorMessage(error, 'Failed to update status'));
+    }
     const data = response.data;
     if (data?.status !== 'success') {
       throw new Error(data?.message || 'Failed to update status');
     }
+    return { tripCompleted: data?.data?.tripCompleted !== false && status === 'completed' };
   },
 
-  submitLocation: async (bookingId: number, lat: number, lng: number): Promise<void> => {
+  getDutyDays: async (bookingId: number): Promise<DriverDutyPayload> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
-    const response = await axios.post(`${base}/api/driver/location-updates.php`, { bookingId, lat, lng }, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 10000,
+    const response = await axios.get(`${base}/api/driver/duty-days.php?bookingId=${bookingId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 15000,
     });
-    const data = response.data;
-    if (data?.status !== 'success') {
-      throw new Error(data?.message || 'Failed to submit location');
+    if (response.data?.status !== 'success') {
+      throw new Error(response.data?.message || 'Failed to load duty days');
+    }
+    return response.data as DriverDutyPayload;
+  },
+
+  confirmDutyReceipt: async (bookingId: number): Promise<void> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    let response;
+    try {
+      response = await axios.post(
+        `${base}/api/driver/duty-segment.php`,
+        { bookingId, action: 'confirm' },
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, timeout: 15000 },
+      );
+    } catch (error) {
+      throw new Error(apiErrorMessage(error, 'Could not confirm this trip'));
+    }
+    if (response.data?.status !== 'success') {
+      throw new Error(response.data?.message || 'Could not confirm this trip');
+    }
+  },
+
+  endDutyDay: async (bookingId: number): Promise<{ tripCompleted: boolean }> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    const response = await axios.post(
+      `${base}/api/driver/duty-segment.php`,
+      { bookingId, action: 'end' },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, timeout: 15000 },
+    );
+    if (response.data?.status !== 'success') {
+      throw new Error(response.data?.message || 'Could not close this day');
+    }
+    return { tripCompleted: response.data?.tripCompleted === true };
+  },
+
+  submitLocation: async (bookingId: number, lat: number, lng: number, accuracy?: number | null): Promise<void> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Sign in again to share your location.');
+    const base = getBase();
+    try {
+      const response = await axios.post(
+        `${base}/api/driver/location-updates.php`,
+        { bookingId, lat, lng, accuracy: accuracy ?? undefined },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+        },
+      );
+      const data = response.data;
+      if (data?.status !== 'success') {
+        throw new Error(data?.message || 'Could not share your location with the office.');
+      }
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number; data?: { message?: string } } })?.response?.status;
+      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      if (message) throw new Error(message);
+      if (status === 404) throw new Error('The office cannot receive locations yet.');
+      if (e instanceof Error && e.message) throw e;
+      throw new Error('Could not share your location with the office.');
     }
   },
 
@@ -473,15 +668,32 @@ export const driverTripsAPI = {
       const ft = f.includes('diesel') ? 'diesel' : f.includes('cng') ? 'cng' : 'petrol';
       formData.append('fuelType', ft);
     }
-    const response = await axios.post(`${base}/api/driver/upload-fuel-odometer.php`, formData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data',
-      },
-      timeout: 60000,
-    });
-    const data = response.data;
-    if (data?.status !== 'success') throw new Error(data?.message || 'Upload failed');
+    let response;
+    try {
+      response = await axios.post(`${base}/api/driver/upload-fuel-odometer.php`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 60000,
+        validateStatus: (status) => status >= 200 && status < 600,
+      });
+    } catch (e) {
+      if (axios.isAxiosError(e)) {
+        const parsed = messageFromFuelEntryErrorBody(coerceFuelEntryJsonObject(e.response?.data) ?? e.response?.data);
+        if (parsed) throw new Error(parsed);
+        if (e.code === 'ECONNABORTED') throw new Error('Upload timed out. Check your connection and try the photo again.');
+        if (!e.response) throw new Error('Network error while uploading the photo. Check your connection and try again.');
+      }
+      throw e;
+    }
+    const data = coerceFuelEntryJsonObject(response.data) ?? response.data;
+    if (response.status >= 400 || data?.status !== 'success') {
+      throw new Error(
+        messageFromFuelEntryErrorBody(data) ||
+          (typeof data?.message === 'string' ? data.message : `Upload failed (HTTP ${response.status})`)
+      );
+    }
     return data.data;
   },
 

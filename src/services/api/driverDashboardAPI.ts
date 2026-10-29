@@ -63,7 +63,30 @@ function normalizeDashboardData(raw: any): DriverDashboardData {
             serverHours: serverH,
           }),
           fuelSpend: toNumber(trip?.fuelSpend ?? trip?.fuel_spend),
+          fuelLitres: toNumber(trip?.fuelLitres ?? trip?.fuel_litres ?? trip?.fuel_quantity),
           tripAmount: toNumber(trip?.tripAmount ?? trip?.trip_amount ?? trip?.total_amount),
+          advancePaidAmount: toNumber(trip?.advancePaidAmount ?? trip?.advance_paid_amount ?? trip?.advance_received),
+          extraCollectedAmount: (() => {
+            const raw = trip?.extraCollectedAmount ?? trip?.extra_collected_amount;
+            if (raw === null || raw === undefined || raw === '') return null;
+            const n = Number(raw);
+            return Number.isFinite(n) ? n : null;
+          })(),
+          extraCollectedCategory: toStringSafe(trip?.extraCollectedCategory ?? trip?.extra_collected_category) || null,
+          liveLat: (() => {
+            const raw = trip?.liveLat ?? trip?.live_lat;
+            if (raw === null || raw === undefined || raw === '') return null;
+            const n = Number(raw);
+            return Number.isFinite(n) ? n : null;
+          })(),
+          liveLng: (() => {
+            const raw = trip?.liveLng ?? trip?.live_lng;
+            if (raw === null || raw === undefined || raw === '') return null;
+            const n = Number(raw);
+            return Number.isFinite(n) ? n : null;
+          })(),
+          liveTrackedAt: toStringSafe(trip?.liveTrackedAt ?? trip?.live_tracked_at) || null,
+          driverCollectsPayment: trip?.driverCollectsPayment !== false && trip?.driver_collects_payment !== 0 && trip?.driver_collects_payment !== false && trip?.driver_collects_payment !== '0',
         };
       }),
       total: toNumber(raw?.trips?.total),
@@ -161,5 +184,53 @@ export const driverDashboardAPI = {
       const response = await axios.get(absoluteUrl, { headers, timeout: 20000 });
       return parseResponse(response);
     }
+  },
+
+  downloadDutySlip: async (bookingId: number, tripCode: string): Promise<void> => {
+    const token = localStorage.getItem('auth_token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const path = `/api/driver/duty-slip-pdf.php?bookingId=${bookingId}`;
+    const absoluteUrl = API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+
+    const read = async (url: string) =>
+      axios.get(url, { headers, responseType: 'blob', timeout: 60000, validateStatus: () => true });
+
+    // Same-origin first. localhost must use the dev proxy; a direct call to the live site is blocked.
+    let response;
+    try {
+      response = await read(path);
+    } catch {
+      response = await read(absoluteUrl);
+    }
+    if (response.status === 404) {
+      response = await read(absoluteUrl);
+    }
+
+    const blob = response.data as Blob;
+    const type = String(blob.type || response.headers?.['content-type'] || '');
+    if (response.status !== 200) {
+      let message = `Duty slip failed (${response.status})`;
+      try {
+        const parsed = JSON.parse(await blob.text()) as { message?: string };
+        if (parsed.message) message = parsed.message;
+      } catch {
+        /* keep status message */
+      }
+      throw new Error(message);
+    }
+
+    const safe = tripCode.replace(/[^\w.-]+/g, '-') || `booking-${bookingId}`;
+    const href = URL.createObjectURL(blob);
+    if (type.includes('text/html')) {
+      window.open(href, '_blank', 'noopener');
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `${safe}-duty-slip.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(href), 1000);
   },
 };

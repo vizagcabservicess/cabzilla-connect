@@ -48,6 +48,7 @@ import { AdminReportsScreen } from '../screens/AdminReportsScreen';
 import { BookingDetailScreen } from '../screens/BookingDetailScreen';
 import { BookingEditScreen } from '../screens/BookingEditScreen';
 import { AssignDriverScreen } from '../screens/AssignDriverScreen';
+import { ChangeAssignmentScreen } from '../screens/ChangeAssignmentScreen';
 import { AssignVehicleScreen } from '../screens/AssignVehicleScreen';
 import { InvoiceScreen } from '../screens/InvoiceScreen';
 import { WebViewScreen } from '../screens/WebViewScreen';
@@ -108,6 +109,7 @@ function ProfileStack() {
       <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
       <Stack.Screen name="BookingEdit" component={BookingEditScreen} />
       <Stack.Screen name="AssignDriver" component={AssignDriverScreen} />
+      <Stack.Screen name="ChangeAssignment" component={ChangeAssignmentScreen} />
       <Stack.Screen name="AssignVehicle" component={AssignVehicleScreen} />
       <Stack.Screen name="BookingInvoice" component={InvoiceScreen} />
       <Stack.Screen name="ContactUs" component={ContactUsScreen} />

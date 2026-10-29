@@ -18,7 +18,7 @@ function charUnits(ch: string): number {
   return 500;
 }
 
-function textWidth(value: string, fontSize: number, bold = false): number {
+export function textWidth(value: string, fontSize: number, bold = false): number {
   let units = 0;
   for (const ch of value) units += charUnits(ch);
   return (units / 1000) * fontSize * (bold ? 1.06 : 1);
@@ -32,7 +32,7 @@ function normalizePdfText(value: string): string {
     .replace(/[\u00A0\u202F]/g, ' ');
 }
 
-function wrapText(value: string, maxWidth: number, fontSize: number, bold = false): string[] {
+export function wrapText(value: string, maxWidth: number, fontSize: number, bold = false): string[] {
   const source = normalizePdfText(value).trim() || '\u2014';
   const words = source.split(/\s+/);
   const lines: string[] = [];
@@ -65,7 +65,7 @@ function wrapText(value: string, maxWidth: number, fontSize: number, bold = fals
   return lines.length ? lines : ['\u2014'];
 }
 
-function pdfLiteral(value: string): string {
+export function pdfLiteral(value: string): string {
   let out = '';
   for (const ch of value) {
     const code = ch.codePointAt(0) ?? 63;
@@ -207,19 +207,35 @@ export function buildReportPdf(report: EventPdfReport): string {
   return assemblePdf(streams, pageW, pageH);
 }
 
-function assemblePdf(streams: string[], pageW: number, pageH: number): string {
+export type PdfImage = {
+  name: string;
+  width: number;
+  height: number;
+  asciiHex: string;
+};
+
+export function assemblePdf(streams: string[], pageW: number, pageH: number, images: PdfImage[] = []): string {
   const pageCount = streams.length;
   const pageId = (index: number) => 5 + index * 2;
   const contentId = (index: number) => 6 + index * 2;
-  const maxId = contentId(pageCount - 1);
+  const contentMax = contentId(pageCount - 1);
+  const imageStart = contentMax + 1;
+  const maxId = contentMax + images.length;
   const objects: string[] = new Array(maxId + 1).fill('');
   const kids = streams.map((_, index) => `${pageId(index)} 0 R`).join(' ');
+  const xobject = images.length
+    ? ` /XObject << ${images.map((image, index) => `/${image.name} ${imageStart + index} 0 R`).join(' ')} >>`
+    : '';
   objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
   objects[2] = `<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>`;
   objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
   objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
+  images.forEach((image, index) => {
+    const data = `${image.asciiHex}>`;
+    objects[imageStart + index] = `<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [ /ASCIIHexDecode /DCTDecode ] /Length ${data.length} >>\nstream\n${data}\nendstream`;
+  });
   streams.forEach((stream, index) => {
-    objects[pageId(index)] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(pageW)} ${num(pageH)}] /Contents ${contentId(index)} 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>`;
+    objects[pageId(index)] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(pageW)} ${num(pageH)}] /Contents ${contentId(index)} 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >>${xobject} >> >>`;
     objects[contentId(index)] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
   });
 

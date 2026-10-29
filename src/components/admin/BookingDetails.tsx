@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookingEditForm } from './BookingEditForm';
-import { DriverAssignment } from './DriverAssignment';
+import { ChangeAssignment } from './ChangeAssignment';
 import { FleetVehicleAssignment } from './FleetVehicleAssignment';
+import { DriverAssignment } from './DriverAssignment';
 import { BookingInvoice } from './BookingInvoice';
 import { BookingDetailsWhatsApp } from './BookingDetailsWhatsApp';
 import { BookingAdvancedSettings } from './BookingAdvancedSettings';
@@ -15,6 +16,7 @@ import { convertUTCToLocal } from '@/lib/dateUtils';
 import { formatBookingStatus, getStatusColorClass, getEffectiveBookingStatus } from '@/utils/bookingUtils';
 import { mergeTripSummary, getDefaultTripSummary, getDefaultBillingAddress } from '@/utils/invoiceTripSummaryDefaults';
 import { resolveBookingAdvanceAmount } from '@/utils/bookingPaymentFields';
+import { bookingAmountWithExtra, extraCollectedAmount, extraCollectedCategoryLabel } from '@/lib/bookingExtra';
 import { BookingTourItinerary } from './BookingTourItinerary';
 import { isTourBooking, resolveTourDestinationLabel, resolveTourDisplayName } from '@/utils/tourConfirmationHelpers';
 
@@ -27,6 +29,7 @@ interface BookingDetailsProps {
   onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any) => Promise<any>;
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
   isSubmitting: boolean;
+  initialTab?: string;
 }
 
 export function BookingDetails({
@@ -37,9 +40,10 @@ export function BookingDetails({
   onCancel,
   onGenerateInvoice,
   onStatusChange,
-  isSubmitting
+  isSubmitting,
+  initialTab = 'details',
 }: BookingDetailsProps) {
-  const [activeTab, setActiveTab] = useState('details');
+  const [activeTab, setActiveTab] = useState(initialTab);
   
   // Lift invoice state up to persist across tab changes and browser sessions
   const getStoredInvoiceState = () => {
@@ -110,6 +114,10 @@ export function BookingDetails({
   }, [booking.id]);
 
   useEffect(() => {
+    setActiveTab(initialTab || 'details');
+  }, [booking.id, initialTab]);
+
+  useEffect(() => {
     console.log('BookingDetails booking.updatedAt:', booking.updatedAt, 'extraCharges:', booking.extraCharges);
   }, [booking]);
 
@@ -126,12 +134,11 @@ export function BookingDetails({
     });
   };
 
-  const isCompleted = booking.status === 'completed';
   const isCancelled = booking.status === 'cancelled';
 
   // Determine which tabs should be enabled based on booking status
   const isEditDisabled = isCancelled;
-  const isAssignmentDisabled = isCancelled || isCompleted;
+  const isAssignmentDisabled = isCancelled;
   const isInvoiceDisabled = isCancelled;
   const isWhatsAppDisabled = false; // WhatsApp messaging is always enabled
   const showTourItinerary = isTourBooking(
@@ -144,9 +151,12 @@ export function BookingDetails({
   const pdfUrl = `/api/admin/download-invoice.php?id=${booking.id}`;
   const displayStatus = getEffectiveBookingStatus(booking);
   const advancePaid = resolveBookingAdvanceAmount(booking);
+  const collectedExtra = extraCollectedAmount(booking);
+  const extraReason = extraCollectedCategoryLabel(booking.extraCollectedCategory ?? booking.extra_collected_category);
+  const amountWithExtra = bookingAmountWithExtra(booking);
 
   return (
-    <div>
+    <div className="min-w-0">
       <div className="mb-4">
         <div className="flex justify-between items-start mb-1">
           <div>
@@ -156,7 +166,12 @@ export function BookingDetails({
             </p>
           </div>
           <div className="text-right">
-            <p className="font-semibold text-base">{formatPrice(booking.totalAmount)}</p>
+            <p className="font-semibold text-base">{formatPrice(amountWithExtra)}</p>
+            {collectedExtra > 0 ? (
+              <p className="text-xs text-gray-500">
+                Includes {formatPrice(collectedExtra)}{extraReason ? ` ${extraReason.toLowerCase()}` : ' extra'}
+              </p>
+            ) : null}
             <div
               className={`inline-block px-1.5 py-0.5 text-xs font-medium rounded-md mt-1 ${getStatusColorClass(displayStatus)}`}
             >
@@ -172,8 +187,8 @@ export function BookingDetails({
         />
       </div>
 
-      <Tabs defaultValue="details" value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="w-full border-b justify-start">
+      <Tabs defaultValue="details" value={activeTab} onValueChange={handleTabChange} className="min-w-0">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 border-b bg-transparent p-0">
           <TabsTrigger 
             value="details"
             onClick={(e) => e.stopPropagation()}
@@ -215,6 +230,13 @@ export function BookingDetails({
             onClick={(e) => e.stopPropagation()}
           >
             Assign Driver
+          </TabsTrigger>
+          <TabsTrigger
+            value="change-assignment"
+            disabled={isCancelled || String(booking.status) === 'completed'}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Change Driver / Vehicle
           </TabsTrigger>
           <TabsTrigger 
             value="invoice" 
@@ -299,9 +321,15 @@ export function BookingDetails({
 
             <div className="mt-3 border-t pt-3">
               <div className="space-y-2">
+                {collectedExtra > 0 ? (
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs text-gray-500">Extra{extraReason ? ` · ${extraReason}` : ''}</p>
+                    <p className="font-medium">{formatPrice(collectedExtra)}</p>
+                  </div>
+                ) : null}
                 <div className="flex justify-between items-center">
                   <p className="text-xs text-gray-500">Total Amount</p>
-                  <p className="font-bold text-lg">{formatPrice(booking.totalAmount)}</p>
+                  <p className="font-bold text-lg">{formatPrice(amountWithExtra)}</p>
                 </div>
                 
                 {/* Show partial payment information if available */}
@@ -313,7 +341,7 @@ export function BookingDetails({
                     </div>
                     <div className="flex justify-between items-center border-t pt-2">
                       <p className="text-xs text-gray-500">Remaining Amount</p>
-                      <p className="font-bold text-lg">{formatPrice(booking.totalAmount - advancePaid)}</p>
+                      <p className="font-bold text-lg">{formatPrice(Math.max(0, amountWithExtra - advancePaid))}</p>
                     </div>
                   </>
                 )}
@@ -348,7 +376,7 @@ export function BookingDetails({
                     variant="destructive" 
                     size="sm"
                     onClick={onCancel}
-                    disabled={isSubmitting || isCompleted}
+                    disabled={isSubmitting}
                   >
                     Cancel Booking
                   </Button>
@@ -415,6 +443,10 @@ export function BookingDetails({
             onClose={() => handleTabChange('details')}
             isSubmitting={isSubmitting}
           />
+        </TabsContent>
+
+        <TabsContent value="change-assignment" className="py-2">
+          <ChangeAssignment booking={booking} />
         </TabsContent>
 
         <TabsContent value="invoice" className="py-2">

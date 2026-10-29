@@ -351,6 +351,8 @@ export const bookingAPI = {
         'distance',
         'paymentType',
         'driverCollectedAmount',
+        'extraCollectedAmount',
+        'extraCollectedCategory',
         'completedAt',
       ];
       const needsAdmin = tripFieldsOnlyInAdmin.some((k) => Object.prototype.hasOwnProperty.call(data as object, k));
@@ -485,6 +487,11 @@ export const bookingAPI = {
       return response.data;
     } catch (error) {
       console.error('Error assigning driver to booking:', error);
+      const body = (error as { response?: { data?: { message?: unknown } } })?.response?.data;
+      const serverMessage = body && typeof body.message === 'string' ? body.message.trim() : '';
+      if (serverMessage) {
+        throw new Error(serverMessage);
+      }
       throw error;
     }
   },

@@ -382,6 +382,26 @@ try {
         $igstAmount = 0;
     }
     
+    // Driver-collected extra (extra hours / km / tolls / others) sits on top of the package fare.
+    $driverExtraAmount = isset($booking['extra_collected_amount']) ? (float)$booking['extra_collected_amount'] : 0;
+    if ($driverExtraAmount < 0) {
+        $driverExtraAmount = 0;
+    }
+    $driverExtraCategory = isset($booking['extra_collected_category']) ? strtolower(trim((string)$booking['extra_collected_category'])) : '';
+    $driverExtraLabel = 'Driver extra';
+    if ($driverExtraCategory === 'extra_hours') {
+        $driverExtraLabel = 'Extra hours';
+    } elseif ($driverExtraCategory === 'extra_km') {
+        $driverExtraLabel = 'Extra km';
+    } elseif ($driverExtraCategory === 'tolls') {
+        $driverExtraLabel = 'Tolls';
+    } elseif ($driverExtraCategory === 'other') {
+        $driverExtraLabel = 'Others';
+    }
+    if ($driverExtraAmount > 0) {
+        $fareTotalWithTax = round($fareTotalWithTax + $driverExtraAmount, 2);
+    }
+
     // Final total
     $grandTotal = round($fareTotalWithTax, 2);
 
@@ -525,6 +545,7 @@ try {
     // Trip type: shared resolver fixes DB outstation + local hourly (8/80, package, hourly_package)
     list($tripTypeRaw, $tripTypeLabel) = invoice_resolve_trip_type_for_booking($booking, $noOfHours, $noOfKm);
     $noOfKm = invoice_round_trip_display_km($booking, $noOfKm, $tripTypeRaw);
+    invoice_fill_driver_close_metrics($conn, $booking, $noOfHours, $noOfKm);
 
     $tripDateDisplay = isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A';
     $vehicleDisplay = htmlspecialchars($booking['cab_type'] ?? 'N/A');
@@ -630,6 +651,14 @@ try {
                         <td style="text-align: right;"><span class="rupee-symbol">₹</span> '.number_format($amount, 2).'</td>
                     </tr>';
         }
+    }
+
+    if ($driverExtraAmount > 0) {
+        $content .= '
+                    <tr>
+                        <td>'.htmlspecialchars($driverExtraLabel).'</td>
+                        <td style="text-align: right;"><span class="rupee-symbol">₹</span> '.number_format($driverExtraAmount, 2).'</td>
+                    </tr>';
     }
 
     if ($gstEnabled) {

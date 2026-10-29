@@ -185,6 +185,16 @@ export default defineConfig(({ mode }) => ({
           });
         },
       },
+      '/api/driver/duty-slip-pdf.php': {
+        target: 'https://www.vizagtaxihub.com',
+        changeOrigin: true,
+        secure: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('accept-encoding', 'identity');
+          });
+        },
+      },
       '/api': {
         target: 'https://www.vizagtaxihub.com',
         changeOrigin: true,

@@ -1650,6 +1650,7 @@ try {
 
     list($tripTypeRaw, $tripTypeLabel) = invoice_resolve_trip_type_for_booking($booking, $noOfHours, $noOfKm);
     $noOfKm = invoice_round_trip_display_km($booking, $noOfKm, $tripTypeRaw);
+    invoice_fill_driver_close_metrics(isset($conn) ? $conn : null, $booking, $noOfHours, $noOfKm);
 
     $tripDateDisplay = isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A';
     $vehicleDisplay = htmlspecialchars($booking['cab_type'] ?? 'N/A');
@@ -2260,6 +2261,23 @@ try {
     @file_put_contents($logPath, $logEntry, FILE_APPEND);
     // #endregion
     
+    $driverExtraAmount = isset($booking['extra_collected_amount']) ? (float)$booking['extra_collected_amount'] : 0;
+    if ($driverExtraAmount < 0) {
+        $driverExtraAmount = 0;
+    }
+    $driverExtraCategory = isset($booking['extra_collected_category']) ? strtolower(trim((string)$booking['extra_collected_category'])) : '';
+    $driverExtraLabel = 'Driver extra';
+    if ($driverExtraCategory === 'extra_hours') {
+        $driverExtraLabel = 'Extra hours';
+    } elseif ($driverExtraCategory === 'extra_km') {
+        $driverExtraLabel = 'Extra km';
+    } elseif ($driverExtraCategory === 'tolls') {
+        $driverExtraLabel = 'Tolls';
+    } elseif ($driverExtraCategory === 'other') {
+        $driverExtraLabel = 'Others';
+    }
+    $invoiceGrandTotal = round($finalTotal + $driverExtraAmount, 2);
+
     $invoiceHtml .= '
             <h3 class="section-title">Fare Breakdown</h3>
             <table class="fare-table">
@@ -2277,7 +2295,7 @@ try {
         $invoiceHtml .= '
                 <tr class="total-row">
                     <td><strong>' . $totalLabel . '</strong></td>
-                    <td style="text-align: right;"><strong>₹ ' . number_format($finalTotal, 2) . '</strong></td>
+                    <td style="text-align: right;"><strong>₹ ' . number_format($invoiceGrandTotal, 2) . '</strong></td>
                 </tr>
                 <tr>
                     <td>' . $baseFareLabel . '</td>
@@ -2300,6 +2318,9 @@ try {
         }
     } else {
         $invoiceHtml .= '\n                <tr>\n                    <td colspan="2" style="text-align:center; color:#888;">No extra charges</td>\n                </tr>';
+    }
+    if ($driverExtraAmount > 0) {
+        $invoiceHtml .= '\n                <tr>\n                    <td>' . htmlspecialchars($driverExtraLabel) . '</td>\n                    <td style="text-align: right;">₹ ' . number_format($driverExtraAmount, 2) . '</td>\n                </tr>';
     }
     
     // Display GST - use CGST/SGST rows to match PDF structure
@@ -2529,7 +2550,7 @@ try {
         $invoiceHtml .= '
                 <tr class="total-row">
                     <td><strong>' . $totalLabel . '</strong></td>
-                    <td style="text-align: right;"><strong>₹ ' . number_format($finalTotal, 2) . '</strong></td>
+                    <td style="text-align: right;"><strong>₹ ' . number_format($invoiceGrandTotal, 2) . '</strong></td>
                 </tr>';
         
         logInvoiceError("Generating total row HTML (tax-exclusive)", [
@@ -2573,7 +2594,7 @@ try {
                 </tr>
                 <tr class="tax-details-summary">
                     <td colspan="4" style="text-align: left;"><strong>Trip charges</strong></td>
-                    <td class="total-col">' . number_format($finalTotal, 2) . '</td>
+                    <td class="total-col">' . number_format($invoiceGrandTotal, 2) . '</td>
                 </tr>';
         } else {
             $invoiceHtml .= '
@@ -2607,7 +2628,7 @@ try {
                 </tr>
                 <tr class="tax-details-summary">
                     <td colspan="7" style="text-align: left;"><strong>Trip charges</strong></td>
-                    <td class="total-col">' . number_format($finalTotal, 2) . '</td>
+                    <td class="total-col">' . number_format($invoiceGrandTotal, 2) . '</td>
                 </tr>';
         }
         $invoiceHtml .= '
@@ -2691,7 +2712,7 @@ try {
             $pattern = '/<tr class="total-row">.*?<td>Total Amount.*?<\/td>.*?<td style="text-align: right;">₹ [0-9,]+\.?[0-9]*<\/td>.*?<\/tr>/s';
             $replacement = '<tr class="total-row">
                         <td>Total Amount (including tax)</td>
-                        <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>
+                        <td style="text-align: right;">₹ ' . number_format($invoiceGrandTotal, 2) . '</td>
                     </tr>';
             $invoiceHtml = preg_replace($pattern, $replacement, $invoiceHtml);
             
@@ -2714,7 +2735,7 @@ try {
         $pattern = '/<tr class="total-row">.*?<td>Total Amount.*?<\/td>.*?<td style="text-align: right;">₹ [0-9,]+\.?[0-9]*<\/td>.*?<\/tr>/s';
         $replacement = '<tr class="total-row">
                     <td>Total Amount (including tax)</td>
-                    <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($invoiceGrandTotal, 2) . '</td>
                 </tr>';
         $invoiceHtml = preg_replace($pattern, $replacement, $invoiceHtml);
         

@@ -181,7 +181,7 @@ export function FleetVehiclesScreen() {
           {vehicles.map((v) => (
             <View key={v.id} style={[styles.card, { width: cardWidth }]}>
               {v.image ? (
-                <Image source={{ uri: v.image }} style={styles.cardImage} resizeMode="cover" />
+                <Image source={{ uri: v.image }} style={styles.cardImage} resizeMode="contain" />
               ) : (
                 <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
                   <MaterialCommunityIcons name="car-side" size={40} color={colors.gray400} />

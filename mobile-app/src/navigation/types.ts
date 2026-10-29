@@ -1,6 +1,16 @@
 import type { Location } from '../types';
 import type { TripType, TripMode } from '../types';
 
+export type QuotationRouteParams = {
+  tours: Array<{ id: string; name: string; days?: number; price?: number; timeDuration?: string }>;
+  vehicleName?: string;
+  packageAmount?: number;
+  pickup?: string;
+  pickupDate?: number;
+  duration?: string;
+  transfers?: Array<{ direction: 'from-airport' | 'to-airport'; placeName: string }>;
+};
+
 export type RootStackParamList = {
   Home: { initialTripType?: TripType; showAuthSheet?: boolean } | undefined;
   ToursList: {
@@ -103,6 +113,7 @@ export type RootStackParamList = {
   BookingDetail: { booking: Record<string, unknown>; bookingId?: number; source?: 'admin' | 'user' };
   BookingEdit: { bookingId: number; booking: Record<string, unknown> };
   AssignDriver: { bookingId: number; booking: Record<string, unknown> };
+  ChangeAssignment: { bookingId: number; booking: Record<string, unknown> };
   AssignVehicle: { bookingId: number; booking: Record<string, unknown> };
   BookingInvoice: { bookingId: number; booking: Record<string, unknown> };
   WebView: { url: string; title: string; html?: string; auth?: boolean; openChat?: boolean };
@@ -118,7 +129,7 @@ export type RootStackParamList = {
   DriverTripDetail: { trip: import('../services/driverTripsAPI').DriverTrip };
   FuelEntry: { bookingId?: number } | undefined;
   BuildMyTrip: undefined;
-  Quotation: { tours: Array<{ id: string; name: string; days?: number }> };
+  Quotation: QuotationRouteParams;
   Payment: {
     pickupLocation: Location;
     dropLocation: Location | null;
@@ -151,5 +162,5 @@ export type ServicesStackParamList = {
   HireDriver: undefined;
   Chat: undefined;
   BuildMyTrip: undefined;
-  Quotation: { tours: Array<{ id: string; name: string; days?: number }> };
+  Quotation: QuotationRouteParams;
 };

@@ -82,18 +82,15 @@ export function routePointsWithStops(
 }
 
 /**
- * One-way with stops is billed garage-to-garage: pickup → stops → drop → pickup.
- * One-way without stops stays pickup → drop (original Distance Matrix path).
+ * Customer route used for kilometers: pickup → stops → drop.
+ * A one-way empty return is applied in fare math. It is not driven back on the map,
+ * including when stops are added. Round-trip totals double this outward distance later.
  */
 export function bookedOutstationRoutePoints(
   pickup: Location,
   drop: Location,
   stops: Array<Location | null | undefined>,
-  tripMode: 'one-way' | 'round-trip'
+  _tripMode: 'one-way' | 'round-trip'
 ): Location[] {
-  const outward = routePointsWithStops(pickup, drop, stops);
-  if (tripMode === 'one-way' && filledOutstationStops(stops).length > 0) {
-    return [...outward, pickup];
-  }
-  return outward;
+  return routePointsWithStops(pickup, drop, stops);
 }

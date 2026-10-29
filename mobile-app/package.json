@@ -34,6 +34,7 @@
     "date-fns": "^4.1.0",
     "expo": "~54.0.0",
     "expo-auth-session": "~7.0.10",
+    "expo-build-properties": "~1.0.10",
     "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.4",
     "expo-crypto": "~15.0.8",

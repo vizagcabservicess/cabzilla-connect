@@ -36,7 +36,21 @@ export interface DriverDashboardTrip {
   totalKilometers: number;
   totalDurationHours: number;
   fuelSpend: number;
+  /** Litres or kg filled on this booking. */
+  fuelLitres?: number;
   tripAmount: number;
+  /** Amount already received before the trip. The driver collects the balance. */
+  advancePaidAmount?: number;
+  /** Extra cash the driver collected on top of the package fare. */
+  extraCollectedAmount?: number | null;
+  /** extra_hours, extra_km, tolls, or other. */
+  extraCollectedCategory?: string | null;
+  /** Latest driver GPS fix while live tracking is on. */
+  liveLat?: number | null;
+  liveLng?: number | null;
+  liveTrackedAt?: string | null;
+  /** False on agent jobs: the driver must not see or collect a fare. */
+  driverCollectsPayment?: boolean;
 }
 
 export interface DriverFuelRecord {

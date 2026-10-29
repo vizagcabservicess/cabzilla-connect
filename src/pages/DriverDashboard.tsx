@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Pencil } from 'lucide-react';
+import { FileText, MapPin, MoreHorizontal, Pencil } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -71,11 +71,30 @@ function formatJourneyDate(value: string | null): string {
   return date.toLocaleDateString('en-IN');
 }
 
+function extraCategoryLabel(code: string | null | undefined): string {
+  switch ((code || '').trim().toLowerCase()) {
+    case 'extra_hours':
+      return 'Extra hours';
+    case 'extra_km':
+      return 'Extra km';
+    case 'tolls':
+      return 'Tolls';
+    case 'other':
+      return 'Others';
+    default:
+      return '';
+  }
+}
+
+function tripTotalAmount(trip: DriverDashboardTrip): number {
+  return toSafeNumber(trip.tripAmount) + toSafeNumber(trip.extraCollectedAmount);
+}
+
 function formatTripPaymentLabel(code: string): string {
   const c = (code || '').trim().toLowerCase();
   const map: Record<string, string> = {
     company_phonepe: 'Company PhonePe',
-    company_paid: 'Company paid',
+    company_paid: 'Company A/C',
     self_paid: 'Self',
     agent_booking: 'Agent booking',
     corporate_booking: 'Corporate',
@@ -194,9 +213,13 @@ export default function DriverDashboard() {
         'End_ODO',
         'Hours',
         'Kilometers',
+        'Fuel_L',
         'Fuel_INR',
         'Amount_INR',
+        'Advance_INR',
         'Collected_INR',
+        'Extra_INR',
+        'Extra_category',
         'Payment',
       ];
       const rows = response.trips.items.map((trip) => [
@@ -211,11 +234,17 @@ export default function DriverDashboard() {
         toSafeNumber(trip.endingOdometer).toFixed(1),
         toSafeNumber(trip.totalDurationHours).toFixed(1),
         toSafeNumber(trip.totalKilometers).toFixed(1),
+        toSafeNumber(trip.fuelLitres).toFixed(2),
         toSafeNumber(trip.fuelSpend).toFixed(0),
-        toSafeNumber(trip.tripAmount).toFixed(0),
+        trip.driverCollectsPayment === false ? '' : tripTotalAmount(trip).toFixed(0),
+        toSafeNumber(trip.advancePaidAmount).toFixed(0),
         trip.driverCollectedAmount != null && Number.isFinite(trip.driverCollectedAmount)
           ? toSafeNumber(trip.driverCollectedAmount).toFixed(0)
           : '',
+        trip.extraCollectedAmount != null && Number.isFinite(trip.extraCollectedAmount)
+          ? toSafeNumber(trip.extraCollectedAmount).toFixed(0)
+          : '',
+        extraCategoryLabel(trip.extraCollectedCategory),
         formatTripPaymentLabel(trip.paymentType),
       ]);
       downloadCsvFile(`driver-ops-trips-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
@@ -306,7 +335,7 @@ export default function DriverDashboard() {
     data.trips.items.forEach((trip) => {
       const key = trip.startTime ? new Date(trip.startTime).toISOString().slice(0, 10) : 'unknown';
       const current = earningsMap.get(key) ?? { date: key, earnings: 0, fuel: 0 };
-      current.earnings += trip.tripAmount;
+      current.earnings += tripTotalAmount(trip);
       earningsMap.set(key, current);
     });
     data.fuelRecords.items.forEach((fuel) => {
@@ -462,7 +491,9 @@ export default function DriverDashboard() {
                       <th className="text-left py-2">No. of Kilometers</th>
                       <th className="text-left py-2">Fuel</th>
                       <th className="text-left py-2">Amount</th>
+                      <th className="text-left py-2">Advance</th>
                       <th className="text-left py-2">Collected</th>
+                      <th className="text-left py-2">Extra</th>
                       <th className="text-left py-2">Payment</th>
                       <th className="text-right py-2 w-[52px]">Actions</th>
                     </tr>
@@ -481,11 +512,20 @@ export default function DriverDashboard() {
                         <td>{toSafeNumber(trip.endingOdometer).toFixed(1)}</td>
                         <td>{toSafeNumber(trip.totalDurationHours).toFixed(1)}</td>
                         <td>{toSafeNumber(trip.totalKilometers).toFixed(1)}</td>
-                        <td>₹{toSafeNumber(trip.fuelSpend).toFixed(0)}</td>
-                        <td>₹{toSafeNumber(trip.tripAmount).toFixed(0)}</td>
+                        <td>
+                          {toSafeNumber(trip.fuelLitres) > 0 ? `${toSafeNumber(trip.fuelLitres).toFixed(2)} L · ` : ''}
+                          ₹{toSafeNumber(trip.fuelSpend).toFixed(0)}
+                        </td>
+                        <td>{trip.driverCollectsPayment === false ? 'Do not collect' : `₹${tripTotalAmount(trip).toFixed(0)}`}</td>
+                        <td>{toSafeNumber(trip.advancePaidAmount) > 0 ? `₹${toSafeNumber(trip.advancePaidAmount).toFixed(0)}` : '—'}</td>
                         <td>
                           {trip.driverCollectedAmount != null && Number.isFinite(trip.driverCollectedAmount)
                             ? `₹${toSafeNumber(trip.driverCollectedAmount).toFixed(0)}`
+                            : '—'}
+                        </td>
+                        <td>
+                          {toSafeNumber(trip.extraCollectedAmount) > 0
+                            ? `₹${toSafeNumber(trip.extraCollectedAmount).toFixed(0)}${extraCategoryLabel(trip.extraCollectedCategory) ? ` · ${extraCategoryLabel(trip.extraCollectedCategory)}` : ''}`
                             : '—'}
                         </td>
                         <td>{formatTripPaymentLabel(trip.paymentType)}</td>
@@ -497,6 +537,31 @@ export default function DriverDashboard() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {trip.liveLat != null && trip.liveLng != null ? (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    window.open(
+                                      `https://www.google.com/maps/search/?api=1&query=${trip.liveLat},${trip.liveLng}`,
+                                      '_blank',
+                                      'noopener,noreferrer',
+                                    );
+                                  }}
+                                >
+                                  <MapPin className="h-4 w-4 mr-2" />
+                                  Live location
+                                </DropdownMenuItem>
+                              ) : null}
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  void driverDashboardAPI.downloadDutySlip(trip.tripId, trip.tripCode).catch((err: unknown) => {
+                                    const message = err instanceof Error ? err.message : 'The duty slip could not be created.';
+                                    window.alert(message);
+                                  });
+                                }}
+                              >
+                                <FileText className="h-4 w-4 mr-2" />
+                                Duty slip
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => {
                                   setEditTrip(trip);
