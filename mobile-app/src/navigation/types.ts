@@ -1,5 +1,6 @@
 import type { Location } from '../types';
 import type { TripType, TripMode } from '../types';
+import type { DriverTrip } from '../services/driverTripsAPI';
 
 export type QuotationRouteParams = {
   tours: Array<{ id: string; name: string; days?: number; price?: number; timeDuration?: string }>;
@@ -8,7 +9,7 @@ export type QuotationRouteParams = {
   pickup?: string;
   pickupDate?: number;
   duration?: string;
-  transfers?: Array<{ direction: 'from-airport' | 'to-airport'; placeName: string }>;
+  transfers?: Array<{ direction: 'from-airport' | 'to-airport' | 'from-station' | 'to-station'; placeName: string }>;
 };
 
 export type RootStackParamList = {
@@ -82,7 +83,7 @@ export type RootStackParamList = {
   Dashboard: { viewAs?: number; viewAsName?: string } | undefined;
   AdminDashboard: undefined;
   /** Super-admin driver ops — web `DriverDashboard` parity */
-  AdminDriverOpsDashboard: undefined;
+  AdminDriverOpsDashboard: { bookingNumber?: string } | undefined;
   AdminBookingsList: undefined;
   /** Same behaviour as web Bookings → Upcoming trips tab */
   AdminUpcomingTrips: undefined;
@@ -126,8 +127,8 @@ export type RootStackParamList = {
   DriverFuelTab: undefined;
   DriverTripsList: undefined;
   DriverFuelHome: undefined;
-  DriverTripDetail: { trip: import('../services/driverTripsAPI').DriverTrip };
-  FuelEntry: { bookingId?: number } | undefined;
+  DriverTripDetail: { trip: DriverTrip };
+  FuelEntry: { bookingId?: number; trip?: DriverTrip } | undefined;
   BuildMyTrip: undefined;
   Quotation: QuotationRouteParams;
   Payment: {

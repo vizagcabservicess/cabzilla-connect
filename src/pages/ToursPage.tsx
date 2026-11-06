@@ -10,7 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Location } from "@/lib/locationData";
 import { isWithinTourPickupRadius } from "@/lib/locationUtils";
 import { coerceTripDate, dateTimeMinuteKey, addCalendarDaysKeepingTime, tourStayDays } from "@/lib/dateUtils";
-import { minTourStartInstant } from "@/lib/tourScheduleTimes";
+import { minTourStartInstant, withStationTiming } from "@/lib/tourScheduleTimes";
 import { ChevronUp, ChevronDown, Edit2, AlertTriangle } from "lucide-react";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { TourListItem } from "@/types/tour";
@@ -124,6 +124,7 @@ const ToursPage = () => {
     }
   });
   const [fareSheetOpen, setFareSheetOpen] = useState(false);
+  const [availableVehicles, setAvailableVehicles] = useState<VehicleWithPricing[] | null>(null);
   const tourPaybarRef = useRef<HTMLDivElement | null>(null);
 
   const persistTourPaymentMode = (mode: 'partial' | 'full') => {
@@ -464,13 +465,19 @@ const ToursPage = () => {
   const hasCollidingTourDates = collidingDateIds.size > 0;
   const tripExtras = readTourCartTripExtras();
   const airportTransfers = tripExtras?.airportTransfers || [];
+  const railwayTransfers = tripExtras?.railwayTransfers || [];
   const airportExtra = Number(tripExtras?.additionalAirportFare) > 0
     ? Number(tripExtras?.additionalAirportFare)
     : airportTransfers.reduce((sum, transfer) => sum + (Number(transfer.fare) > 0 ? Number(transfer.fare) : 0), 0);
-  const minTourDate = minTourStartInstant(airportTransfers);
+  const railwayExtra = Number(tripExtras?.additionalRailwayFare) > 0
+    ? Number(tripExtras?.additionalRailwayFare)
+    : railwayTransfers.reduce((sum, transfer) => sum + (Number(transfer.fare) > 0 ? Number(transfer.fare) : 0), 0);
+  const minTourDate = minTourStartInstant(withStationTiming([...airportTransfers, ...railwayTransfers]));
 
   useEffect(() => {
-    const fromAirport = airportTransfers.some((transfer) => transfer.direction === 'from-airport');
+    const fromAirport = [...airportTransfers, ...railwayTransfers].some(
+      (transfer) => transfer.direction === 'from-airport' || transfer.direction === 'from-station'
+    );
     if (!fromAirport || includedTours.length === 0) return;
     const needsShift = includedTours.some((tour) => {
       const date = datesByTourId[tour.tourId] ?? pickupDate;
@@ -485,7 +492,7 @@ const ToursPage = () => {
     } catch {
       /* ignore */
     }
-  }, [airportTransfers, includedTours, minTourDate.getTime()]);
+  }, [airportTransfers, railwayTransfers, includedTours, minTourDate.getTime()]);
 
   const handleTourDateChange = (tourId: string, date: Date | undefined) => {
     if (!date) return;
@@ -556,6 +563,10 @@ const ToursPage = () => {
     });
   };
 
+  const handleAvailableVehiclesChange = useCallback((next: VehicleWithPricing[]) => {
+    setAvailableVehicles(next);
+  }, []);
+
   const cartFareLines = useMemo(
     () =>
       includedTours.map((tour) => {
@@ -571,10 +582,36 @@ const ToursPage = () => {
       }),
     [includedTours, vehiclesByTourId, datesByTourId, pickupDate]
   );
-  const combinedTotal = cartFareLines.reduce((sum, line) => sum + line.price, 0) + airportExtra;
+  const combinedTotal = cartFareLines.reduce((sum, line) => sum + line.price, 0) + airportExtra + railwayExtra;
   const pricedTourCount = cartFareLines.filter((line) => line.price > 0).length;
-  const showTourPaybar =
-    isCartSearch && searchInitiated && Boolean(selectedVehicle) && combinedTotal > 0;
+  const availabilityScope = `${activeTour?.tourId ?? ''}:${activeTourDate?.getTime() ?? 0}`;
+  const [trackedAvailabilityScope, setTrackedAvailabilityScope] = useState(availabilityScope);
+  if (availabilityScope !== trackedAvailabilityScope) {
+    setTrackedAvailabilityScope(availabilityScope);
+    setAvailableVehicles(null);
+  }
+  const selectedVehicleIsBookable = Boolean(
+    selectedVehicle &&
+      availableVehicles?.some((vehicle) =>
+        vehicleMatchesPreferred(vehicle, {
+          id: selectedVehicle.id || selectedVehicle.vehicleId || selectedVehicle.name,
+          name: selectedVehicle.name,
+        })
+      )
+  );
+  const showCheckoutFare =
+    availableVehicles !== null &&
+    availableVehicles.length > 0 &&
+    selectedVehicleIsBookable &&
+    combinedTotal > 0;
+  const showTourPaybar = isCartSearch && searchInitiated && showCheckoutFare;
+
+  useEffect(() => {
+    if (!availableVehicles || !selectedVehicle) return;
+    if (selectedVehicleIsBookable) return;
+    setVehiclesByTourId({});
+    setFareSheetOpen(false);
+  }, [availableVehicles, selectedVehicle, selectedVehicleIsBookable]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.vthBookingUi = 'results';
@@ -663,6 +700,8 @@ const ToursPage = () => {
         vehiclesByTourId,
         additionalAirportFare: airportExtra,
         airportTransfers,
+        additionalRailwayFare: railwayExtra,
+        railwayTransfers,
       });
     }
     navigate(
@@ -838,6 +877,29 @@ const ToursPage = () => {
           </span>
         </li>
       ) : null}
+      {railwayTransfers.map((transfer, index) => (
+        <li key={`station-${transfer.direction}-${index}`} className="flex items-start justify-between gap-3 text-sm">
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-gray-900">
+              {transfer.direction === 'from-station' ? 'Railway pickup' : 'Railway drop'}
+            </span>
+            <span className="block text-xs text-gray-500">
+              {transfer.placeName || 'Vizag railway station transfer'}
+            </span>
+          </span>
+          <span className="shrink-0 font-semibold text-gray-900">
+            {Number(transfer.fare) > 0 ? `₹${Number(transfer.fare).toLocaleString('en-IN')}` : railwayExtra > 0 ? '' : '—'}
+          </span>
+        </li>
+      ))}
+      {railwayExtra > 0 && railwayTransfers.every((transfer) => !(Number(transfer.fare) > 0)) ? (
+        <li className="flex items-start justify-between gap-3 text-sm">
+          <span className="font-medium text-gray-900">Railway station transfers</span>
+          <span className="shrink-0 font-semibold text-gray-900">
+            ₹{railwayExtra.toLocaleString('en-IN')}
+          </span>
+        </li>
+      ) : null}
     </ul>
   );
   
@@ -973,6 +1035,30 @@ const ToursPage = () => {
                   )}
                 </div>
               ) : null}
+              {railwayTransfers.length > 0 || railwayExtra > 0 ? (
+                <div className="mb-3 rounded-xl border border-sky-100 bg-sky-50/80 px-3 py-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
+                    Railway station transfers
+                  </p>
+                  {railwayTransfers.length > 0 ? (
+                    <ul className="mt-1 space-y-1">
+                      {railwayTransfers.map((transfer, index) => (
+                        <li key={`editor-station-${index}`} className="text-sm text-slate-800">
+                          {transfer.direction === 'from-station' ? 'From station' : 'To station'}
+                          {transfer.placeName ? ` · ${transfer.placeName}` : ''}
+                          {Number(transfer.fare) > 0
+                            ? ` · ₹${Number(transfer.fare).toLocaleString('en-IN')}`
+                            : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-sm font-medium text-slate-800">
+                      ₹{railwayExtra.toLocaleString('en-IN')} extra
+                    </p>
+                  )}
+                </div>
+              ) : null}
               <div
                 className={`mb-3 rounded-lg border px-2.5 py-1 ${
                   activeTour && collidingDateIds.has(activeTour.tourId)
@@ -1004,7 +1090,9 @@ const ToursPage = () => {
                     onBookNow={handleContinueWithVehicle}
                     tourDate={activeTourDate}
                     combinePricingFrom={includedTours}
+                    onAvailableVehiclesChange={handleAvailableVehiclesChange}
                   />
+                  {showCheckoutFare ? (
                   <div
                     id="tour-combined-fare"
                     className="mt-4 hidden scroll-mt-32 rounded-xl border border-slate-200 bg-white p-3 lg:block"
@@ -1032,6 +1120,7 @@ const ToursPage = () => {
                       />
                     </div>
                   </div>
+                  ) : null}
                 </>
               ) : (
                 <p className="text-sm text-gray-500">Tap a package on the left to choose its vehicle.</p>

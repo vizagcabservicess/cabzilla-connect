@@ -273,6 +273,10 @@ export function getVizagAirportLocations(): Location[] {
   return vizagLocations.filter((loc) => loc.type === 'airport');
 }
 
+export function getVizagRailwayStation(): Location | undefined {
+  return vizagLocations.find((loc) => loc.id === 'vizag_railway');
+}
+
 function coordsKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
   if (
     !Number.isFinite(aLat) ||

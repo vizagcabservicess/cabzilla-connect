@@ -171,6 +171,24 @@ export function formatTourDurationLabel(days: number): string {
   return `${count} Days / ${nights} Night${nights === 1 ? '' : 's'}`;
 }
 
+/** Arrival days before the tour start that are close enough to belong to this trip. */
+export function leadingTransferDayCount(
+  tourStartIso: string,
+  transfers: Array<{ direction?: string; pickupDate?: string }>
+): number {
+  const start = utcDayIndex(tourStartIso);
+  if (start == null) return 0;
+  const days = new Set<number>();
+  for (const transfer of transfers) {
+    if (transfer.direction !== 'from-airport' && transfer.direction !== 'from-station') continue;
+    const day = utcDayIndex(String(transfer.pickupDate || ''));
+    if (day == null) continue;
+    const gap = start - day;
+    if (gap > 0 && gap <= AIRPORT_DURATION_PAD_DAYS) days.add(day);
+  }
+  return days.size;
+}
+
 /** Calendar days from tour start through last tour day plus nearby airport dates (not stale years). */
 export function daysCoveringTourAndAirports(
   tourStartIso: string,
@@ -270,6 +288,15 @@ export function clampTripAfterFromAirports(
     return fieldsFromInstant(min);
   }
   return fieldsFromInstant(tripAt);
+}
+
+/** Station arrivals and departures use the same gap rules as airport transfers. */
+export function withStationTiming(transfers: AirportWhenInput[]): AirportWhenInput[] {
+  return transfers.map((transfer) => {
+    if (transfer.direction === 'from-station') return { ...transfer, direction: 'from-airport' };
+    if (transfer.direction === 'to-station') return { ...transfer, direction: 'to-airport' };
+    return transfer;
+  });
 }
 
 export function airportHotelName(transfers: Array<AirportWhenInput & { placeName?: string }>): string {

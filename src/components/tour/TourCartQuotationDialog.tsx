@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -56,14 +56,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
+import { useGoogleMaps, requestGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { generateTourCartQuotationPdf } from '@/lib/generateTourCartQuotationPdf';
 import type { CountryCode } from '@/lib/countryCodes';
 import type { Location } from '@/lib/locationData';
-import { getVizagAirportLocations } from '@/lib/locationData';
 import { isWithinTourPickupRadius } from '@/lib/locationUtils';
 import { tourDetailAPI } from '@/services/api/tourDetailAPI';
-import { airportHotelName, clampToLeadTime, clampTripAfterFromAirports, daysCoveringTourAndAirports, earliestPickupInstant, earliestToAirportWhen, formatTourDurationLabel, latestFromAirportWhen, minTourStartInstant, tourIsoDateOnly } from '@/lib/tourScheduleTimes';
+import { AIRPORT_DURATION_PAD_DAYS, airportHotelName, clampToLeadTime, clampTripAfterFromAirports, daysCoveringTourAndAirports, earliestPickupInstant, earliestToAirportWhen, formatTourDurationLabel, latestFromAirportWhen, leadingTransferDayCount, minTourStartInstant, tourIsoDateOnly, withStationTiming } from '@/lib/tourScheduleTimes';
 import {
   flattenTourItineraryPlaces,
   moveListItem,
@@ -83,7 +82,7 @@ import {
   type TourQuoteAdjustments,
   type TourQuoteInclusions,
   type TourQuoteTripPlan,
-} from '@/components/pdf/TourCartQuotationPDF';
+} from '@/lib/tourQuoteModel';
 
 const QUOTE_EXTRA_OPTIONS: Array<{ key: keyof TourQuoteInclusions; label: string }> = [
   { key: 'parking', label: 'Parking fees' },
@@ -195,6 +194,25 @@ export function quoteDayCount(
   if (nights > 0) return nights + 1;
   const fromTours = tours.reduce((sum, tour) => sum + (Number(tour.days) > 0 ? Number(tour.days) : 1), 0);
   return Math.max(1, fromTours || 1);
+}
+
+/** Day rows follow the pickup-through-return dates when a timed trip sets them. */
+export function quotedItineraryDayCount(
+  plan: TourQuoteTripPlan,
+  tours: Array<{ days?: number }> = []
+): number {
+  const calendar = Number(plan.calendarDays);
+  if (Number.isFinite(calendar) && calendar > 0) return Math.round(calendar);
+  return quoteDayCount(plan.tourDuration, tours);
+}
+
+export function quotedStayNightCount(
+  plan: TourQuoteTripPlan,
+  tours: Array<{ days?: number }> = []
+): number {
+  const calendar = Number(plan.calendarDays);
+  if (Number.isFinite(calendar) && calendar > 0) return Math.max(0, Math.round(calendar) - 1);
+  return quoteNightCount(plan.tourDuration, tours);
 }
 
 function resolvedTripPlan(
@@ -354,6 +372,22 @@ function buildWhatsAppText(
         });
         return `Airport transfer: ${route}${when ? ` on ${when}` : ''}`;
       }),
+    ...(quote.railwayTransfers || [])
+      .filter((transfer) => transfer.placeName)
+      .map((transfer) => {
+        const station = 'Visakhapatnam Railway Station';
+        const route =
+          transfer.direction === 'from-station'
+            ? `From ${station} to ${transfer.placeName}`
+            : `From ${transfer.placeName} to ${station}`;
+        const when = formatTripWhen({
+          pickupLocation: '',
+          pickupDate: transfer.pickupDate,
+          pickupTime: transfer.pickupTime,
+          tourDuration: '',
+        });
+        return `Railway station transfer: ${route}${when ? ` on ${when}` : ''}`;
+      }),
     `Tour duration: ${quote.tripPlan?.tourDuration || suggestedTourDuration(quote.tours)}`,
     'Book: +91 9966363662 | www.vizagtaxihub.com',
   ]
@@ -426,6 +460,18 @@ export function TripPlanFields({
   const { toast } = useToast();
   const { isLoaded, google } = useGoogleMaps();
   const [locating, setLocating] = useState(false);
+
+  useEffect(() => {
+    requestGoogleMaps();
+  }, []);
+
+  const openTravelSchedule = (event: PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+    pickerRef.current?.open({ scroll: false });
+  };
 
   const applyLocation = (location: Location | null | undefined) => {
     if (!location?.id) {
@@ -587,9 +633,7 @@ export function TripPlanFields({
           <div className="relative grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => {
-                window.setTimeout(() => pickerRef.current?.open(), 30);
-              }}
+              onPointerDown={openTravelSchedule}
               className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-left"
             >
               {menuFields ? <Calendar className="h-4 w-4 shrink-0 text-slate-500" /> : null}
@@ -609,9 +653,7 @@ export function TripPlanFields({
             </button>
             <button
               type="button"
-              onClick={() => {
-                window.setTimeout(() => pickerRef.current?.open(), 30);
-              }}
+              onPointerDown={openTravelSchedule}
               className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-left"
             >
               {menuFields ? <Clock className="h-4 w-4 shrink-0 text-slate-500" /> : null}
@@ -637,6 +679,7 @@ export function TripPlanFields({
                 onDateChange={applyDate}
                 minDate={minDate && minDate.getTime() > earliestPickupInstant().getTime() ? minDate : earliestPickupInstant()}
                 variant="infield"
+                forceSheet
               />
             </div>
           </div>
@@ -645,7 +688,10 @@ export function TripPlanFields({
         <div>
           {planFieldLabel(Clock, 'Tour duration')}
           {durationChoices.length > 0 ? (
-            <Select value={plan.tourDuration} onValueChange={(value) => set({ tourDuration: value })}>
+            <Select
+              value={plan.tourDuration}
+              onValueChange={(value) => set({ tourDuration: value, calendarDays: undefined })}
+            >
               <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-white text-base font-medium text-slate-900 shadow-none focus:ring-1 focus:ring-blue-500/30 md:text-[13px]">
                 <SelectValue placeholder="Select duration" />
               </SelectTrigger>
@@ -661,7 +707,7 @@ export function TripPlanFields({
             <Input
               id={`${idPrefix}-duration`}
               value={plan.tourDuration}
-              onChange={(event) => set({ tourDuration: event.target.value })}
+              onChange={(event) => set({ tourDuration: event.target.value, calendarDays: undefined })}
               placeholder="2 Days / 1 Night"
               className={quoteFieldClass}
             />
@@ -711,53 +757,146 @@ function planDateFromIso(iso: string): Date | null {
   return new Date(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10)));
 }
 
+type ScheduleTransfer = { direction?: string; pickupDate?: string; pickupTime?: string; placeName?: string };
+
+function calendarGap(later: Date, earlier: Date): number {
+  return Math.round((later.getTime() - earlier.getTime()) / 86400000);
+}
+
+/** Arrival days that sit before the tour start, within the same window used for the duration label. */
+export function leadingScheduleDayCount(plan: TourQuoteTripPlan, transfers: ScheduleTransfer[]): number {
+  return leadingTransferDayCount(plan.pickupDate, transfers);
+}
+
+function scheduleListOrigin(plan: TourQuoteTripPlan, transfers: ScheduleTransfer[]): Date | null {
+  const start = planDateFromIso(plan.pickupDate);
+  let origin = start;
+  for (const transfer of transfers) {
+    if (transfer.direction !== 'from-airport' && transfer.direction !== 'from-station') continue;
+    const date = planDateFromIso(tourIsoDateOnly(String(transfer.pickupDate || '')));
+    if (!date || !start) continue;
+    const gap = calendarGap(start, date);
+    if (gap > 0 && gap <= AIRPORT_DURATION_PAD_DAYS && (!origin || date.getTime() < origin.getTime())) {
+      origin = date;
+    }
+  }
+  return origin;
+}
+
 export function buildTripSchedule(
   tours: Array<{ tourName: string; days?: number; timeDuration?: string; description?: string }>,
   plan: TourQuoteTripPlan,
-  transfers: Array<{ direction?: string; pickupDate?: string; pickupTime?: string; placeName?: string }> = []
+  transfers: ScheduleTransfer[] = []
 ): TripScheduleLine[] {
   const fromAirport = latestFromAirportWhen(transfers);
   const toAirport = earliestToAirportWhen(transfers);
+  const fromStation = transfers.find((transfer) => transfer.direction === 'from-station' && transfer.pickupDate);
+  const toStation = transfers.find((transfer) => transfer.direction === 'to-station' && transfer.pickupDate);
   const pickupStart = planDateFromIso(plan.pickupDate);
-  const fromDay = fromAirport ? planDateFromIso(fromAirport.pickupDate) : null;
-  const start =
-    fromDay && pickupStart && fromDay.getTime() < pickupStart.getTime() ? fromDay : pickupStart || fromDay;
+  const tourStart = pickupStart || scheduleListOrigin(plan, transfers);
   const hotel = airportHotelName(transfers);
+  const stationPlace = String(fromStation?.placeName || toStation?.placeName || '').trim();
   const lines: TripScheduleLine[] = [];
-  let dayNumber = 1;
+  const noteForIso = (iso: string): string[] => {
+    const notes: string[] = [];
+    if (fromAirport && iso === fromAirport.pickupDate) {
+      notes.push(hotel ? `Airport pickup to ${hotel}` : 'Airport pickup');
+    }
+    if (toAirport && iso === toAirport.pickupDate) {
+      notes.push(hotel ? `Drop at airport from ${hotel}` : 'Transfer to airport');
+    }
+    if (fromStation?.pickupDate && iso === tourIsoDateOnly(fromStation.pickupDate)) {
+      notes.push(stationPlace ? `Railway pickup to ${stationPlace}` : 'Railway station pickup');
+    }
+    if (toStation?.pickupDate && iso === tourIsoDateOnly(toStation.pickupDate)) {
+      notes.push(stationPlace ? `Drop at railway station from ${stationPlace}` : 'Transfer to railway station');
+    }
+    return notes;
+  };
+  const dated = new Map<string, { date: Date; titles: string[]; notes: string[] }>();
+  const remember = (iso: string, title: string, note: string) => {
+    const date = planDateFromIso(iso);
+    if (!date) return;
+    const row = dated.get(iso) || { date, titles: [], notes: [] };
+    if (title && !row.titles.includes(title)) row.titles.push(title);
+    if (note && !row.notes.includes(note)) row.notes.push(note);
+    dated.set(iso, row);
+  };
+  if (pickupStart) {
+    for (const transfer of transfers) {
+      const iso = tourIsoDateOnly(String(transfer.pickupDate || ''));
+      const date = iso ? planDateFromIso(iso) : null;
+      if (!date) continue;
+      const before = calendarGap(pickupStart, date);
+      if (before <= 0 || before > AIRPORT_DURATION_PAD_DAYS) continue;
+      if (transfer.direction === 'from-station') {
+        remember(iso, 'Railway pickup', stationPlace ? `Railway pickup to ${stationPlace}` : 'Railway station pickup');
+      } else if (transfer.direction === 'from-airport') {
+        remember(iso, 'Airport pickup', hotel ? `Airport pickup to ${hotel}` : 'Airport pickup');
+      }
+    }
+  }
+  const leading = [...dated.values()].sort((a, b) => a.date.getTime() - b.date.getTime());
+  dated.clear();
+  for (const row of leading) {
+    lines.push({
+      day: lines.length + 1,
+      when: scheduleWhenLabel(row.date),
+      title: row.titles.join(' · '),
+      note: row.notes.join(' · '),
+    });
+  }
+  let tourDayOffset = 0;
   for (const tour of tours) {
     const count = Number(tour.days) > 0 ? Number(tour.days) : 1;
     const blurb = scheduleBlurb(tour.description) || String(tour.timeDuration || '').trim();
     for (let index = 0; index < count; index += 1) {
-      const date = start ? scheduleDayDate(start, dayNumber - 1) : null;
+      const date = tourStart ? scheduleDayDate(tourStart, tourDayOffset) : null;
       const iso = date ? planDayIso(date) : '';
       const isReturnDay = count > 1 && index === count - 1;
-      const notes: string[] = [];
-      if (fromAirport && iso === fromAirport.pickupDate) {
-        notes.push(hotel ? `Airport pickup to ${hotel}` : 'Airport pickup');
-      }
-      if (toAirport && iso === toAirport.pickupDate) {
-        notes.push(hotel ? `Drop at airport from ${hotel}` : 'Transfer to airport');
-      }
+      const notes = noteForIso(iso);
       if (!isReturnDay && index === 0 && blurb) notes.push(blurb);
       if (isReturnDay) notes.push('Continue sightseeing & return');
       lines.push({
-        day: dayNumber,
+        day: lines.length + 1,
         when: date ? scheduleWhenLabel(date) : '',
         title: isReturnDay ? '' : tour.tourName,
         note: notes.join(' · '),
       });
-      dayNumber += 1;
+      tourDayOffset += 1;
     }
   }
-  return lines;
+  const lastTour = tourStart && tourDayOffset > 0 ? scheduleDayDate(tourStart, tourDayOffset - 1) : null;
+  if (lastTour) {
+    for (const transfer of transfers) {
+      const iso = tourIsoDateOnly(String(transfer.pickupDate || ''));
+      const date = iso ? planDateFromIso(iso) : null;
+      if (!date) continue;
+      const after = calendarGap(date, lastTour);
+      if (after <= 0 || after > AIRPORT_DURATION_PAD_DAYS) continue;
+      if (transfer.direction === 'to-station') {
+        remember(iso, 'Railway drop', stationPlace ? `Drop at railway station from ${stationPlace}` : 'Transfer to railway station');
+      } else if (transfer.direction === 'to-airport') {
+        remember(iso, 'Airport drop', hotel ? `Drop at airport from ${hotel}` : 'Transfer to airport');
+      }
+    }
+    for (const row of [...dated.values()].sort((a, b) => a.date.getTime() - b.date.getTime())) {
+      lines.push({
+        day: lines.length + 1,
+        when: scheduleWhenLabel(row.date),
+        title: row.titles.join(' · '),
+        note: row.notes.join(' · '),
+      });
+    }
+  }
+  return lines.map((line, index) => ({ ...line, day: index + 1 }));
 }
 
 function isOutsideTripSheet(target: EventTarget | null): boolean {
   const node = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
   return Boolean(
     node?.closest(
-      '.location-search-sheet, .pac-container, .datetime-picker-sheet, [data-radix-popper-content-wrapper]'
+      '.location-search-sheet, .location-suggestion-panel, .pac-container, .datetime-picker-sheet, [data-radix-popper-content-wrapper]'
     )
   );
 }
@@ -796,7 +935,6 @@ export function TourCartQuotationDialog({
     const fromAirport = transfers.find(
       (transfer) => transfer.direction === 'from-airport' && (transfer.place || transfer.placeName)
     );
-    const toAirport = transfers.find((transfer) => transfer.direction === 'to-airport');
     if (fromAirport) {
       const plan = resolvedTripPlan(currentQuote);
       const hotelName = fromAirport.placeName || fromAirport.place?.name || '';
@@ -816,15 +954,6 @@ export function TourCartQuotationDialog({
           pickupPlace: fillPickup && hotelInRange ? nextPlace : plan.pickupPlace,
         });
       }
-    }
-    if (toAirport) {
-      const airportLocations = getVizagAirportLocations();
-      const airport =
-        airportLocations.find((location) => location.id === 'vizag_airport') ?? airportLocations[0];
-      setLastDropPlace((current) => {
-        if (current && /airport/i.test(current.name || current.address || '')) return current;
-        return airport;
-      });
     }
   }, [open, airportSyncKey]);
   const [nightStays, setNightStays] = useState<string[]>([]);
@@ -867,8 +996,8 @@ export function TourCartQuotationDialog({
     quoteAllowsCustomSeating,
     quoteNotes,
   ]);
-  const stayNightCount = quoteNightCount(resolvedTripPlan(quote).tourDuration, quote.tours);
-  const extraDayCount = quoteDayCount(resolvedTripPlan(quote).tourDuration, quote.tours);
+  const stayNightCount = quotedStayNightCount(resolvedTripPlan(quote), quote.tours);
+  const extraDayCount = quotedItineraryDayCount(resolvedTripPlan(quote), quote.tours);
 
   useEffect(() => {
     setNightStays((current) => {
@@ -882,6 +1011,11 @@ export function TourCartQuotationDialog({
   }, [stayNightCount]);
 
   const quoteTourKey = quote.tours.map((tour) => tour.tourId || tour.tourName).join('|');
+  const transferScheduleKey = [
+    quote.tripPlan?.pickupDate || '',
+    ...(quote.airportTransfers || []).map((transfer) => `${transfer.direction}:${transfer.pickupDate}`),
+    ...(quote.railwayTransfers || []).map((transfer) => `${transfer.direction}:${transfer.pickupDate}`),
+  ].join('|');
 
   useEffect(() => {
     if (!open) return;
@@ -909,15 +1043,22 @@ export function TourCartQuotationDialog({
       })
     ).then((loaded) => {
       if (cancelled) return;
-      const seed = flattenTourItineraryPlaces(loaded);
-      const dayCount = quoteDayCount(resolvedTripPlan(quoteRef.current).tourDuration, loaded);
+      const current = quoteRef.current;
+      const plan = resolvedTripPlan(current);
+      const transfers = [...(current.airportTransfers || []), ...(current.railwayTransfers || [])];
+      const lead = leadingScheduleDayCount(plan, transfers);
+      const seed = [
+        ...Array.from({ length: lead }, () => [] as string[]),
+        ...flattenTourItineraryPlaces(loaded),
+      ];
+      const dayCount = Math.max(quotedItineraryDayCount(plan, loaded), seed.length);
       setItinerarySeed(seed);
       setExtraPlacesByDay(padPlacesByDay([], dayCount, seed));
     });
     return () => {
       cancelled = true;
     };
-  }, [open, quoteTourKey]);
+  }, [open, quoteTourKey, transferScheduleKey]);
 
   useEffect(() => {
     setExtraPlacesByDay((current) => {
@@ -928,14 +1069,14 @@ export function TourCartQuotationDialog({
 
   const itineraryDays = useMemo(() => {
     const plan = resolvedTripPlan(quote);
-    const transfers = quote.airportTransfers || [];
+    const transfers = [...(quote.airportTransfers || []), ...(quote.railwayTransfers || [])];
     const lines = buildTripSchedule(quote.tours, plan, transfers);
     const fromAirport = latestFromAirportWhen(transfers);
     const toAirport = earliestToAirportWhen(transfers);
     const hotel = airportHotelName(transfers);
-    const origin =
-      (fromAirport ? planDateFromIso(fromAirport.pickupDate) : null) || planDateFromIso(plan.pickupDate);
-    return Array.from({ length: extraDayCount }, (_, index) => {
+    const origin = scheduleListOrigin(plan, transfers);
+    const dayCount = Math.max(extraDayCount, lines.length);
+    return Array.from({ length: dayCount }, (_, index) => {
       const line = lines[index];
       if (line) return line;
       const start = origin ? scheduleDayDate(origin, index) : null;
@@ -969,7 +1110,7 @@ export function TourCartQuotationDialog({
     const spanDays = daysCoveringTourAndAirports(
       quote.tripPlan?.pickupDate || '',
       packageDays,
-      (quote.airportTransfers || []).map((transfer) => transfer.pickupDate)
+      [...(quote.airportTransfers || []), ...(quote.railwayTransfers || [])].map((transfer) => transfer.pickupDate)
     );
     if (spanDays > packageDays) values.add(formatTourDurationLabel(spanDays));
     for (const tour of quote.tours) {
@@ -979,7 +1120,7 @@ export function TourCartQuotationDialog({
       if (raw) values.add(raw);
     }
     return [...values];
-  }, [quote.airportTransfers, quote.tours, quote.tripPlan?.pickupDate]);
+  }, [quote.airportTransfers, quote.railwayTransfers, quote.tours, quote.tripPlan?.pickupDate]);
   const selectedFare =
     quote.vehicleOptions.find((vehicle) => vehicle.name === quote.selectedVehicleName) ||
     quote.vehicleOptions[0];
@@ -1235,7 +1376,7 @@ export function TourCartQuotationDialog({
       <DialogContent
         showClose={false}
         data-tour-quote-dialog=""
-        className="max-h-[92vh] max-w-[420px] content-start gap-0 overflow-x-hidden overflow-y-auto rounded-[1.6rem] border-slate-200 p-0 sm:rounded-[1.6rem] max-md:inset-x-0 max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:top-auto max-md:flex max-md:h-auto max-md:max-h-[100dvh] max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:flex-col max-md:justify-start max-md:rounded-b-none max-md:rounded-t-[1.6rem]"
+        className="max-h-[92vh] max-w-[420px] content-start gap-0 overflow-y-auto rounded-[1.6rem] border-slate-200 p-0 sm:rounded-[1.6rem] lg:overflow-x-hidden max-md:inset-x-0 max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:top-auto max-md:flex max-md:h-auto max-md:max-h-[100dvh] max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:flex-col max-md:justify-start max-md:rounded-b-none max-md:rounded-t-[1.6rem]"
         onPointerDownOutside={(event) => {
           if (isOutsideTripSheet(event.target)) event.preventDefault();
         }}
@@ -1332,7 +1473,9 @@ export function TourCartQuotationDialog({
                 menuFields
                 plan={resolvedTripPlan(quote)}
                 durationOptions={durationOptions}
-                minDate={minTourStartInstant(quote.airportTransfers || [])}
+                minDate={minTourStartInstant(
+                  withStationTiming([...(quote.airportTransfers || []), ...(quote.railwayTransfers || [])])
+                )}
                 onChange={onTripPlanChange}
               />
               <div>
@@ -1401,7 +1544,10 @@ export function TourCartQuotationDialog({
                                     });
                                   }}
                                   placeholder="Place or activity"
-                                  className="h-9 rounded-lg bg-white text-base md:text-[13px]"
+                                  autoComplete="off"
+                                  autoCorrect="off"
+                                  spellCheck={false}
+                                  className="h-9 min-w-0 flex-1 rounded-lg bg-white text-base md:text-[13px]"
                                 />
                                 <div className="flex h-9 shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200">
                                   <button
@@ -1494,7 +1640,10 @@ export function TourCartQuotationDialog({
                                     });
                                   }}
                                   placeholder={`City or hotel for night ${dayIndex + 1}`}
-                                  className="h-9 rounded-lg bg-white text-base md:text-[13px]"
+                                  autoComplete="off"
+                                  autoCorrect="off"
+                                  spellCheck={false}
+                                  className="h-9 min-w-0 rounded-lg bg-white text-base md:text-[13px]"
                                 />
                               </div>
                             ) : null}
@@ -1541,6 +1690,11 @@ export function TourCartQuotationDialog({
               {quote.additionalAirportFare && quote.additionalAirportFare > 0 ? (
                 <p className="text-[10px] font-medium text-slate-500">
                   Includes ₹{quote.additionalAirportFare.toLocaleString('en-IN')} airport transfer
+                </p>
+              ) : null}
+              {quote.additionalRailwayFare && quote.additionalRailwayFare > 0 ? (
+                <p className="text-[10px] font-medium text-slate-500">
+                  Includes ₹{quote.additionalRailwayFare.toLocaleString('en-IN')} railway station transfer
                 </p>
               ) : null}
             </div>

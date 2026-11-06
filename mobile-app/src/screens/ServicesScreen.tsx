@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/core';
 import { colors, fonts } from '../theme/colors';
+import { openVthAi } from '../lib/vthAi';
 import type { TripType } from '../types';
 
 const WHATSAPP_NUMBER = '919966363662';
@@ -34,7 +35,7 @@ const SERVICE_ITEMS: Array<{
   { id: 'tour', label: 'Tour', icon: 'map-marker-path', tripType: 'tour' },
   { id: 'hire', label: 'Hire Driver', icon: 'account', action: 'hire-driver' },
   { id: 'whatsapp', label: 'Chat on WhatsApp', icon: 'whatsapp', action: 'whatsapp' },
-  { id: 'chat', label: 'Chat', icon: 'message-text-outline', action: 'chat' },
+  { id: 'chat', label: 'VTH AI', icon: 'creation', action: 'chat' },
   { id: 'build-trip', label: 'Build My Trip', icon: 'map-marker-path', action: 'build-trip' },
 ];
 
@@ -47,7 +48,7 @@ export function ServicesScreen() {
       return;
     }
     if (item.action === 'chat') {
-      navigation.navigate('Chat');
+      openVthAi();
       return;
     }
     if (item.action === 'build-trip') {

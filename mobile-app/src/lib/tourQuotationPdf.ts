@@ -14,7 +14,7 @@ export type QuotePdfInput = {
   nightStays?: string[];
   dayPlans?: Array<{ day: number; title: string; places?: string }>;
   itinerary?: Array<{ day: number; heading: string; section?: string; activities: string[]; halt?: string }>;
-  transfers?: Array<{ direction: 'from-airport' | 'to-airport'; placeName: string }>;
+  transfers?: Array<{ direction: 'from-airport' | 'to-airport' | 'from-station' | 'to-station'; placeName: string }>;
   packageAmount?: number;
   carrierIncluded?: boolean;
   carrierAmount?: number;
@@ -208,6 +208,13 @@ export function buildTourQuotationPdf(input: QuotePdfInput): string {
       activities: [`From Alluri Sitarama Raju International Airport to ${transfer.placeName}`],
     });
   });
+  (input.transfers || []).filter((transfer) => transfer.direction === 'from-station').forEach((transfer) => {
+    drawDay(need, line, fill, () => y, (next) => { y = next; }, {
+      label: 'STATION',
+      heading: 'Railway pickup',
+      activities: [`From Visakhapatnam Railway Station to ${transfer.placeName}`],
+    });
+  });
   days.forEach((day) => {
     drawDay(need, line, fill, () => y, (next) => { y = next; }, {
       label: `DAY ${day.day}`,
@@ -222,6 +229,13 @@ export function buildTourQuotationPdf(input: QuotePdfInput): string {
       label: 'AIRPORT',
       heading: 'Airport drop',
       activities: [`From ${transfer.placeName} to Alluri Sitarama Raju International Airport`],
+    });
+  });
+  (input.transfers || []).filter((transfer) => transfer.direction === 'to-station').forEach((transfer) => {
+    drawDay(need, line, fill, () => y, (next) => { y = next; }, {
+      label: 'STATION',
+      heading: 'Railway drop',
+      activities: [`From ${transfer.placeName} to Visakhapatnam Railway Station`],
     });
   });
 

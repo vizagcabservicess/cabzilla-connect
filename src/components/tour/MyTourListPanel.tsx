@@ -69,10 +69,12 @@ import {
   suggestedTourDuration,
 } from '@/components/tour/TourCartQuotationDialog';
 import { TourAdditionalAirportTransfers } from '@/components/tour/TourAdditionalAirportTransfers';
-import { airportHotelName, clampToLeadTime, clampTripAfterFromAirports, daysCoveringTourAndAirports, formatTourDurationLabel, minTourStartInstant, AIRPORT_DURATION_PAD_DAYS } from '@/lib/tourScheduleTimes';
+import { airportHotelName, clampToLeadTime, clampTripAfterFromAirports, daysCoveringTourAndAirports, formatTourDurationLabel, minTourStartInstant, withStationTiming, AIRPORT_DURATION_PAD_DAYS } from '@/lib/tourScheduleTimes';
 import { isBuildTripDeepLink, shareBuildYourTripLink } from '@/lib/buildYourTrip';
-import type { TourQuoteAirportTransfer, TourQuoteTripPlan } from '@/components/pdf/TourCartQuotationPDF';
+import type { TourQuoteAirportTransfer, TourQuoteRailwayTransfer, TourQuoteTripPlan } from '@/lib/tourQuoteModel';
 import type { CountryCode } from '@/lib/countryCodes';
+import type { Location } from '@/lib/locationData';
+import { requestGoogleMaps } from '@/providers/GoogleMapsProvider';
 
 type CatalogTour = {
   tourId: string;
@@ -110,6 +112,36 @@ function formatDuration(days?: number, timeDuration?: string): string {
   if (label) return label;
   if (days === 1) return '1 Day';
   return '';
+}
+
+function readSessionPickupPlace(): Location | undefined {
+  try {
+    const raw = sessionStorage.getItem('pickupLocation');
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as Location;
+    return parsed?.id ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readSessionPickupWhen(): { pickupDate: string; pickupTime: string } {
+  try {
+    const raw = sessionStorage.getItem('pickupDate');
+    if (!raw) return { pickupDate: '', pickupTime: '' };
+    const date = new Date(JSON.parse(raw) as string);
+    if (Number.isNaN(date.getTime())) return { pickupDate: '', pickupTime: '' };
+    return {
+      pickupDate: [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+      ].join('-'),
+      pickupTime: `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`,
+    };
+  } catch {
+    return { pickupDate: '', pickupTime: '' };
+  }
 }
 
 function tripPlanSummary(plan: TourQuoteTripPlan): string {
@@ -219,11 +251,22 @@ export function MyTourListPanel() {
   const [showQuoteDialog, setShowQuoteDialog] = useState(false);
   const [tripPlan, setTripPlan] = useState<TourQuoteTripPlan>(() => {
     const saved = readTourCartTripExtras()?.tripPlan;
+    const sessionPlace = readSessionPickupPlace();
+    const sessionWhen = readSessionPickupWhen();
+    const savedPlace = saved?.pickupPlace?.id ? saved.pickupPlace : undefined;
+    const sameSessionPlace =
+      sessionPlace &&
+      saved?.pickupLocation &&
+      (sessionPlace.name === saved.pickupLocation || sessionPlace.address === saved.pickupLocation)
+        ? sessionPlace
+        : undefined;
+    const pickupPlace = savedPlace || sameSessionPlace || (!saved?.pickupLocation ? sessionPlace : undefined);
     return {
-      pickupLocation: saved?.pickupLocation || '',
-      pickupDate: saved?.pickupDate || '',
-      pickupTime: saved?.pickupTime || '',
+      pickupLocation: saved?.pickupLocation || pickupPlace?.name || pickupPlace?.address || '',
+      pickupDate: saved?.pickupDate || sessionWhen.pickupDate,
+      pickupTime: saved?.pickupDate ? saved.pickupTime || '' : sessionWhen.pickupTime,
       tourDuration: saved?.tourDuration || '',
+      pickupPlace,
     };
   });
   const [tripPlanOpen, setTripPlanOpen] = useState('');
@@ -231,9 +274,26 @@ export function MyTourListPanel() {
   const [airportTransfers, setAirportTransfers] = useState<TourQuoteAirportTransfer[]>(
     () => readTourCartTripExtras()?.airportTransfers || []
   );
-  const handleAirportTransfers = useCallback((next: TourQuoteAirportTransfer[]) => {
+  const [railwayExtra, setRailwayExtra] = useState(() => readTourCartTripExtras()?.additionalRailwayFare || 0);
+  const [railwayTransfers, setRailwayTransfers] = useState<TourQuoteRailwayTransfer[]>(
+    () => readTourCartTripExtras()?.railwayTransfers || []
+  );
+  const handleAirportTransfers = useCallback((next: Array<TourQuoteAirportTransfer | TourQuoteRailwayTransfer>) => {
+    const airport = next.filter(
+      (transfer): transfer is TourQuoteAirportTransfer =>
+        transfer.direction === 'from-airport' || transfer.direction === 'to-airport'
+    );
     setAirportTransfers((current) =>
-      JSON.stringify(current) === JSON.stringify(next) ? current : next
+      JSON.stringify(current) === JSON.stringify(airport) ? current : airport
+    );
+  }, []);
+  const handleRailwayTransfers = useCallback((next: Array<TourQuoteAirportTransfer | TourQuoteRailwayTransfer>) => {
+    const railway = next.filter(
+      (transfer): transfer is TourQuoteRailwayTransfer =>
+        transfer.direction === 'from-station' || transfer.direction === 'to-station'
+    );
+    setRailwayTransfers((current) =>
+      JSON.stringify(current) === JSON.stringify(railway) ? current : railway
     );
   }, []);
   const handleTripSchedule = useCallback((when: { pickupDate: string; pickupTime: string }) => {
@@ -250,12 +310,16 @@ export function MyTourListPanel() {
   );
 
   useEffect(() => {
-    const hotel = airportHotelName(airportTransfers);
+    const arrivalTiming = withStationTiming([...airportTransfers, ...railwayTransfers]);
+    const hotel =
+      airportHotelName(airportTransfers) ||
+      airportHotelName(withStationTiming(railwayTransfers));
     const fromAirport = airportTransfers.find((transfer) => transfer.direction === 'from-airport');
-    const hasFromAirport = Boolean(fromAirport);
+    const fromStation = railwayTransfers.find((transfer) => transfer.direction === 'from-station');
+    const hasArrival = arrivalTiming.some((transfer) => transfer.direction === 'from-airport');
     setTripPlan((current) => {
-      const clamped = hasFromAirport
-        ? clampTripAfterFromAirports(current, airportTransfers)
+      const clamped = hasArrival
+        ? clampTripAfterFromAirports(current, arrivalTiming)
         : current.pickupDate
           ? clampToLeadTime(current)
           : current;
@@ -271,7 +335,7 @@ export function MyTourListPanel() {
       }
       if (hotel && !current.pickupLocation.trim()) {
         next.pickupLocation = hotel;
-        next.pickupPlace = fromAirport?.place || current.pickupPlace;
+        next.pickupPlace = fromAirport?.place || fromStation?.place || current.pickupPlace;
         changed = true;
       }
       const saved = changed ? next : current;
@@ -289,13 +353,18 @@ export function MyTourListPanel() {
       }
       return changed ? next : current;
     });
-  }, [airportTransfers]);
+  }, [airportTransfers, railwayTransfers]);
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
     window.addEventListener(VTH_TOUR_LIST_PANEL_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(VTH_TOUR_LIST_PANEL_OPEN_EVENT, onOpen);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    requestGoogleMaps();
+  }, [open]);
 
   useEffect(() => {
     let cancelled = false;
@@ -362,7 +431,7 @@ export function MyTourListPanel() {
     const spanDays = daysCoveringTourAndAirports(
       tripPlan.pickupDate,
       packageDays,
-      airportTransfers.map((transfer) => transfer.pickupDate)
+      [...airportTransfers, ...railwayTransfers].map((transfer) => transfer.pickupDate)
     );
     const storedDays = currentDays > packageDays + AIRPORT_DURATION_PAD_DAYS ? packageDays : currentDays;
     const nextDays = durationTouched.current
@@ -373,7 +442,7 @@ export function MyTourListPanel() {
     setTripPlan((current) =>
       current.tourDuration === nextLabel ? current : { ...current, tourDuration: nextLabel }
     );
-  }, [rows, airportTransfers, tripPlan.pickupDate, tripPlan.tourDuration]);
+  }, [rows, airportTransfers, railwayTransfers, tripPlan.pickupDate, tripPlan.tourDuration]);
 
   const plannedTrip = useMemo<TourQuoteTripPlan>(
     () => ({
@@ -383,8 +452,8 @@ export function MyTourListPanel() {
     [rows, tripPlan]
   );
   const tripSchedule = useMemo(
-    () => buildTripSchedule(rows, plannedTrip, airportTransfers),
-    [rows, plannedTrip, airportTransfers]
+    () => buildTripSchedule(rows, plannedTrip, [...airportTransfers, ...railwayTransfers]),
+    [rows, plannedTrip, airportTransfers, railwayTransfers]
   );
   const durationOptions = useMemo(() => {
     const values = new Set<string>();
@@ -394,7 +463,7 @@ export function MyTourListPanel() {
     const spanDays = daysCoveringTourAndAirports(
       tripPlan.pickupDate,
       packageDays,
-      airportTransfers.map((transfer) => transfer.pickupDate)
+      [...airportTransfers, ...railwayTransfers].map((transfer) => transfer.pickupDate)
     );
     if (spanDays > packageDays) values.add(formatTourDurationLabel(spanDays));
     for (const row of rows) {
@@ -404,7 +473,7 @@ export function MyTourListPanel() {
       if (raw) values.add(raw);
     }
     return [...values];
-  }, [rows, tripPlan.pickupDate, airportTransfers]);
+  }, [rows, tripPlan.pickupDate, airportTransfers, railwayTransfers]);
 
   const vehicleOptions = useMemo<VehicleOption[]>(() => {
     if (rows.length === 0) return [];
@@ -450,18 +519,26 @@ export function MyTourListPanel() {
   const packageValue =
     selectedOption?.price ||
     rows.reduce((sum, row) => sum + (Number(row.minPrice) || 0), 0);
-  const quotedTotal = packageValue + airportExtra;
+  const quotedTotal = packageValue + airportExtra + railwayExtra;
   const isSuperAdmin = user?.role === 'super_admin';
 
   const persistTripExtras = useCallback(
-    (nextTransfers = airportTransfers, nextFare = airportExtra, nextPlan = tripPlan) => {
+    (
+      nextTransfers = airportTransfers,
+      nextFare = airportExtra,
+      nextPlan = tripPlan,
+      nextRailway = railwayTransfers,
+      nextRailwayFare = railwayExtra
+    ) => {
       writeTourCartTripExtras({
         tripPlan: nextPlan,
         airportTransfers: nextTransfers,
         additionalAirportFare: nextFare,
+        railwayTransfers: nextRailway,
+        additionalRailwayFare: nextRailwayFare,
       });
     },
-    [airportExtra, airportTransfers, tripPlan]
+    [airportExtra, airportTransfers, railwayExtra, railwayTransfers, tripPlan]
   );
 
   useEffect(() => {
@@ -619,6 +696,18 @@ export function MyTourListPanel() {
           onTripScheduleChange={handleTripSchedule}
         />
 
+        <TourAdditionalAirportTransfers
+          kind="railway"
+          vehicle={selectedVehicle}
+          tripStartDate={plannedTrip.pickupDate}
+          tripStartTime={plannedTrip.pickupTime}
+          tripDayCount={quotedTripDayCount(suggestedTourDuration(rows), rows)}
+          initialTransfers={railwayTransfers}
+          onFareChange={setRailwayExtra}
+          onTransfersChange={handleRailwayTransfers}
+          onTripScheduleChange={handleTripSchedule}
+        />
+
         <Accordion
           type="single"
           collapsible
@@ -645,7 +734,7 @@ export function MyTourListPanel() {
                 embedded
                 plan={plannedTrip}
                 durationOptions={durationOptions}
-                minDate={minTourStartInstant(airportTransfers)}
+                minDate={minTourStartInstant(withStationTiming([...airportTransfers, ...railwayTransfers]))}
                 onChange={(next) => {
                   if (next.tourDuration !== plannedTrip.tourDuration) durationTouched.current = true;
                   setTripPlan(next);
@@ -823,6 +912,11 @@ export function MyTourListPanel() {
               {airportExtra > 0 ? (
                 <p className="mt-0.5 text-[10px] font-medium text-slate-500">
                   Includes {formatPrice(airportExtra)} additional airport transfer
+                </p>
+              ) : null}
+              {railwayExtra > 0 ? (
+                <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                  Includes {formatPrice(railwayExtra)} railway station transfer
                 </p>
               ) : null}
             </div>
@@ -1090,6 +1184,8 @@ export function MyTourListPanel() {
             combinedTotal: quotedTotal,
             additionalAirportFare: airportExtra,
             airportTransfers,
+            additionalRailwayFare: railwayExtra,
+            railwayTransfers,
             vehicleOptions: vehicleOptions.map((option) => {
               const fleetMatch = vehicles.find(
                 (vehicle) => (vehicle.id || vehicle.vehicleId || vehicle.name) === option.id

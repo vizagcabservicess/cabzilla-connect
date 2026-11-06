@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -64,6 +65,7 @@ import { FuelEntryScreen } from '../screens/FuelEntryScreen';
 import { DriverTripsDashboardScreen } from '../screens/DriverTripsDashboardScreen';
 import { DriverFuelScreen } from '../screens/DriverFuelScreen';
 import { MenuProvider } from '../providers/MenuProvider';
+import { VthAiAssistant } from '../components/VthAiAssistant';
 import type { RootStackParamList, ServicesStackParamList } from './types';
 import { colors } from '../theme/colors';
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -80,6 +82,8 @@ function ProfileStack() {
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
       <Stack.Screen name="AdminDriverOpsDashboard" component={AdminDriverOpsDashboardScreen} />
+      <Stack.Screen name="DriverTripDetail" component={DriverTripDetailScreen} />
+      <Stack.Screen name="FuelEntry" component={FuelEntryScreen} />
       <Stack.Screen name="AdminBookingsList" component={AdminBookingsListScreen} />
       <Stack.Screen name="AdminUpcomingTrips" component={AdminUpcomingTripsScreen} />
       <Stack.Screen name="AdminMenu" component={AdminMenuScreen} />
@@ -233,7 +237,7 @@ export function RootNavigator() {
   }
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
@@ -276,7 +280,8 @@ export function RootNavigator() {
         }}
       />
     </Tab.Navigator>
-    </>
+    <VthAiAssistant />
+    </View>
   );
 }
 

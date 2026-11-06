@@ -1,181 +1,39 @@
 import React from 'react';
 import { Document, Font, Image, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import type { Location } from '@/lib/locationData';
+import {
+  defaultTourQuoteInclusions,
+  GST_INVOICE_NOTE,
+  quoteInclusionLines,
+  quoteInclusionSummary,
+  type TourCartQuotationPDFProps,
+  type TourCartQuotationTour,
+  type TourCartQuotationVehicle,
+  type TourQuoteAdjustments,
+  type TourQuoteAirportTransfer,
+  type TourQuoteRailwayTransfer,
+  type TourQuoteInclusions,
+  type TourQuoteTripPlan,
+} from '@/lib/tourQuoteModel';
+import { leadingTransferDayCount } from '@/lib/tourScheduleTimes';
 
-export type TourCartQuotationItineraryDay = {
-  day: number;
-  title: string;
-  description: string;
-  activities: string[];
-};
-
-export type TourCartQuotationTour = {
-  tourId?: string;
-  tourName: string;
-  duration: string;
-  price: number;
-  days?: number;
-  distance?: number;
-  timeDuration?: string;
-  description?: string;
-  itinerary?: TourCartQuotationItineraryDay[];
-};
-
-export type TourCartQuotationVehicle = {
-  name: string;
-  price: number;
-  capacity?: number;
-  image?: string;
-};
-
-export type TourQuoteInclusions = {
-  parking: boolean;
-  tolls: boolean;
-  driverAllowance: boolean;
-  permits: boolean;
-  entryFees: boolean;
-  hotels: boolean;
-  gst: boolean;
-};
-
-export const defaultTourQuoteInclusions = (): TourQuoteInclusions => ({
-  parking: false,
-  tolls: false,
-  driverAllowance: false,
-  permits: false,
-  entryFees: false,
-  hotels: false,
-  gst: false,
-});
-
-const QUOTE_EXTRAS: Array<{ key: keyof TourQuoteInclusions; label: string; excludedLabel?: string }> = [
-  { key: 'parking', label: 'Parking fees' },
-  { key: 'tolls', label: 'Tolls' },
-  { key: 'driverAllowance', label: "Driver's allowance" },
-  { key: 'permits', label: 'Permits' },
-  { key: 'entryFees', label: 'Entry fees' },
-  { key: 'hotels', label: 'Hotels' },
-];
-
-export const GST_INVOICE_NOTE = 'GST 18% is applicable only when a GST invoice is raised.';
-
-export function quoteInclusionSummary(inclusions: TourQuoteInclusions): string {
-  const included = QUOTE_EXTRAS.filter((item) => inclusions[item.key]).map((item) => item.label);
-  const excluded = QUOTE_EXTRAS.filter((item) => !inclusions[item.key]).map(
-    (item) => item.excludedLabel || item.label
-  );
-  const parts: string[] = ['Private cab, driver and fuel as per package are included'];
-  if (included.length > 0) parts.push(`${included.join(', ')} included`);
-  if (excluded.length > 0) parts.push(`${excluded.join(', ')} not included`);
-  return `${parts.join('. ')}. ${GST_INVOICE_NOTE}`;
-}
-
-function quoteInclusionLines(
-  inclusions: TourQuoteInclusions,
-  adjustments?: TourQuoteAdjustments
-): { included: string; excluded: string } {
-  const included = ['Private cab', 'Driver', 'Fuel as per package'];
-  const excluded: string[] = [];
-  for (const item of QUOTE_EXTRAS) {
-    if (inclusions[item.key]) included.push(item.label);
-    else excluded.push(item.excludedLabel || item.label);
-  }
-  if (adjustments?.carrierIncluded) {
-    const amount = Math.max(0, Number(adjustments.carrierAmount) || 0);
-    included.push(amount > 0 ? `Carrier (+ Rs ${Math.round(amount)})` : 'Carrier');
-  }
-  const dot = ' · ';
-  return {
-    included: `${included.join(dot)} - INCLUDED`,
-    excluded: excluded.length > 0 ? `${excluded.join(dot)} - NOT INCLUDED` : '',
-  };
-}
-
-export type TourQuoteTripPlan = {
-  pickupLocation: string;
-  pickupDate: string;
-  pickupTime: string;
-  tourDuration: string;
-  pickupPlace?: Location;
-};
-
-export type TourQuoteAdjustments = {
-  lastDropLocation?: string;
-  hotelName?: string;
-  /** Quotation-only overnight stay location for each night. */
-  nightStays?: string[];
-  carrierIncluded?: boolean;
-  carrierAmount?: number;
-  extraLabel?: string;
-  extraAmount?: number;
-  discountAmount?: number;
-  /** Quotation-only seating override for Tempo Traveller / Urbania. */
-  customSeatingCapacity?: number;
-  /** Editable itinerary places for each quote day (index is day number minus 1). */
-  extraPlacesByDay?: string[][];
-  quoteNotes?: string;
-};
-
-export const defaultTourQuoteAdjustments = (): TourQuoteAdjustments => ({
-  lastDropLocation: '',
-  hotelName: '',
-  nightStays: [],
-  carrierIncluded: false,
-  carrierAmount: 0,
-  extraLabel: '',
-  extraAmount: 0,
-  discountAmount: 0,
-  customSeatingCapacity: 0,
-  extraPlacesByDay: [],
-  quoteNotes: '',
-});
-
-export function quoteAddonTotal(adjustments?: TourQuoteAdjustments): number {
-  const carrier =
-    adjustments?.carrierIncluded ? Math.max(0, Number(adjustments.carrierAmount) || 0) : 0;
-  const extra = Math.max(0, Number(adjustments?.extraAmount) || 0);
-  return carrier + extra;
-}
-
-export function quotePayableTotal(
-  packageTotal: number,
-  adjustments?: TourQuoteAdjustments
-): number {
-  const base = Math.max(0, Number(packageTotal) || 0);
-  const addons = quoteAddonTotal(adjustments);
-  const discount = Math.max(0, Number(adjustments?.discountAmount) || 0);
-  return Math.max(0, base + addons - Math.min(discount, base + addons));
-}
-
-export type TourQuoteAirportTransfer = {
-  direction: 'from-airport' | 'to-airport';
-  placeName: string;
-  pickupDate: string;
-  pickupTime: string;
-  fare?: number;
-  distanceKm?: number;
-  place?: Location;
-};
-
-export type TourCartQuotationPDFProps = {
-  customerName: string;
-  customerPhone: string;
-  preparedOn: Date;
-  tours: TourCartQuotationTour[];
-  selectedVehicleName: string;
-  combinedTotal: number;
-  /** Extra airport-transfer fare already included in combinedTotal. */
-  additionalAirportFare?: number;
-  airportTransfers?: TourQuoteAirportTransfer[];
-  vehicleOptions: TourCartQuotationVehicle[];
-  inclusions?: TourQuoteInclusions;
-  tripPlan?: TourQuoteTripPlan;
-  routeLabel?: string;
-  tripTypeLabel?: string;
-  /** Original package fare before extras and discount. */
-  packageTotal?: number;
-  adjustments?: TourQuoteAdjustments;
-};
+export type {
+  TourCartQuotationItineraryDay,
+  TourCartQuotationTour,
+  TourCartQuotationVehicle,
+  TourQuoteInclusions,
+  TourQuoteTripPlan,
+  TourQuoteAdjustments,
+  TourQuoteAirportTransfer,
+  TourCartQuotationPDFProps,
+} from '@/lib/tourQuoteModel';
+export {
+  defaultTourQuoteInclusions,
+  defaultTourQuoteAdjustments,
+  GST_INVOICE_NOTE,
+  quoteInclusionSummary,
+  quoteAddonTotal,
+  quotePayableTotal,
+} from '@/lib/tourQuoteModel';
 
 const GREEN = '#1A3A2A';
 const GREEN_LINE = '#2A5A3A';
@@ -805,6 +663,18 @@ function isBookingTripKind(label: string): boolean {
   return /outstation|airport transfer|^local\b/i.test(label);
 }
 
+/** Cab quotes are outstation, airport, or local trips. Tour packages keep their own label. */
+function bookingFareTitle(tripKind: string, dayCount: number): string {
+  if (/outstation/i.test(tripKind)) {
+    const mode = /round/i.test(tripKind) ? 'ROUND TRIP' : /one[-\s]?way/i.test(tripKind) ? 'ONE-WAY' : '';
+    const days = `${dayCount}-DAY OUTSTATION`;
+    return mode ? `${days} (${mode})` : days;
+  }
+  if (/airport/i.test(tripKind)) return 'AIRPORT TRANSFER';
+  if (/^local\b/i.test(tripKind)) return tripKind.toUpperCase();
+  return tripKind.toUpperCase();
+}
+
 function scheduleDays(days: FlatDay[], plan?: TourQuoteTripPlan, tripTypeLabel?: string): FlatDay[] {
   if (!plan) return days;
   const location = pdfText(plan.pickupLocation);
@@ -842,7 +712,9 @@ function flattenDays(
   plan?: TourQuoteTripPlan,
   tripTypeLabel?: string,
   routeLabel?: string,
-  adjustments?: TourQuoteAdjustments
+  adjustments?: TourQuoteAdjustments,
+  transfers: TourQuoteAirportTransfer[] = [],
+  lead = 0
 ): FlatDay[] {
   const out: FlatDay[] = [];
   let n = 1;
@@ -885,7 +757,7 @@ function flattenDays(
       const hasEditedPlaces = (adjustments?.extraPlacesByDay || []).some((places) =>
         (places || []).some((place) => pdfText(place).trim())
       );
-      const edited = extraPlacesForDay(adjustments, out.length);
+      const edited = extraPlacesForDay(adjustments, out.length, lead);
       const activities = hasEditedPlaces
         ? edited
         : item.activities.filter((line) => {
@@ -918,7 +790,11 @@ function flattenDays(
     }
   }
   return applyEndRouteHeadings(
-    finalizeNightHalts(applyQuoteNotes(scheduleDays(out, plan, tripTypeLabel), adjustments), adjustments),
+    finalizeNightHalts(
+      applyQuoteNotes(scheduleDays(out, plan, tripTypeLabel), adjustments, transfers),
+      adjustments,
+      lead
+    ),
     adjustments
   );
 }
@@ -948,10 +824,10 @@ function applyEndRouteHeadings(days: FlatDay[], adjustments?: TourQuoteAdjustmen
   });
 }
 
-function finalizeNightHalts(days: FlatDay[], adjustments?: TourQuoteAdjustments): FlatDay[] {
+function finalizeNightHalts(days: FlatDay[], adjustments?: TourQuoteAdjustments, lead = 0): FlatDay[] {
   const stays = (adjustments?.nightStays || []).map((stay) => pdfText(stay).trim());
   return days.map((day, index) => {
-    const stay = stays[index];
+    const stay = stays[index + lead];
     if (stay) {
       return { ...day, halt: shortHalt(stay) || stay };
     }
@@ -962,23 +838,35 @@ function finalizeNightHalts(days: FlatDay[], adjustments?: TourQuoteAdjustments)
   });
 }
 
-function extraPlacesForDay(adjustments: TourQuoteAdjustments | undefined, dayIndex: number): string[] {
-  return (adjustments?.extraPlacesByDay?.[dayIndex] || [])
+function extraPlacesForDay(
+  adjustments: TourQuoteAdjustments | undefined,
+  dayIndex: number,
+  lead = 0
+): string[] {
+  return (adjustments?.extraPlacesByDay?.[dayIndex + lead] || [])
     .map((place) => pdfText(place).trim())
     .filter(Boolean);
 }
 
-function applyQuoteNotes(days: FlatDay[], adjustments?: TourQuoteAdjustments): FlatDay[] {
+function applyQuoteNotes(
+  days: FlatDay[],
+  adjustments?: TourQuoteAdjustments,
+  transfers: TourQuoteAirportTransfer[] = []
+): FlatDay[] {
   if (!adjustments || days.length === 0) return days;
   const drop = pdfText(adjustments.lastDropLocation || '').trim();
   const stays = (adjustments.nightStays || []).map((stay) => pdfText(stay).trim());
   const hasNightStays = stays.some(Boolean);
   const hotel = pdfText(adjustments.hotelName || '').trim();
   const notes = pdfText(adjustments.quoteNotes || '').trim();
+  const airportDropIsSeparate = transfers.some(
+    (transfer) => transfer.direction === 'to-airport' && pdfText(transfer.placeName).trim()
+  );
   return days.map((day, index) => {
     const extras: string[] = [];
     if (index === days.length - 1) {
-      if (drop) extras.push(`Drop at ${drop}`);
+      const dropAlreadyOnAirportRow = airportDropIsSeparate && /airport/i.test(drop);
+      if (drop && !dropAlreadyOnAirportRow) extras.push(`Drop at ${drop}`);
       if (hotel && !hasNightStays) extras.push(`Hotel: ${hotel}`);
       if (notes) extras.push(`Notes: ${notes}`);
     }
@@ -1013,27 +901,46 @@ function airportTransferCard(transfer: TourQuoteAirportTransfer): { when: string
  * Airport transfers are their own rows. Arrivals sit before day 1.
  * Departures sit after the last day. They are not mixed into sightseeing bullets.
  */
-function splitAirportTransfers(
+function splitTimedTransfers<T extends { placeName: string; pickupDate: string; direction: string }>(
   dayCount: number,
   plan: TourQuoteTripPlan | undefined,
-  transfers: TourQuoteAirportTransfer[]
-): { leading: TourQuoteAirportTransfer[]; trailing: TourQuoteAirportTransfer[] } {
+  transfers: T[],
+  isDeparture: (direction: string) => boolean
+): { leading: T[]; trailing: T[] } {
   const start = plan?.pickupDate ? parsePlanDate(plan.pickupDate) : null;
   const startMs = start ? startOfPlanDay(start) : null;
   const endMs = startMs == null ? null : startMs + Math.max(0, dayCount - 1) * 24 * 60 * 60 * 1000;
-  const leading: TourQuoteAirportTransfer[] = [];
-  const trailing: TourQuoteAirportTransfer[] = [];
+  const leading: T[] = [];
+  const trailing: T[] = [];
   for (const transfer of transfers) {
     if (!transfer.placeName.trim()) continue;
     const transferDate = transfer.pickupDate ? parsePlanDate(transfer.pickupDate) : null;
     const whenMs = transferDate ? startOfPlanDay(transferDate) : null;
     const departs =
-      transfer.direction === 'to-airport' ||
+      isDeparture(transfer.direction) ||
       (whenMs != null && endMs != null && startMs != null && whenMs >= endMs && whenMs > startMs);
     if (departs) trailing.push(transfer);
     else leading.push(transfer);
   }
   return { leading, trailing };
+}
+
+function railwayTransferCard(transfer: TourQuoteRailwayTransfer): { when: string; route: string } {
+  const station = 'Visakhapatnam Railway Station';
+  const place = pdfText(transfer.placeName) || 'selected location';
+  const route =
+    transfer.direction === 'from-station'
+      ? `From ${station} to ${place}`
+      : `From ${place} to ${station}`;
+  const date = transfer.pickupDate ? parsePlanDate(transfer.pickupDate) : null;
+  const when = [
+    date ? formatPlanDate(date) : '',
+    transfer.pickupTime ? formatPlanTime(transfer.pickupTime) : '',
+  ].filter(Boolean);
+  return {
+    when: pdfText(when.join(' at ')),
+    route: pdfText(route),
+  };
 }
 
 function durationLabel(tours: TourCartQuotationTour[], flatCount: number): { title: string; sub: string } {
@@ -1069,6 +976,8 @@ export function TourCartQuotationPDF({
   combinedTotal,
   additionalAirportFare = 0,
   airportTransfers = [],
+  additionalRailwayFare = 0,
+  railwayTransfers = [],
   vehicleOptions,
   inclusions = defaultTourQuoteInclusions(),
   tripPlan,
@@ -1081,7 +990,19 @@ export function TourCartQuotationPDF({
   const selected = vehicleOptions.find((vehicle) => vehicle.name === selectedVehicleName);
   const tripKind = pdfText(tripTypeLabel || '') || `${tours.length} selected package${tours.length === 1 ? '' : 's'}`;
   const bookingKind = isBookingTripKind(tripKind);
-  const flatDays = flattenDays(tours, tripPlan, tripTypeLabel, routeLabel, adjustments);
+  const leadDays = leadingTransferDayCount(tripPlan?.pickupDate || '', [
+    ...airportTransfers,
+    ...railwayTransfers,
+  ]);
+  const flatDays = flattenDays(
+    tours,
+    tripPlan,
+    tripTypeLabel,
+    routeLabel,
+    adjustments,
+    airportTransfers,
+    leadDays
+  );
   const packageFare = Math.max(0, Number(packageTotal ?? combinedTotal) || 0);
   const carrierAmount = adjustments?.carrierIncluded
     ? Math.max(0, Number(adjustments.carrierAmount) || 0)
@@ -1089,7 +1010,18 @@ export function TourCartQuotationPDF({
   const extraAmount = Math.max(0, Number(adjustments?.extraAmount) || 0);
   const extraLabel = pdfText(adjustments?.extraLabel || '').trim() || 'Extra';
   const discountAmount = Math.max(0, Number(adjustments?.discountAmount) || 0);
-  const airportRows = splitAirportTransfers(flatDays.length, tripPlan, airportTransfers);
+  const airportRows = splitTimedTransfers(
+    flatDays.length,
+    tripPlan,
+    airportTransfers,
+    (direction) => direction === 'to-airport'
+  );
+  const railwayRows = splitTimedTransfers(
+    flatDays.length,
+    tripPlan,
+    railwayTransfers,
+    (direction) => direction === 'to-station'
+  );
   const duration = durationLabel(tours, flatDays.length);
   const localQuote = isLocalTourQuote(tours, tripTypeLabel);
   const localHours = tours.length === 1 ? tourHoursLabel(tours[0]) : '';
@@ -1219,7 +1151,9 @@ export function TourCartQuotationPDF({
                   ? `After discount ${rupees(discountAmount)}`
                   : additionalAirportFare > 0
                     ? `Includes airport transfer ${rupees(additionalAirportFare)}`
-                    : 'Private cab package'}
+                    : additionalRailwayFare > 0
+                      ? `Includes railway transfer ${rupees(additionalRailwayFare)}`
+                      : 'Private cab package'}
               </Text>
             </View>
           </View>
@@ -1247,6 +1181,22 @@ export function TourCartQuotationPDF({
                 <Text style={styles.dayHeadLeft}>AIRPORT</Text>
                 <View style={styles.dayHeadMain}>
                   <Text style={styles.dayHeadRight}>{card.when || 'Airport transfer'}</Text>
+                </View>
+              </View>
+              <View style={styles.dayBody}>
+                <Text style={styles.place}>{card.route}</Text>
+              </View>
+            </View>
+          );
+        })}
+        {railwayRows.leading.map((transfer, index) => {
+          const card = railwayTransferCard(transfer);
+          return (
+            <View key={`station-before-${index}`} style={styles.dayCard} wrap={false}>
+              <View style={styles.dayHeadRow}>
+                <Text style={styles.dayHeadLeft}>STATION</Text>
+                <View style={styles.dayHeadMain}>
+                  <Text style={styles.dayHeadRight}>{card.when || 'Railway transfer'}</Text>
                 </View>
               </View>
               <View style={styles.dayBody}>
@@ -1307,19 +1257,38 @@ export function TourCartQuotationPDF({
             </View>
           );
         })}
+        {railwayRows.trailing.map((transfer, index) => {
+          const card = railwayTransferCard(transfer);
+          return (
+            <View key={`station-after-${index}`} style={styles.dayCard} wrap={false}>
+              <View style={styles.dayHeadRow}>
+                <Text style={styles.dayHeadLeft}>STATION</Text>
+                <View style={styles.dayHeadMain}>
+                  <Text style={styles.dayHeadRight}>{card.when || 'Railway transfer'}</Text>
+                </View>
+              </View>
+              <View style={styles.dayBody}>
+                <Text style={styles.place}>{card.route}</Text>
+              </View>
+            </View>
+          );
+        })}
 
         <View style={styles.sectionWrap} wrap={false}>
-          <Text style={styles.sectionHead}>TOUR COST</Text>
+          <Text style={styles.sectionHead}>{bookingKind ? 'TRIP COST' : 'TOUR COST'}</Text>
           <View style={styles.sectionRule} />
           <View style={styles.costBox}>
             <Text style={styles.costKicker}>
-              {dayCount}-DAY TOUR PACKAGE{DOT}
+              {bookingKind ? bookingFareTitle(tripKind, dayCount) : `${dayCount}-DAY TOUR PACKAGE`}
+              {DOT}
               {vehicle.toUpperCase()}
               {seatCount ? ` (${seatCount} SEATER AC)` : ' (AC)'}
             </Text>
             <Text style={styles.costAmount}>{rupees(combinedTotal)}</Text>
             {packageFare !== combinedTotal || carrierAmount > 0 || extraAmount > 0 || discountAmount > 0 ? (
-              <Text style={styles.costSub}>Package {rupees(packageFare)}</Text>
+              <Text style={styles.costSub}>
+                {bookingKind ? 'Fare' : 'Package'} {rupees(packageFare)}
+              </Text>
             ) : null}
             {adjustments?.carrierIncluded ? (
               <Text style={styles.costSub}>
@@ -1337,6 +1306,11 @@ export function TourCartQuotationPDF({
             {additionalAirportFare > 0 ? (
               <Text style={styles.costSub}>
                 Includes additional airport transfer {rupees(additionalAirportFare)}
+              </Text>
+            ) : null}
+            {additionalRailwayFare > 0 ? (
+              <Text style={styles.costSub}>
+                Includes railway station transfer {rupees(additionalRailwayFare)}
               </Text>
             ) : null}
             <Text style={styles.costSub}>{ribbon.join(DOT)}</Text>

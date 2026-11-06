@@ -462,6 +462,29 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
   }
 };
 
+/** Inclusive calendar dates from pickup through return. Same-day return is 1. */
+export function outstationRoundTripCalendarDays(pickupDate: Date, returnDate: Date): number {
+  const pickupDateOnly = new Date(pickupDate.getFullYear(), pickupDate.getMonth(), pickupDate.getDate());
+  const returnDateOnly = new Date(returnDate.getFullYear(), returnDate.getMonth(), returnDate.getDate());
+  const dayDiff = Math.floor((returnDateOnly.getTime() - pickupDateOnly.getTime()) / (24 * 60 * 60 * 1000));
+  return Math.max(1, dayDiff + 1);
+}
+
+/** Clock time between pickup and return, e.g. "12 Hours" or "1 Day 12 Hours". */
+export function formatExactTripDuration(start: Date, end: Date): string {
+  const elapsed = end.getTime() - start.getTime();
+  if (!Number.isFinite(elapsed) || elapsed <= 0) return '1 Hour';
+  const totalMinutes = Math.max(1, Math.round(elapsed / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days} ${days === 1 ? 'Day' : 'Days'}`);
+  if (hours > 0) parts.push(`${hours} ${hours === 1 ? 'Hour' : 'Hours'}`);
+  if (minutes > 0) parts.push(`${minutes} ${minutes === 1 ? 'Min' : 'Mins'}`);
+  return parts.join(' ') || '1 Hour';
+}
+
 /**
  * Calculate fare breakdown for outstation round trip bookings.
  * Uses calendar dates (not total hours): each distinct date from pickup through return counts as a billing day.
@@ -494,11 +517,7 @@ export function calculateOutstationRoundTripFare({
   // 1. KM included per calendar day: 300 KM
   // 2. calendarDays = distinct calendar dates from pickup date through return date (inclusive)
   //    Any midnight crossing = new billing day. Do NOT use total hours.
-  const pickupDateOnly = new Date(pickupDate.getFullYear(), pickupDate.getMonth(), pickupDate.getDate());
-  const returnDateOnly = new Date(returnDate.getFullYear(), returnDate.getMonth(), returnDate.getDate());
-  const MS_PER_DAY = 24 * 60 * 60 * 1000;
-  const dayDiff = Math.floor((returnDateOnly.getTime() - pickupDateOnly.getTime()) / MS_PER_DAY);
-  let calendarDays = Math.max(1, dayDiff + 1);
+  const calendarDays = outstationRoundTripCalendarDays(pickupDate, returnDate);
   // 3. includedKM = calendarDays × 300
   const includedKM = calendarDays * 300;
   // 4. baseFare = includedKM × perKmRate

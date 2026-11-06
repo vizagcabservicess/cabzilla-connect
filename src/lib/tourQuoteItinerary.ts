@@ -1,4 +1,4 @@
-import type { TourCartQuotationItineraryDay } from '@/components/pdf/TourCartQuotationPDF';
+import type { TourCartQuotationItineraryDay } from '@/lib/tourQuoteModel';
 
 export function normalizeQuoteItinerary(raw: unknown): TourCartQuotationItineraryDay[] {
   if (!Array.isArray(raw)) return [];

@@ -105,6 +105,14 @@ const TourDetailPage = () => {
     checkoutSnapshot?.airportTransfers?.length
       ? checkoutSnapshot.airportTransfers
       : readTourCartTripExtras()?.airportTransfers || [];
+  const checkoutRailwayFare =
+    Number(checkoutSnapshot?.additionalRailwayFare) > 0
+      ? Number(checkoutSnapshot?.additionalRailwayFare)
+      : Number(readTourCartTripExtras()?.additionalRailwayFare) || 0;
+  const checkoutRailwayTransfers =
+    checkoutSnapshot?.railwayTransfers?.length
+      ? checkoutSnapshot.railwayTransfers
+      : readTourCartTripExtras()?.railwayTransfers || [];
   const checkoutCombinedDistance = checkoutLines.reduce((sum, line) => sum + (line.distance || 0), 0);
   
   // Load pickup details from session storage or navigation state
@@ -726,7 +734,7 @@ const TourDetailPage = () => {
   const payableTotal =
     (checkoutLines.length > 1 && checkoutCombinedTotal > 0
       ? checkoutCombinedTotal
-      : (selectedVehicle?.price ?? 0)) + checkoutAirportFare;
+      : (selectedVehicle?.price ?? 0)) + checkoutAirportFare + checkoutRailwayFare;
   const payableDistance =
     checkoutLines.length > 1 && checkoutCombinedDistance > 0
       ? checkoutCombinedDistance
@@ -857,6 +865,25 @@ const TourDetailPage = () => {
                       </li>
                     );
                   })}
+                  {checkoutRailwayTransfers.map((transfer, index) => (
+                    <li key={`station-${index}`} className="flex items-start justify-between gap-3 text-sm">
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-gray-900">
+                          {transfer.direction === 'from-station' ? 'Railway pickup' : 'Railway drop'}
+                        </span>
+                        <span className="block text-xs text-gray-500">
+                          {transfer.placeName || 'Vizag railway station transfer'}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-semibold text-gray-900">
+                        {Number(transfer.fare) > 0
+                          ? `₹${Number(transfer.fare).toLocaleString('en-IN')}`
+                          : checkoutRailwayFare > 0
+                            ? ''
+                            : '—'}
+                      </span>
+                    </li>
+                  ))}
                   {checkoutAirportTransfers.map((transfer, index) => (
                     <li key={`airport-${index}`} className="flex items-start justify-between gap-3 text-sm">
                       <span className="min-w-0">
@@ -882,9 +909,10 @@ const TourDetailPage = () => {
                 <span className="text-sm font-semibold text-gray-900">
                   Combined fare · {checkoutLines.filter((line) => line.price > 0).length} tours
                   {checkoutAirportFare > 0 ? ' + airport' : ''}
+                  {checkoutRailwayFare > 0 ? ' + railway' : ''}
                 </span>
                 <span className="text-base font-bold text-blue-600">
-                  ₹{(checkoutCombinedTotal + checkoutAirportFare).toLocaleString('en-IN')}
+                  ₹{(checkoutCombinedTotal + checkoutAirportFare + checkoutRailwayFare).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>

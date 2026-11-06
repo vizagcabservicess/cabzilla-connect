@@ -3,6 +3,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -23,15 +25,71 @@ import { useTripCart, type TripTour } from '../lib/tripCart';
 import { shareBuildTripLink } from '../lib/tripQuoteShare';
 import { LocationInput } from '../components/LocationInput';
 import { DateTimePickerComponent } from '../components/DateTimePicker';
+import { calculateDistanceMatrix } from '../services/distanceService';
+import { calculateAirportFare, getAirportFares, type AirportFare } from '../services/fareService';
 import type { Location } from '../types';
 
 type Row = TripTour & { pricing?: Record<string, number>; distance?: number };
 
+type TransferDirection = 'from-airport' | 'to-airport' | 'from-station' | 'to-station';
+
 type Transfer = {
   id: string;
-  direction: 'from-airport' | 'to-airport';
+  direction: TransferDirection;
   place: Location | null;
+  when: Date;
+  distanceKm: number;
+  fare: number;
 };
+
+const VIZAG_AIRPORT: Location = {
+  id: 'vizag_airport',
+  name: 'Alluri Sitarama Raju International Airport',
+  address: 'Alluri Sitarama Raju International Airport, Bhogapuram, Vizianagaram District, Andhra Pradesh',
+  city: 'Bhogapuram',
+  state: 'Andhra Pradesh',
+  lat: 17.97611,
+  lng: 83.50389,
+  type: 'airport',
+  popularityScore: 99,
+  isInVizag: false,
+};
+
+const VIZAG_RAILWAY: Location = {
+  id: 'vizag_railway',
+  name: 'Visakhapatnam Railway Station',
+  address: 'Visakhapatnam Railway Station, Visakhapatnam',
+  city: 'Visakhapatnam',
+  state: 'Andhra Pradesh',
+  lat: 17.7215,
+  lng: 83.2248,
+  type: 'train_station',
+  popularityScore: 98,
+  isInVizag: true,
+};
+
+function isArrival(direction: TransferDirection): boolean {
+  return direction === 'from-airport' || direction === 'from-station';
+}
+
+function edgeWhen(direction: TransferDirection, tripStart: Date, dayCount: number): Date {
+  const date = new Date(tripStart);
+  if (!isArrival(direction)) {
+    date.setDate(date.getDate() + Math.max(0, dayCount - 1));
+  }
+  return date;
+}
+
+function newTransfer(direction: TransferDirection, tripStart: Date, dayCount: number): Transfer {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    direction,
+    place: null,
+    when: edgeWhen(direction, tripStart, dayCount),
+    distanceKm: 0,
+    fare: 0,
+  };
+}
 
 function formatPrice(amount: number): string {
   if (!(amount > 0)) return '';
@@ -108,7 +166,12 @@ export function BuildMyTripScreen() {
   const [planOpen, setPlanOpen] = useState(false);
   const [itineraryOpen, setItineraryOpen] = useState(true);
   const [airportOpen, setAirportOpen] = useState(false);
+  const [railwayOpen, setRailwayOpen] = useState(false);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [railwayTransfers, setRailwayTransfers] = useState<Transfer[]>([]);
+  const [whenPickerId, setWhenPickerId] = useState<string | null>(null);
+  const [airportFares, setAirportFares] = useState<Record<string, AirportFare> | null>(null);
+  const [faresReady, setFaresReady] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [phone, setPhone] = useState('');
   const [guestReady, setGuestReady] = useState(false);
@@ -116,6 +179,10 @@ export function BuildMyTripScreen() {
   useEffect(() => {
     void tourAPI.getAvailableTours().then(setCatalog).catch(() => setCatalog([]));
     void loadVehicles().then(setVehicles).catch(() => setVehicles([]));
+    void getAirportFares()
+      .then(setAirportFares)
+      .catch(() => setAirportFares(null))
+      .finally(() => setFaresReady(true));
   }, []);
 
   const rows = useMemo<Row[]>(() => tripCart.items.map((item) => {
@@ -183,6 +250,58 @@ export function BuildMyTripScreen() {
     return lines;
   }, [rows, when]);
 
+  const tripDayCount = Math.max(1, itinerary.length);
+  const airportExtra = transfers.reduce((sum, transfer) => sum + (transfer.fare > 0 ? transfer.fare : 0), 0);
+  const railwayExtra = railwayTransfers.reduce((sum, transfer) => sum + (transfer.fare > 0 ? transfer.fare : 0), 0);
+  const quotedTotal = packageValue + airportExtra + railwayExtra;
+  const transferQuoteKey = [
+    selectedVehicle?.id || '',
+    faresReady ? 'ready' : 'wait',
+    ...transfers.map((transfer) => `${transfer.id}:${transfer.direction}:${transfer.place?.lat ?? ''}:${transfer.place?.lng ?? ''}`),
+    ...railwayTransfers.map((transfer) => `${transfer.id}:${transfer.direction}:${transfer.place?.lat ?? ''}:${transfer.place?.lng ?? ''}`),
+  ].join('|');
+
+  useEffect(() => {
+    if (!faresReady || !selectedVehicle) return;
+    const lists = [
+      { items: transfers, hub: VIZAG_AIRPORT, apply: setTransfers },
+      { items: railwayTransfers, hub: VIZAG_RAILWAY, apply: setRailwayTransfers },
+    ];
+    const pending = lists.some((list) =>
+      list.items.some((transfer) => transfer.place && Number.isFinite(transfer.place.lat) && Number.isFinite(transfer.place.lng))
+    );
+    if (!pending) return;
+    let cancelled = false;
+    const vehicle = selectedVehicle;
+    void (async () => {
+      const priced = await Promise.all(lists.map(async (list) => {
+        const next = await Promise.all(list.items.map(async (transfer) => {
+          const place = transfer.place;
+          if (!place || !Number.isFinite(place.lat) || !Number.isFinite(place.lng)) {
+            return transfer.distanceKm === 0 && transfer.fare === 0 ? transfer : { ...transfer, distanceKm: 0, fare: 0 };
+          }
+          const origin = isArrival(transfer.direction) ? list.hub : place;
+          const destination = isArrival(transfer.direction) ? place : list.hub;
+          const result = await calculateDistanceMatrix(origin, destination);
+          const distanceKm = result.status === 'OK' ? result.distance : 0;
+          const fare = distanceKm > 0 ? calculateAirportFare(vehicle.name, distanceKm, airportFares, vehicle.id) : 0;
+          return { ...transfer, distanceKm, fare };
+        }));
+        return { ...list, next };
+      }));
+      if (cancelled) return;
+      priced.forEach((list) => {
+        const changed = list.next.some(
+          (transfer, index) => transfer.distanceKm !== list.items[index]?.distanceKm || transfer.fare !== list.items[index]?.fare
+        );
+        if (changed) list.apply(list.next);
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [transferQuoteKey, faresReady, selectedVehicle, transfers, railwayTransfers, airportFares]);
+
   const goAddTours = () => {
     if (navigation.canGoBack()) navigation.goBack();
   };
@@ -201,11 +320,14 @@ export function BuildMyTripScreen() {
       return;
     }
     const vehicle = selectedVehicle;
-    const transferNote = transfers
+    const transferNote = [...transfers, ...railwayTransfers]
       .filter((transfer) => transfer.place?.name)
-      .map((transfer) => transfer.direction === 'from-airport'
-        ? `Airport to ${transfer.place?.name}`
-        : `${transfer.place?.name} to Airport`)
+      .map((transfer) => {
+        if (transfer.direction === 'from-airport') return `Airport to ${transfer.place?.name}`;
+        if (transfer.direction === 'to-airport') return `${transfer.place?.name} to Airport`;
+        if (transfer.direction === 'from-station') return `Railway station to ${transfer.place?.name}`;
+        return `${transfer.place?.name} to Railway station`;
+      })
       .join(' + ');
     const dropName = [rows.map((row) => row.name).join(' + '), transferNote].filter(Boolean).join(' · ');
     (navigation.navigate as (name: string, params?: object) => void)('BookingSummary', {
@@ -221,7 +343,7 @@ export function BuildMyTripScreen() {
       selectedVehicle: vehicle
         ? { id: vehicle.id, name: vehicle.name, capacity: vehicle.capacity, image: vehicle.image }
         : { id: 'quote', name: 'Cab' },
-      totalPrice: packageValue,
+      totalPrice: quotedTotal,
       paymentMode: 'partial',
     });
   };
@@ -256,11 +378,11 @@ export function BuildMyTripScreen() {
         };
       }),
       vehicleName: selectedVehicle?.name || '',
-      packageAmount: packageValue,
+      packageAmount: quotedTotal,
       pickup: pickup?.name || '',
       pickupDate: when.getTime(),
       duration: durationLabel,
-      transfers: transfers
+      transfers: [...transfers, ...railwayTransfers]
         .filter((transfer) => transfer.place?.name)
         .map((transfer) => ({
           direction: transfer.direction,
@@ -316,7 +438,7 @@ export function BuildMyTripScreen() {
             <Feather name="navigation" size={16} color="#2563eb" />
             <Text style={styles.foldTitle}>Airport Transfers</Text>
             <Text style={styles.foldMeta} numberOfLines={1}>
-              {transfers.length === 0 ? 'Add a transfer' : `${transfers.length} added`}
+              {airportExtra > 0 ? `${formatPrice(airportExtra)} extra` : transfers.length === 0 ? 'Pickup or drop from Vizag airport' : `${transfers.length} added`}
             </Text>
             <Feather name={airportOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#94a3b8" />
           </TouchableOpacity>
@@ -337,7 +459,17 @@ export function BuildMyTripScreen() {
                         <TouchableOpacity
                           key={direction}
                           style={[styles.dirChip, on && styles.dirChipOn]}
-                          onPress={() => setTransfers((current) => current.map((item) => item.id === transfer.id ? { ...item, direction } : item))}
+                          onPress={() => {
+                            if (direction === transfer.direction) return;
+                            setTransfers((current) => current.map((item) => item.id === transfer.id ? {
+                              ...item,
+                              direction,
+                              place: null,
+                              distanceKm: 0,
+                              fare: 0,
+                              when: edgeWhen(direction, when, tripDayCount),
+                            } : item));
+                          }}
                         >
                           <Text style={[styles.dirText, on && styles.dirTextOn]}>
                             {direction === 'from-airport' ? 'From Airport' : 'To Airport'}
@@ -347,20 +479,205 @@ export function BuildMyTripScreen() {
                     })}
                   </View>
                   <LocationInput
-                    label={transfer.direction === 'from-airport' ? 'Drop at' : 'Pickup from'}
-                    placeholder="Hotel or place in Vizag"
+                    label={transfer.direction === 'from-airport' ? 'Drop location (Hotel / Address)' : 'Pickup location (Hotel / Address)'}
+                    placeholder={transfer.direction === 'from-airport' ? 'Hotel or drop address' : 'Hotel or pickup address'}
                     value={transfer.place}
-                    onLocationChange={(place) => setTransfers((current) => current.map((item) => item.id === transfer.id ? { ...item, place } : item))}
+                    onLocationChange={(place) => setTransfers((current) => current.map((item) => item.id === transfer.id ? { ...item, place, distanceKm: 0, fare: 0 } : item))}
                     tripType="airport"
+                    isPickupLocation={transfer.direction === 'to-airport'}
                   />
+                  <View style={styles.whenRow}>
+                    <View style={styles.whenCol}>
+                      <Text style={styles.miniLabel}>Date</Text>
+                      <TouchableOpacity style={styles.whenBtn} onPress={() => setWhenPickerId(transfer.id)}>
+                        <Feather name="calendar" size={14} color="#94a3b8" />
+                        <Text style={styles.whenValue} numberOfLines={1}>{format(transfer.when, 'd MMM, yyyy')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.whenCol}>
+                      <Text style={styles.miniLabel}>Pickup time</Text>
+                      <TouchableOpacity style={styles.whenBtn} onPress={() => setWhenPickerId(transfer.id)}>
+                        <Feather name="clock" size={14} color="#94a3b8" />
+                        <Text style={styles.whenValue} numberOfLines={1}>{format(transfer.when, 'h:mm a')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {whenPickerId === transfer.id ? (
+                    <>
+                      <DateTimePicker
+                        value={transfer.when}
+                        mode="datetime"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        minimumDate={new Date(Date.now() + 60 * 60 * 1000)}
+                        onChange={(_, selected) => {
+                          if (Platform.OS === 'android') setWhenPickerId(null);
+                          if (!selected) return;
+                          setTransfers((current) => current.map((item) => item.id === transfer.id ? { ...item, when: selected } : item));
+                        }}
+                      />
+                      {Platform.OS === 'ios' ? (
+                        <TouchableOpacity style={styles.pickerDone} onPress={() => setWhenPickerId(null)}>
+                          <Text style={styles.pickerDoneText}>Done</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <View style={styles.statRow}>
+                    <View style={styles.statBox}>
+                      <View style={styles.statLabelRow}>
+                        <Feather name="map-pin" size={11} color="#94a3b8" />
+                        <Text style={styles.statLabel}>Distance</Text>
+                      </View>
+                      <Text style={styles.statValue}>{transfer.distanceKm > 0 ? `${Math.round(transfer.distanceKm)} km` : '—'}</Text>
+                    </View>
+                    <View style={styles.statBox}>
+                      <View style={styles.statLabelRow}>
+                        <Text style={styles.statRupee}>₹</Text>
+                        <Text style={styles.statLabel}>Estimated fare</Text>
+                      </View>
+                      <Text style={[styles.statValue, transfer.fare > 0 && styles.statFare]}>
+                        {!selectedVehicle
+                          ? 'Select a vehicle'
+                          : transfer.fare > 0
+                            ? `${formatPrice(transfer.fare)} extra`
+                            : transfer.place
+                              ? 'Calculating…'
+                              : '—'}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               ))}
               <TouchableOpacity
                 style={styles.dashedBtn}
-                onPress={() => setTransfers((current) => [...current, { id: `${Date.now()}`, direction: 'from-airport', place: null }])}
+                onPress={() => setTransfers((current) => [...current, newTransfer('from-airport', when, tripDayCount)])}
               >
                 <Feather name="plus" size={14} color="#2563eb" />
-                <Text style={styles.dashedText}>Add a transfer</Text>
+                <Text style={styles.dashedText}>{transfers.length === 0 ? 'Add a transfer' : 'Add another transfer'}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          <TouchableOpacity style={styles.fold} onPress={() => setRailwayOpen((open) => !open)}>
+            <Feather name="map-pin" size={16} color="#2563eb" />
+            <Text style={styles.foldTitle}>Railway Station Transfers</Text>
+            <Text style={styles.foldMeta} numberOfLines={1}>
+              {railwayExtra > 0 ? `${formatPrice(railwayExtra)} extra` : railwayTransfers.length === 0 ? 'Pickup or drop from Vizag railway station' : `${railwayTransfers.length} added`}
+            </Text>
+            <Feather name={railwayOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#94a3b8" />
+          </TouchableOpacity>
+          {railwayOpen ? (
+            <View style={styles.foldBody}>
+              {railwayTransfers.map((transfer, index) => (
+                <View key={transfer.id} style={styles.transferCard}>
+                  <View style={styles.transferHead}>
+                    <Text style={styles.transferTitle}>Transfer {index + 1}</Text>
+                    <TouchableOpacity onPress={() => setRailwayTransfers((current) => current.filter((item) => item.id !== transfer.id))}>
+                      <Feather name="trash-2" size={16} color="#fb7185" />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.dirRow}>
+                    {(['from-station', 'to-station'] as const).map((direction) => {
+                      const on = transfer.direction === direction;
+                      return (
+                        <TouchableOpacity
+                          key={direction}
+                          style={[styles.dirChip, on && styles.dirChipOn]}
+                          onPress={() => {
+                            if (direction === transfer.direction) return;
+                            setRailwayTransfers((current) => current.map((item) => item.id === transfer.id ? {
+                              ...item,
+                              direction,
+                              place: null,
+                              distanceKm: 0,
+                              fare: 0,
+                              when: edgeWhen(direction, when, tripDayCount),
+                            } : item));
+                          }}
+                        >
+                          <Text style={[styles.dirText, on && styles.dirTextOn]}>
+                            {direction === 'from-station' ? 'From Station' : 'To Station'}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <LocationInput
+                    label={transfer.direction === 'from-station' ? 'Drop location (Hotel / Address)' : 'Pickup location (Hotel / Address)'}
+                    placeholder={transfer.direction === 'from-station' ? 'Hotel or drop address' : 'Hotel or pickup address'}
+                    value={transfer.place}
+                    onLocationChange={(place) => setRailwayTransfers((current) => current.map((item) => item.id === transfer.id ? { ...item, place, distanceKm: 0, fare: 0 } : item))}
+                    tripType="outstation"
+                    isPickupLocation={transfer.direction === 'to-station'}
+                  />
+                  <View style={styles.whenRow}>
+                    <View style={styles.whenCol}>
+                      <Text style={styles.miniLabel}>Date</Text>
+                      <TouchableOpacity style={styles.whenBtn} onPress={() => setWhenPickerId(transfer.id)}>
+                        <Feather name="calendar" size={14} color="#94a3b8" />
+                        <Text style={styles.whenValue} numberOfLines={1}>{format(transfer.when, 'd MMM, yyyy')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.whenCol}>
+                      <Text style={styles.miniLabel}>Pickup time</Text>
+                      <TouchableOpacity style={styles.whenBtn} onPress={() => setWhenPickerId(transfer.id)}>
+                        <Feather name="clock" size={14} color="#94a3b8" />
+                        <Text style={styles.whenValue} numberOfLines={1}>{format(transfer.when, 'h:mm a')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {whenPickerId === transfer.id ? (
+                    <>
+                      <DateTimePicker
+                        value={transfer.when}
+                        mode="datetime"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        minimumDate={new Date(Date.now() + 60 * 60 * 1000)}
+                        onChange={(_, selected) => {
+                          if (Platform.OS === 'android') setWhenPickerId(null);
+                          if (!selected) return;
+                          setRailwayTransfers((current) => current.map((item) => item.id === transfer.id ? { ...item, when: selected } : item));
+                        }}
+                      />
+                      {Platform.OS === 'ios' ? (
+                        <TouchableOpacity style={styles.pickerDone} onPress={() => setWhenPickerId(null)}>
+                          <Text style={styles.pickerDoneText}>Done</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <View style={styles.statRow}>
+                    <View style={styles.statBox}>
+                      <View style={styles.statLabelRow}>
+                        <Feather name="map-pin" size={11} color="#94a3b8" />
+                        <Text style={styles.statLabel}>Distance</Text>
+                      </View>
+                      <Text style={styles.statValue}>{transfer.distanceKm > 0 ? `${Math.round(transfer.distanceKm)} km` : '—'}</Text>
+                    </View>
+                    <View style={styles.statBox}>
+                      <View style={styles.statLabelRow}>
+                        <Text style={styles.statRupee}>₹</Text>
+                        <Text style={styles.statLabel}>Estimated fare</Text>
+                      </View>
+                      <Text style={[styles.statValue, transfer.fare > 0 && styles.statFare]}>
+                        {!selectedVehicle
+                          ? 'Select a vehicle'
+                          : transfer.fare > 0
+                            ? `${formatPrice(transfer.fare)} extra`
+                            : transfer.place
+                              ? 'Calculating…'
+                              : '—'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+              <TouchableOpacity
+                style={styles.dashedBtn}
+                onPress={() => setRailwayTransfers((current) => [...current, newTransfer('from-station', when, tripDayCount)])}
+              >
+                <Feather name="plus" size={14} color="#2563eb" />
+                <Text style={styles.dashedText}>{railwayTransfers.length === 0 ? 'Add a transfer' : 'Add another transfer'}</Text>
               </TouchableOpacity>
             </View>
           ) : null}
@@ -482,8 +799,14 @@ export function BuildMyTripScreen() {
             <View style={styles.estimateCopy}>
               <Text style={styles.estimateLabel}>Estimated Package Value</Text>
               <Text style={styles.estimateValue}>
-                {packageValue > 0 ? `${formatPrice(packageValue)} onwards` : 'Quote on request'}
+                {quotedTotal > 0 ? `${formatPrice(quotedTotal)} onwards` : 'Quote on request'}
               </Text>
+              {airportExtra > 0 ? (
+                <Text style={styles.estimateExtra}>Includes {formatPrice(airportExtra)} additional airport transfer</Text>
+              ) : null}
+              {railwayExtra > 0 ? (
+                <Text style={styles.estimateExtra}>Includes {formatPrice(railwayExtra)} railway station transfer</Text>
+              ) : null}
             </View>
             <Text style={styles.estimateNote}>Customize your trip as per your needs!</Text>
           </View>
@@ -614,6 +937,20 @@ const styles = StyleSheet.create({
   dirChipOn: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   dirText: { color: '#334155', fontFamily: fonts.semiBold, fontSize: 12 },
   dirTextOn: { color: '#fff' },
+  whenRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  whenCol: { flex: 1 },
+  miniLabel: { marginBottom: 6, fontSize: 11, fontFamily: fonts.semiBold, color: '#64748b' },
+  whenBtn: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff', paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  whenValue: { flex: 1, fontSize: 13, fontFamily: fonts.medium, color: '#0f172a' },
+  pickerDone: { alignItems: 'flex-end', paddingVertical: 6 },
+  pickerDoneText: { color: '#2563eb', fontFamily: fonts.semiBold },
+  statRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  statBox: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 10 },
+  statLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statLabel: { fontSize: 10, fontFamily: fonts.semiBold, color: '#94a3b8', textTransform: 'uppercase' },
+  statRupee: { fontSize: 11, fontFamily: fonts.semiBold, color: '#94a3b8' },
+  statValue: { marginTop: 4, fontSize: 13, fontFamily: fonts.semiBold, color: '#1e293b' },
+  statFare: { color: '#2563eb' },
   fieldLabel: { marginTop: 8, marginBottom: 6, fontFamily: fonts.semiBold, color: '#0f172a', fontSize: 13 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderRadius: 999, backgroundColor: '#f1f5f9', paddingHorizontal: 12, paddingVertical: 8 },
@@ -653,6 +990,7 @@ const styles = StyleSheet.create({
   estimateCopy: { flex: 1 },
   estimateLabel: { color: '#475569', fontFamily: fonts.semiBold, fontSize: 11 },
   estimateValue: { marginTop: 4, color: '#1d4ed8', fontFamily: fonts.bold, fontSize: 20 },
+  estimateExtra: { marginTop: 2, color: '#64748b', fontSize: 10, fontFamily: fonts.medium },
   estimateNote: { maxWidth: '38%', textAlign: 'right', color: '#059669', fontStyle: 'italic', fontSize: 10 },
   vehicles: { marginTop: 12, backgroundColor: '#ecfdf5', borderRadius: 16, borderWidth: 1, borderColor: '#d1fae5', padding: 12 },
   vehiclesLabel: { fontFamily: fonts.semiBold, color: '#334155', fontSize: 11, marginBottom: 8 },

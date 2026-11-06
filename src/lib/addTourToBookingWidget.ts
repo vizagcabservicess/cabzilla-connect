@@ -567,12 +567,24 @@ export type TourCartCheckoutSnapshot = {
   vehiclesByTourId: Record<string, unknown>;
   additionalAirportFare?: number;
   airportTransfers?: TourCartAirportTransfer[];
+  additionalRailwayFare?: number;
+  railwayTransfers?: TourCartRailwayTransfer[];
 };
 
 export const TOUR_CART_TRIP_EXTRAS_KEY = 'tourCartTripExtras';
 
 export type TourCartAirportTransfer = {
   direction: 'from-airport' | 'to-airport';
+  placeName: string;
+  pickupDate: string;
+  pickupTime: string;
+  fare?: number;
+  distanceKm?: number;
+  place?: Location;
+};
+
+export type TourCartRailwayTransfer = {
+  direction: 'from-station' | 'to-station';
   placeName: string;
   pickupDate: string;
   pickupTime: string;
@@ -591,6 +603,8 @@ export type TourCartTripExtras = {
   };
   airportTransfers: TourCartAirportTransfer[];
   additionalAirportFare: number;
+  railwayTransfers?: TourCartRailwayTransfer[];
+  additionalRailwayFare?: number;
 };
 
 export function writeTourCartTripExtras(extras: TourCartTripExtras): void {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { getResolvedApiOrigin } from '../config';
 import { colors } from '../theme/colors';
+import { openVthAi } from '../lib/vthAi';
 
 type Bubble = { id: string; from: 'assistant' | 'guest'; text: string };
 
@@ -39,6 +40,10 @@ function replyFor(text: string): { text: string; trip?: 'airport' | 'outstation'
 
 export function ChatScreen() {
   const navigation = useNavigation();
+
+  useEffect(() => {
+    openVthAi();
+  }, []);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [draft, setDraft] = useState('');

@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { FileDown } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { TourCartQuotationDialog } from '@/components/tour/TourCartQuotationDialog';
-import type { TourQuoteTripPlan } from '@/components/pdf/TourCartQuotationPDF';
+import type { TourQuoteTripPlan } from '@/lib/tourQuoteModel';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
@@ -12,7 +12,7 @@ import { isValidTripDate } from '@/lib/dateUtils';
 import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, Briefcase, Fuel, Check, X, Edit2, MessageCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
-import { calculateFare, calculateOutstationRoundTripFare, oneWayOutstationExtra } from '@/lib/fareCalculationService';
+import { calculateFare, calculateOutstationRoundTripFare, formatExactTripDuration, oneWayOutstationExtra, outstationRoundTripCalendarDays } from '@/lib/fareCalculationService';
 import { getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import { useFare } from '../hooks/useFare';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
@@ -1090,6 +1090,50 @@ export const BookingSummary = ({
     onFinalTotalChange,
   ]);
 
+  const quoteTripPlan = useMemo<TourQuoteTripPlan>(() => {
+    const pickupDateIso = isValidTripDate(pickupDate)
+      ? [
+          pickupDate.getFullYear(),
+          String(pickupDate.getMonth() + 1).padStart(2, '0'),
+          String(pickupDate.getDate()).padStart(2, '0'),
+        ].join('-')
+      : '';
+    const pickupTime = isValidTripDate(pickupDate)
+      ? `${String(pickupDate.getHours()).padStart(2, '0')}:${String(pickupDate.getMinutes()).padStart(2, '0')}`
+      : '';
+    const travelHours =
+      durationMinutes > 0 ? `${Math.max(1, Math.round(durationMinutes / 60))} hr(s)` : '';
+    let duration =
+      tripType === 'local'
+        ? hourlyPackage
+        : tripType === 'airport'
+          ? travelHours || 'Airport transfer'
+          : travelHours || '1 Day';
+    let calendarDays: number | undefined;
+    if (
+      tripType === 'outstation' &&
+      tripMode === 'round-trip' &&
+      isValidTripDate(pickupDate) &&
+      isValidTripDate(returnDate)
+    ) {
+      duration = formatExactTripDuration(pickupDate, returnDate);
+      calendarDays = outstationRoundTripCalendarDays(pickupDate, returnDate);
+    }
+    return {
+      pickupLocation: pickupLocation?.name || '',
+      pickupDate: pickupDateIso,
+      pickupTime,
+      tourDuration: duration,
+      calendarDays,
+      pickupPlace: pickupLocation || undefined,
+    };
+  }, [durationMinutes, hourlyPackage, pickupDate, pickupLocation, returnDate, tripMode, tripType]);
+  const [quotePlan, setQuotePlan] = useState<TourQuoteTripPlan>(quoteTripPlan);
+
+  useEffect(() => {
+    setQuotePlan(quoteTripPlan);
+  }, [quoteTripPlan]);
+
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !isValidTripDate(pickupDate)) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
@@ -1155,41 +1199,6 @@ export const BookingSummary = ({
 
   const canShareOnWhatsApp =
     !!pickupLocation && !!pickupDate && !!selectedCab && summaryTotal > 0;
-
-  const quoteTripPlan = useMemo<TourQuoteTripPlan>(() => {
-    const pickupDateIso = isValidTripDate(pickupDate)
-      ? [
-          pickupDate.getFullYear(),
-          String(pickupDate.getMonth() + 1).padStart(2, '0'),
-          String(pickupDate.getDate()).padStart(2, '0'),
-        ].join('-')
-      : '';
-    const pickupTime = isValidTripDate(pickupDate)
-      ? `${String(pickupDate.getHours()).padStart(2, '0')}:${String(pickupDate.getMinutes()).padStart(2, '0')}`
-      : '';
-    const travelHours =
-      durationMinutes > 0 ? `${Math.max(1, Math.round(durationMinutes / 60))} hr(s)` : '';
-    const duration =
-      tripType === 'outstation' && tripMode === 'round-trip' && isValidTripDate(returnDate)
-        ? `${Math.max(1, Math.round((returnDate.getTime() - (pickupDate?.getTime() || 0)) / 86400000) + 1)} Days`
-        : tripType === 'local'
-          ? hourlyPackage
-          : tripType === 'airport'
-            ? travelHours || 'Airport transfer'
-            : travelHours || '1 Day';
-    return {
-      pickupLocation: pickupLocation?.name || '',
-      pickupDate: pickupDateIso,
-      pickupTime,
-      tourDuration: duration,
-      pickupPlace: pickupLocation || undefined,
-    };
-  }, [durationMinutes, hourlyPackage, pickupDate, pickupLocation, returnDate, tripMode, tripType]);
-  const [quotePlan, setQuotePlan] = useState<TourQuoteTripPlan>(quoteTripPlan);
-
-  useEffect(() => {
-    setQuotePlan(quoteTripPlan);
-  }, [quoteTripPlan]);
 
   const quoteRouteName =
     tripType === 'airport'
@@ -1558,6 +1567,34 @@ export const BookingSummary = ({
               ? `Tour · ${selectedTourLines.length} selected tours`
               : 'Tour'
             : tripType.charAt(0).toUpperCase() + tripType.slice(1);
+
+  const isOutstationRoundTrip = tripType === 'outstation' && tripMode === 'round-trip';
+  const quoteDistance =
+    isOutstationRoundTrip && distance > 0 ? distance * 2 : displayDistance;
+  const quoteDayCount = Math.max(1, quotePlan.calendarDays || 1);
+  const returnFrom = dropLocation?.name?.trim() || '';
+  const returnTo = pickupLocation?.name?.trim() || '';
+  const returnLeg =
+    isOutstationRoundTrip &&
+    returnFrom &&
+    returnTo &&
+    returnFrom.toLowerCase() !== returnTo.toLowerCase()
+      ? `${returnFrom} to ${returnTo}${
+          isValidTripDate(returnDate) ? ` at ${format(returnDate, 'h:mm a')}` : ''
+        }`
+      : '';
+  const quoteItinerary = Array.from({ length: quoteDayCount }, (_, index) => {
+    const activities: string[] = [];
+    if (index === 0) activities.push(`${quoteRouteName} ${tripTypeHeading}`);
+    const isReturnDay = index === quoteDayCount - 1;
+    if (returnLeg && isReturnDay) activities.push(returnLeg);
+    return {
+      day: index + 1,
+      title: '',
+      description: '',
+      activities,
+    };
+  });
 
   return (
     <div className="text-[14px] md:text-[14px] booking-summary-mobile">
@@ -1995,16 +2032,12 @@ export const BookingSummary = ({
                 tourName: quoteRouteName,
                 duration: quotePlan.tourDuration,
                 price: totalAfterDiscount,
-                days: Number(/^(\d+)\s*Days/i.exec(quotePlan.tourDuration)?.[1]) || 1,
-                distance: displayDistance,
-                itinerary: [
-                  {
-                    day: 1,
-                    title: '',
-                    description: '',
-                    activities: [`${quoteRouteName} ${tripTypeHeading}`],
-                  },
-                ],
+                days:
+                  tripType === 'outstation' && tripMode === 'round-trip'
+                    ? undefined
+                    : Number(/^(\d+)\s*Days/i.exec(quotePlan.tourDuration)?.[1]) || 1,
+                distance: quoteDistance,
+                itinerary: quoteItinerary,
               },
             ],
             routeLabel: quoteRouteName,

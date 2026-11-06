@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import { Calendar, Clock, IndianRupee, MapPin, Plane, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { Calendar, Clock, IndianRupee, MapPin, Plane, Plus, TrainFront, Trash2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { toast } from 'sonner';
 import { DateTimePicker, type DateTimePickerHandle } from '@/components/DateTimePicker';
 import { LocationInput } from '@/components/LocationInput';
-import type { TourQuoteAirportTransfer } from '@/components/pdf/TourCartQuotationPDF';
+import type { TourQuoteAirportTransfer, TourQuoteRailwayTransfer } from '@/lib/tourQuoteModel';
 import { calculateDistanceMatrix } from '@/lib/distanceService';
 import { isAirportTransferOtherEnd, isVizagAirportLocation } from '@/lib/inferTripService';
-import { getVizagAirportLocations, type Location } from '@/lib/locationData';
+import { getVizagAirportLocations, getVizagRailwayStation, type Location } from '@/lib/locationData';
 import { isSelectedMapLocation } from '@/lib/locationUtils';
 import { cn } from '@/lib/utils';
 import { earliestPickupInstant, planInstant, separateAirportAndTrip, type PlanWhen } from '@/lib/tourScheduleTimes';
@@ -15,17 +15,33 @@ import { getAirportFaresForVehicle } from '@/services/fareService';
 import type { AirportFare, CabType } from '@/types/cab';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
 
-type AirportDirection = 'from-airport' | 'to-airport';
+type TransferKind = 'airport' | 'railway';
+type HubDirection = 'from-airport' | 'to-airport' | 'from-station' | 'to-station';
+type HubTransfer = TourQuoteAirportTransfer | TourQuoteRailwayTransfer;
 
 type AirportTransferLeg = {
   id: string;
-  direction: AirportDirection;
+  direction: HubDirection;
   place?: Location;
   pickupDate: string;
   pickupTime: string;
   distanceKm: number;
   fare: number;
 };
+
+function isArrival(direction: HubDirection): boolean {
+  return direction === 'from-airport' || direction === 'from-station';
+}
+
+function scheduleDirection(direction: HubDirection): 'from-airport' | 'to-airport' {
+  return isArrival(direction) ? 'from-airport' : 'to-airport';
+}
+
+function isRailwayHub(place: Location): boolean {
+  if (place.id === 'vizag_railway') return true;
+  const blob = `${place.name} ${place.address}`.toLowerCase();
+  return /railway/.test(blob) && /visakhapatnam|\bvizag\b/.test(blob);
+}
 
 const airportLocations = getVizagAirportLocations();
 const airportLocation =
@@ -61,27 +77,27 @@ function isInsideTourDates(iso: string, start: string, dayCount: number): boolea
   return whenMs > startMs && whenMs < endMs;
 }
 
-function edgeDate(direction: AirportDirection, start: string, dayCount: number): string {
+function edgeDate(direction: HubDirection, start: string, dayCount: number): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return '';
-  return direction === 'to-airport' ? tripEndDate(start, dayCount) : start;
+  return isArrival(direction) ? start : tripEndDate(start, dayCount);
 }
 
 function newLeg(
-  direction: AirportDirection,
+  direction: HubDirection,
   startDate: string,
   startTime: string,
   dayCount: number
 ): { leg: AirportTransferLeg; trip: PlanWhen } {
   const pickupDate = edgeDate(direction, startDate, dayCount);
   const separated = separateAirportAndTrip({
-    direction,
+    direction: scheduleDirection(direction),
     airport: { pickupDate, pickupTime: startTime },
     trip: { pickupDate: startDate, pickupTime: startTime },
     prefer: 'trip',
   });
   return {
     leg: {
-      id: `airport-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: `${direction}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       direction,
       pickupDate: separated.airport.pickupDate || pickupDate,
       pickupTime: separated.airport.pickupTime,
@@ -103,7 +119,8 @@ function formatRupees(amount: number): string {
 function bookingWidgetAirportFare(
   airportFares: AirportFare | null,
   vehicleId: string,
-  distance: number
+  distance: number,
+  includeAirportFee = true
 ): number {
   if (distance <= 0) return 0;
 
@@ -129,20 +146,21 @@ function bookingWidgetAirportFare(
   }
 
   const airportFee =
-    typeof airportFares?.airportFee === 'number' && airportFares.airportFee > 0
+    includeAirportFee && typeof airportFares?.airportFee === 'number' && airportFares.airportFee > 0
       ? airportFares.airportFee
       : 0;
   return basePrice + airportFee + extraDistanceFare;
 }
 
 type TourAdditionalAirportTransfersProps = {
+  kind?: TransferKind;
   vehicle: CabType | null;
   tripStartDate: string;
   tripStartTime: string;
   tripDayCount: number;
-  initialTransfers?: TourQuoteAirportTransfer[];
+  initialTransfers?: HubTransfer[];
   onFareChange: (fare: number) => void;
-  onTransfersChange?: (transfers: TourQuoteAirportTransfer[]) => void;
+  onTransfersChange?: (transfers: HubTransfer[]) => void;
   onTripScheduleChange?: (when: PlanWhen) => void;
 };
 
@@ -179,27 +197,21 @@ function fieldsFromDate(date: Date | undefined): { pickupDate: string; pickupTim
 function AirportTransferWhen({
   pickupDate,
   pickupTime,
+  label,
   onChange,
 }: {
   pickupDate: string;
   pickupTime: string;
+  label: string;
   onChange: (next: { pickupDate: string; pickupTime: string }) => void;
 }) {
   const pickerRef = useRef<DateTimePickerHandle>(null);
-  const [showPicker, setShowPicker] = useState(false);
   const travelDate = dateFromFields(pickupDate, pickupTime);
 
-  useEffect(() => {
-    if (!showPicker) return;
-    pickerRef.current?.open();
-  }, [showPicker]);
-
-  const openWhen = () => {
-    if (showPicker) {
-      window.setTimeout(() => pickerRef.current?.open(), 30);
-      return;
-    }
-    setShowPicker(true);
+  const openWhen = (event: PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    pickerRef.current?.open({ scroll: false });
   };
   const dateLabel = travelDate
     ? `${travelDate.getDate()} ${WHEN_MONTHS[travelDate.getMonth()]}, ${travelDate.getFullYear()}`
@@ -220,7 +232,7 @@ function AirportTransferWhen({
           <p className="mb-1.5 text-[11px] font-semibold text-slate-500">Date</p>
           <button
             type="button"
-            onClick={openWhen}
+            onPointerDown={openWhen}
             className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left"
           >
             <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
@@ -233,7 +245,7 @@ function AirportTransferWhen({
           <p className="mb-1.5 text-[11px] font-semibold text-slate-500">Pickup time</p>
           <button
             type="button"
-            onClick={openWhen}
+            onPointerDown={openWhen}
             className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left"
           >
             <Clock className="h-4 w-4 shrink-0 text-slate-400" />
@@ -243,24 +255,22 @@ function AirportTransferWhen({
           </button>
         </div>
       </div>
-      {showPicker ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-10 overflow-hidden opacity-0">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-10 overflow-hidden opacity-0">
           <DateTimePicker
             ref={pickerRef}
-            label="Airport transfer date and time"
+            label={label}
             date={travelDate}
             onDateChange={(date) => onChange(fieldsFromDate(date))}
             minDate={earliestPickupInstant()}
             variant="infield"
-            preferPopover
+            forceSheet
           />
         </div>
-      ) : null}
     </div>
   );
 }
 
-function legsFromTransfers(transfers: TourQuoteAirportTransfer[] | undefined): AirportTransferLeg[] {
+function legsFromTransfers(transfers: HubTransfer[] | undefined): AirportTransferLeg[] {
   if (!transfers?.length) return [];
   return transfers.map((transfer, index) => ({
     id: `airport-saved-${index}-${transfer.pickupDate || 'na'}`,
@@ -274,6 +284,7 @@ function legsFromTransfers(transfers: TourQuoteAirportTransfer[] | undefined): A
 }
 
 export function TourAdditionalAirportTransfers({
+  kind = 'airport',
   vehicle,
   tripStartDate,
   tripStartTime,
@@ -283,8 +294,13 @@ export function TourAdditionalAirportTransfers({
   onTransfersChange,
   onTripScheduleChange,
 }: TourAdditionalAirportTransfersProps) {
+  const railwayHub = getVizagRailwayStation();
+  const hub = kind === 'railway' ? railwayHub : airportLocation;
+  const fromDirection: HubDirection = kind === 'railway' ? 'from-station' : 'from-airport';
+  const toDirection: HubDirection = kind === 'railway' ? 'to-station' : 'to-airport';
+  const transferNoun = kind === 'railway' ? 'Railway transfer' : 'Airport transfer';
   const [legs, setLegs] = useState<AirportTransferLeg[]>(() => legsFromTransfers(initialTransfers));
-  const [sectionOpen, setSectionOpen] = useState(() => (initialTransfers?.length ? 'airport' : ''));
+  const [sectionOpen, setSectionOpen] = useState(() => (initialTransfers?.length ? kind : ''));
   const skipEmptyNotify = useRef(true);
   const [fareRow, setFareRow] = useState<AirportFare | null>(null);
   const vehicleId = vehicle?.id || vehicle?.vehicleId || vehicle?.name || '';
@@ -309,7 +325,7 @@ export function TourAdditionalAirportTransfers({
         fare: leg.fare,
         distanceKm: leg.distanceKm,
         place: leg.place,
-      }))
+      })) as HubTransfer[]
     );
   }, [legs, onTransfersChange]);
 
@@ -334,14 +350,17 @@ export function TourAdditionalAirportTransfers({
     void (async () => {
       const next = await Promise.all(
         legs.map(async (leg) => {
-          if (!isSelectedMapLocation(leg.place) || !airportLocation) {
+          if (!isSelectedMapLocation(leg.place) || !hub) {
             return leg;
           }
-          const origin = leg.direction === 'from-airport' ? airportLocation : leg.place;
-          const destination = leg.direction === 'from-airport' ? leg.place : airportLocation;
+          const origin = isArrival(leg.direction) ? hub : leg.place;
+          const destination = isArrival(leg.direction) ? leg.place : hub;
           const result = await calculateDistanceMatrix(origin, destination);
           const distanceKm = result.status === 'OK' ? result.distance : 0;
-          const fare = distanceKm > 0 ? bookingWidgetAirportFare(fareRow, vehicleId, distanceKm) : 0;
+          const fare =
+            distanceKm > 0
+              ? bookingWidgetAirportFare(fareRow, vehicleId, distanceKm, kind === 'airport')
+              : 0;
           return { ...leg, distanceKm, fare };
         })
       );
@@ -355,7 +374,7 @@ export function TourAdditionalAirportTransfers({
     return () => {
       cancelled = true;
     };
-  }, [legs, vehicleId, fareRow]);
+  }, [hub, kind, legs, vehicleId, fareRow]);
 
   useEffect(() => {
     let tripPatch: PlanWhen | null = null;
@@ -369,7 +388,7 @@ export function TourAdditionalAirportTransfers({
           ? edgeDate(leg.direction, tripStartDate, tripDayCount) || leg.pickupDate
           : leg.pickupDate;
         const separated = separateAirportAndTrip({
-          direction: leg.direction,
+          direction: scheduleDirection(leg.direction),
           airport: { pickupDate, pickupTime: leg.pickupTime },
           trip: { pickupDate: tripDate, pickupTime: tripTime },
           prefer: 'trip',
@@ -408,22 +427,34 @@ export function TourAdditionalAirportTransfers({
   };
 
   const acceptPlace = (id: string, place: Location) => {
-    if (!isSelectedMapLocation(place) || isVizagAirportLocation(place)) {
+    const isHub = kind === 'railway' ? isRailwayHub(place) : isVizagAirportLocation(place);
+    if (!isSelectedMapLocation(place) || isHub) {
       updateLeg(id, { place: undefined, distanceKm: 0, fare: 0 });
       return;
     }
     if (!isAirportTransferOtherEnd(place)) {
-      toast('This place is outside the airport transfer area. Choose Visakhapatnam, Vizianagaram, Srikakulam, or nearby.');
+      toast(
+        kind === 'railway'
+          ? 'This place is outside the railway transfer area. Choose Visakhapatnam, Vizianagaram, Srikakulam, or nearby.'
+          : 'This place is outside the airport transfer area. Choose Visakhapatnam, Vizianagaram, Srikakulam, or nearby.'
+      );
       updateLeg(id, { place: undefined, distanceKm: 0, fare: 0 });
       return;
     }
     updateLeg(id, { place, distanceKm: 0, fare: 0 });
   };
 
-  const summary = legs.length === 0 ? 'Pickup or drop from Vizag airport' : total > 0 ? `${formatRupees(total)} extra` : `${legs.length} added`;
+  const summary =
+    legs.length === 0
+      ? kind === 'railway'
+        ? 'Pickup or drop from Vizag railway station'
+        : 'Pickup or drop from Vizag airport'
+      : total > 0
+        ? `${formatRupees(total)} extra`
+        : `${legs.length} added`;
 
   const addLeg = () => {
-    const created = newLeg('from-airport', tripStartDate, tripStartTime, tripDayCount);
+    const created = newLeg(fromDirection, tripStartDate, tripStartTime, tripDayCount);
     setLegs((current) => [...current, created.leg]);
     if (
       created.trip.pickupDate &&
@@ -431,20 +462,20 @@ export function TourAdditionalAirportTransfers({
       (created.trip.pickupDate !== tripStartDate || created.trip.pickupTime !== tripStartTime)
     ) {
       onTripScheduleChange?.(created.trip);
-      toast('Tour time moved so the airport transfer stays 2 hours apart on the same day.');
+      toast(`Tour time moved so the ${transferNoun.toLowerCase()} stays 2 hours apart on the same day.`);
     }
-    setSectionOpen('airport');
+    setSectionOpen(kind);
   };
 
-  const acceptWhen = (id: string, direction: AirportDirection, next: { pickupDate: string; pickupTime: string }) => {
+  const acceptWhen = (id: string, direction: HubDirection, next: { pickupDate: string; pickupTime: string }) => {
     let pickupDate = next.pickupDate;
     let pickupTime = next.pickupTime;
     if (isInsideTourDates(pickupDate, tripStartDate, tripDayCount)) {
-      toast('Airport transfer can’t be during the tour. Choose the first day, the last day, or a date outside the trip.');
+      toast(`${transferNoun} can’t be during the tour. Choose the first day, the last day, or a date outside the trip.`);
       pickupDate = edgeDate(direction, tripStartDate, tripDayCount) || pickupDate;
     }
     const separated = separateAirportAndTrip({
-      direction,
+      direction: scheduleDirection(direction),
       airport: { pickupDate, pickupTime },
       trip: { pickupDate: tripStartDate, pickupTime: tripStartTime },
       prefer: 'airport',
@@ -459,18 +490,24 @@ export function TourAdditionalAirportTransfers({
       toast(
         leadMoved && !separated.tripChanged
           ? 'Pickup time must be at least 1.5 hours from now.'
-          : 'Airport transfer and the tour need a 2 hour gap when they are on the same date.'
+          : `${transferNoun} and the tour need a 2 hour gap when they are on the same date.`
       );
     }
   };
 
   return (
     <Accordion type="single" collapsible value={sectionOpen} onValueChange={setSectionOpen} className="mb-2">
-      <AccordionItem value="airport" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <AccordionItem value={kind} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <AccordionTrigger className="h-11 rounded-none border-0 bg-white px-3 py-0 text-slate-400 hover:no-underline [&>svg]:text-slate-400">
           <span className="flex min-w-0 flex-1 items-center gap-2 pr-2">
-            <Plane className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
-            <span className="shrink-0 text-[13px] font-semibold text-slate-900">Airport Transfers</span>
+            {kind === 'railway' ? (
+              <TrainFront className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
+            ) : (
+              <Plane className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
+            )}
+            <span className="shrink-0 text-[13px] font-semibold text-slate-900">
+              {kind === 'railway' ? 'Railway Station Transfers' : 'Airport Transfers'}
+            </span>
             <span className="truncate text-[12px] font-normal text-slate-500">{summary}</span>
           </span>
         </AccordionTrigger>
@@ -487,7 +524,8 @@ export function TourAdditionalAirportTransfers({
           ) : (
             <div className="space-y-3">
               {legs.map((leg, index) => {
-                const fromAirport = leg.direction === 'from-airport';
+                const fromHub = isArrival(leg.direction);
+                const HubIcon = kind === 'railway' ? TrainFront : Plane;
                 return (
                   <div key={leg.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
                     <div className="mb-3 flex items-center justify-between gap-2">
@@ -495,7 +533,7 @@ export function TourAdditionalAirportTransfers({
                       <button
                         type="button"
                         className="rounded-full p-1 text-rose-400 hover:bg-rose-50 hover:text-rose-600"
-                        aria-label={`Remove airport transfer ${index + 1}`}
+                        aria-label={`Remove ${transferNoun.toLowerCase()} ${index + 1}`}
                         onClick={() => setLegs((current) => current.filter((item) => item.id !== leg.id))}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -505,9 +543,9 @@ export function TourAdditionalAirportTransfers({
                       <button
                         type="button"
                         className="axis-trip-toggle-btn inline-flex items-center justify-center gap-1.5 text-[12px]"
-                        data-active={fromAirport ? 'true' : 'false'}
+                        data-active={fromHub ? 'true' : 'false'}
                         onClick={() => {
-                          const pickupDate = edgeDate('from-airport', tripStartDate, tripDayCount) || leg.pickupDate;
+                          const pickupDate = edgeDate(fromDirection, tripStartDate, tripDayCount) || leg.pickupDate;
                           const separated = separateAirportAndTrip({
                             direction: 'from-airport',
                             airport: { pickupDate, pickupTime: leg.pickupTime || tripStartTime },
@@ -515,7 +553,7 @@ export function TourAdditionalAirportTransfers({
                             prefer: 'trip',
                           });
                           updateLeg(leg.id, {
-                            direction: 'from-airport',
+                            direction: fromDirection,
                             place: undefined,
                             distanceKm: 0,
                             fare: 0,
@@ -524,15 +562,15 @@ export function TourAdditionalAirportTransfers({
                           if (separated.tripChanged) onTripScheduleChange?.(separated.trip);
                         }}
                       >
-                        <Plane className="h-3.5 w-3.5" />
-                        From Airport
+                        <HubIcon className="h-3.5 w-3.5" />
+                        {kind === 'railway' ? 'From Station' : 'From Airport'}
                       </button>
                       <button
                         type="button"
                         className="axis-trip-toggle-btn inline-flex items-center justify-center gap-1.5 text-[12px]"
-                        data-active={!fromAirport ? 'true' : 'false'}
+                        data-active={!fromHub ? 'true' : 'false'}
                         onClick={() => {
-                          const pickupDate = edgeDate('to-airport', tripStartDate, tripDayCount) || leg.pickupDate;
+                          const pickupDate = edgeDate(toDirection, tripStartDate, tripDayCount) || leg.pickupDate;
                           const separated = separateAirportAndTrip({
                             direction: 'to-airport',
                             airport: { pickupDate, pickupTime: leg.pickupTime || tripStartTime },
@@ -540,7 +578,7 @@ export function TourAdditionalAirportTransfers({
                             prefer: 'trip',
                           });
                           updateLeg(leg.id, {
-                            direction: 'to-airport',
+                            direction: toDirection,
                             place: undefined,
                             distanceKm: 0,
                             fare: 0,
@@ -550,21 +588,21 @@ export function TourAdditionalAirportTransfers({
                         }}
                       >
                         <MapPin className="h-3.5 w-3.5" />
-                        To Airport
+                        {kind === 'railway' ? 'To Station' : 'To Airport'}
                       </button>
                     </div>
                     <p className="mb-1.5 text-[11px] font-semibold text-slate-500">
-                      {fromAirport ? 'Drop location (Hotel / Address)' : 'Pickup location (Hotel / Address)'}
+                      {fromHub ? 'Drop location (Hotel / Address)' : 'Pickup location (Hotel / Address)'}
                     </p>
                     <LocationInput
-                      id={`tour-airport-${leg.id}`}
+                      id={`tour-${kind}-${leg.id}`}
                       label=""
-                      placeholder={fromAirport ? 'Hotel or drop address' : 'Hotel or pickup address'}
+                      placeholder={fromHub ? 'Hotel or drop address' : 'Hotel or pickup address'}
                       location={leg.place}
                       onLocationChange={(place) => acceptPlace(leg.id, place)}
-                      tripType="airport"
-                      isPickupLocation={!fromAirport}
-                      hideRestrictedAirportDrops={fromAirport}
+                      tripType={kind === 'railway' ? 'outstation' : 'airport'}
+                      isPickupLocation={!fromHub}
+                      hideRestrictedAirportDrops={kind === 'airport' && fromHub}
                       variant="infield"
                       compact
                       hideSubtitle
@@ -574,6 +612,7 @@ export function TourAdditionalAirportTransfers({
                       <AirportTransferWhen
                         pickupDate={leg.pickupDate}
                         pickupTime={leg.pickupTime}
+                        label={kind === 'railway' ? 'Railway transfer date and time' : 'Airport transfer date and time'}
                         onChange={(next) => acceptWhen(leg.id, leg.direction, next)}
                       />
                     </div>

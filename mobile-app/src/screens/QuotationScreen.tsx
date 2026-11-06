@@ -206,9 +206,11 @@ export function QuotationScreen({ route }: Props) {
       `Date and time: ${whenLabel}`,
       ...(params.transfers || []).map((transfer) => {
         const airport = 'Alluri Sitarama Raju International Airport';
-        return transfer.direction === 'from-airport'
-          ? `Airport transfer: From ${airport} to ${transfer.placeName}`
-          : `Airport transfer: From ${transfer.placeName} to ${airport}`;
+        const station = 'Visakhapatnam Railway Station';
+        if (transfer.direction === 'from-airport') return `Airport transfer: From ${airport} to ${transfer.placeName}`;
+        if (transfer.direction === 'to-airport') return `Airport transfer: From ${transfer.placeName} to ${airport}`;
+        if (transfer.direction === 'from-station') return `Railway station transfer: From ${station} to ${transfer.placeName}`;
+        return `Railway station transfer: From ${transfer.placeName} to ${station}`;
       }),
       `Tour duration: ${duration.trim() || `${plans.length} day${plans.length === 1 ? '' : 's'}`}`,
       'Book: +91 9966363662 | www.vizagtaxihub.com',
@@ -355,12 +357,22 @@ export function QuotationScreen({ route }: Props) {
             <TextInput style={styles.input} placeholder="e.g. 3 Days / 2 Nights" value={duration} onChangeText={setDuration} />
             <Text style={styles.label}>Last drop location (optional)</Text>
             <TextInput style={styles.input} placeholder="Search last drop location" value={lastDrop} onChangeText={setLastDrop} />
-            {(params.transfers || []).length > 0 ? (
+            {(params.transfers || []).some((transfer) => transfer.direction === 'from-airport' || transfer.direction === 'to-airport') ? (
               <View style={styles.noteCard}>
                 <Text style={styles.noteTitle}>Airport transfers</Text>
-                {params.transfers?.map((transfer) => (
+                {params.transfers?.filter((transfer) => transfer.direction === 'from-airport' || transfer.direction === 'to-airport').map((transfer) => (
                   <Text key={`${transfer.direction}-${transfer.placeName}`} style={styles.noteLine}>
                     {transfer.direction === 'from-airport' ? 'From airport to' : 'To airport from'} {transfer.placeName}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+            {(params.transfers || []).some((transfer) => transfer.direction === 'from-station' || transfer.direction === 'to-station') ? (
+              <View style={styles.noteCard}>
+                <Text style={styles.noteTitle}>Railway station transfers</Text>
+                {params.transfers?.filter((transfer) => transfer.direction === 'from-station' || transfer.direction === 'to-station').map((transfer) => (
+                  <Text key={`${transfer.direction}-${transfer.placeName}`} style={styles.noteLine}>
+                    {transfer.direction === 'from-station' ? 'From station to' : 'To station from'} {transfer.placeName}
                   </Text>
                 ))}
               </View>

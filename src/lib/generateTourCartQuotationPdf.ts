@@ -3,7 +3,7 @@ import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import type {
   TourCartQuotationPDFProps,
   TourCartQuotationTour,
-} from '@/components/pdf/TourCartQuotationPDF';
+} from '@/lib/tourQuoteModel';
 import { normalizeQuoteItinerary } from '@/lib/tourQuoteItinerary';
 
 function cleanText(raw: string): string {
