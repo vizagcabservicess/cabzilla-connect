@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../utils/invoice_trip_type_display.inc.php';
 require_once __DIR__ . '/../utils/invoice_trip_summary_overrides.inc.php';
+require_once __DIR__ . '/../utils/invoice_brand_assets.inc.php';
 
 // CRITICAL: Set all response headers first before any output
 // Turn off error display to prevent output before JSON
@@ -1718,6 +1719,7 @@ try {
                 <tr>
                     <td width="38%" valign="top" style="word-wrap:break-word;overflow-wrap:break-word;">
                         <p class="compact-p"><strong>Seller/Service Provider:</strong></p>
+                        ' . invoice_brand_logo_html() . '
                         <p class="compact-p"><strong>VIZAG TAXI HUB</strong></p>
                         <p class="compact-p">44-66-22/4, Singalamma Puram, Kailasapuram, Visakhapatnam, Andhra Pradesh - 530024</p>' .
                         ($gstEnabled
@@ -2651,11 +2653,11 @@ try {
     $invoiceHtml .= '
         </div>
 
-        <div class="footer">
+        ' . invoice_brand_footer_html($gstEnabled, '
             <p>Thank you for choosing Vizag Taxi Hub.</p>
             <p>For any questions regarding this invoice, please contact support@vizagtaxihub.com</p>
             <p style="font-size: 9px; color: #999; margin-top: 6px;">Generated on: ' . date('Y-m-d H:i:s') . '</p>
-        </div>
+        ') . '
     </div>
 </body>
 </html>';

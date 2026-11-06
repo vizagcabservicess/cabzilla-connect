@@ -2,7 +2,7 @@
  * Super-admin driver operations dashboard — parity with web `DriverDashboard.tsx`.
  * Trips, fuel, summary metrics, filters, charts (simplified), trip edit/delete.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,9 @@ import {
   Modal,
   Platform,
   Alert,
+  Linking,
 } from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,19 +25,26 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors } from '../theme/colors';
 import { useAuth } from '../providers/AuthProvider';
 import { driverDashboardAPI } from '../services/driverDashboardAPI';
+import { dashboardTripToDriverTrip } from '../services/driverTripsAPI';
 import { adminAPI } from '../services/adminAPI';
 import type {
   DriverDashboardData,
   DriverDashboardTrip,
   DriverFuelRecord,
+  OpsTripStatus,
   PaymentType,
-  TripStatus,
 } from '../types/driverDashboard';
 import { format } from 'date-fns';
 import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { AdminDriverOpsTripEditModal } from '../components/AdminDriverOpsTripEditModal';
+import { DriverLiveMap } from '../components/DriverLiveMap';
 import { shareBookingDutySlip } from '../lib/bookingDutySlip';
+import {
+  loadSuperAdminPushMute,
+  setSuperAdminPushMute,
+  subscribeSuperAdminPushMute,
+} from '../lib/superAdminPushMute';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AdminDriverOpsDashboard'>;
 
@@ -62,11 +71,86 @@ const INITIAL_DATA: DriverDashboardData = {
   },
 };
 
-const STATUS_COLORS: Record<TripStatus, string> = {
-  assigned: '#2563eb',
-  in_progress: '#f59e0b',
-  completed: '#16a34a',
-};
+const OPS_STATUS_TABS: Array<{ id: 'all' | OpsTripStatus; label: string; dot: string }> = [
+  { id: 'all', label: 'All', dot: '#64748b' },
+  { id: 'assigned', label: 'Assigned', dot: '#2563eb' },
+  { id: 'receipt_accepted', label: 'Receipt accepted', dot: '#4f46e5' },
+  { id: 'in_progress', label: 'In progress', dot: '#ea580c' },
+  { id: 'day_closed', label: 'Day closed', dot: '#475569' },
+  { id: 'completed', label: 'Completed', dot: '#16a34a' },
+  { id: 'cancelled', label: 'Cancelled', dot: '#dc2626' },
+];
+
+function opsStatusLabel(status: OpsTripStatus): string {
+  switch (status) {
+    case 'assigned':
+      return 'Assigned';
+    case 'receipt_accepted':
+      return 'Confirm Receipt – Accepted';
+    case 'in_progress':
+      return 'In Progress';
+    case 'day_closed':
+      return 'Day closed';
+    case 'completed':
+      return 'Completed';
+    case 'cancelled':
+      return 'Cancelled';
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
+}
+
+function opsStatusTone(status: OpsTripStatus): { bg: string; text: string; border: string } {
+  switch (status) {
+    case 'assigned':
+      return { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' };
+    case 'receipt_accepted':
+      return { bg: '#eef2ff', text: '#4338ca', border: '#c7d2fe' };
+    case 'in_progress':
+      return { bg: '#fff7ed', text: '#c2410c', border: '#fed7aa' };
+    case 'day_closed':
+      return { bg: '#f8fafc', text: '#334155', border: '#cbd5e1' };
+    case 'completed':
+      return { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' };
+    case 'cancelled':
+      return { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca' };
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
+}
+
+function parseIsoDate(iso: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const parsed = new Date(`${iso}T00:00:00`);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date();
+}
+
+function toIsoDate(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function formatFilterDate(iso: string): string {
+  const parsed = parseIsoDate(iso);
+  if (!iso) return 'Select date';
+  return format(parsed, 'dd-MM-yyyy');
+}
+
+const PAYMENT_OPTIONS: Array<{ id: 'all' | PaymentType; label: string }> = [
+  { id: 'all', label: 'All Payments' },
+  { id: 'company_paid', label: 'Company Paid' },
+  { id: 'company_phonepe', label: 'Company PhonePe' },
+  { id: 'self_paid', label: 'Self Paid' },
+  { id: 'corporate_booking', label: 'Corporate' },
+  { id: 'agent_booking', label: 'Agent' },
+];
 
 const PAGE_SIZE = 15;
 const EXPORT_FETCH_LIMIT = 8000;
@@ -126,7 +210,7 @@ function formatJourneyDate(value: string | null): string {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-IN');
+  return format(date, 'dd MMM yyyy');
 }
 
 function formatTripPaymentLabel(code: string): string {
@@ -141,9 +225,54 @@ function formatTripPaymentLabel(code: string): string {
   return map[c] || c.replace(/_/g, ' ') || '—';
 }
 
-type MainTab = 'dashboard' | 'trips' | 'fuel' | 'reports';
+type MainTab = 'dashboard' | 'trips' | 'live' | 'fuel' | 'reports';
 
-export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
+const MAIN_TABS: Array<{ key: MainTab; label: string }> = [
+  { key: 'trips', label: 'Trips' },
+  { key: 'live', label: 'Live GPS' },
+  { key: 'fuel', label: 'Fuel' },
+  { key: 'reports', label: 'Reports' },
+  { key: 'dashboard', label: 'Charts' },
+];
+
+function formatTrackedAgo(value: string | null | undefined): string {
+  if (!value) return 'No GPS yet';
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) return 'No GPS yet';
+  const minutes = Math.max(0, Math.round((Date.now() - time) / 60000));
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  return `${Math.floor(hours / 24)} d ago`;
+}
+
+const DATE_STRIP_PAST_DAYS = 180;
+const DATE_STRIP_FUTURE_DAYS = 21;
+
+function todayIso(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function shiftIsoDay(iso: string, days: number): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  date.setDate(date.getDate() + days);
+  const nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+  const nextDay = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${nextMonth}-${nextDay}`;
+}
+
+function formatIsoDayLabel(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+export function AdminDriverOpsDashboardScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const isSuper = user?.role === 'super_admin';
 
@@ -152,17 +281,29 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [alertsMuted, setAlertsMuted] = useState(false);
+  const [muteBusy, setMuteBusy] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<'all' | TripStatus>('all');
+  const [search, setSearch] = useState((route.params?.bookingNumber ?? '').trim());
+  const [status, setStatus] = useState<'all' | OpsTripStatus>('all');
   const [paymentType, setPaymentType] = useState<'all' | PaymentType>('all');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [driverId, setDriverId] = useState<number | null>(null);
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [vehicles, setVehicles] = useState<string[]>([]);
   const [driverPickerOpen, setDriverPickerOpen] = useState(false);
+  const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
+  const [paymentPickerOpen, setPaymentPickerOpen] = useState(false);
+  const [datePicker, setDatePicker] = useState<null | 'from' | 'to'>(null);
+  const [iosDraftDate, setIosDraftDate] = useState(new Date());
   const [tripPage, setTripPage] = useState(0);
   const [fuelPage, setFuelPage] = useState(0);
-  const [mainTab, setMainTab] = useState<MainTab>('dashboard');
+  const [mainTab, setMainTab] = useState<MainTab>('trips');
+  const [liveTrips, setLiveTrips] = useState<DriverDashboardTrip[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [selectedLiveId, setSelectedLiveId] = useState<number | null>(null);
+  const [mapHeld, setMapHeld] = useState(false);
 
   const [editTrip, setEditTrip] = useState<DriverDashboardTrip | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -176,8 +317,9 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
       fromDate: fromDate || undefined,
       toDate: toDate || undefined,
       driverId: driverId && driverId > 0 ? driverId : undefined,
+      vehicleNumber: vehicleNumber || undefined,
     }),
-    [search, status, paymentType, fromDate, toDate, driverId]
+    [search, status, paymentType, fromDate, toDate, driverId, vehicleNumber]
   );
 
   const exportFuelCsv = useCallback(async () => {
@@ -243,7 +385,7 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
         trip.vehicleNumber || '',
         compactLocation(trip.pickupLocation),
         compactLocation(trip.dropLocation),
-        trip.status,
+        opsStatusLabel(trip.opsStatus),
         toSafeNumber(trip.startingOdometer).toFixed(1),
         toSafeNumber(trip.endingOdometer).toFixed(1),
         toSafeNumber(trip.totalDurationHours).toFixed(1),
@@ -266,6 +408,25 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (!isSuper) return;
+    const unsubscribe = subscribeSuperAdminPushMute(setAlertsMuted);
+    void loadSuperAdminPushMute();
+    return unsubscribe;
+  }, [isSuper]);
+
+  const handleToggleAlerts = async () => {
+    if (muteBusy) return;
+    setMuteBusy(true);
+    try {
+      await setSuperAdminPushMute(!alertsMuted);
+    } catch {
+      Alert.alert('Notifications', 'Could not save that setting. Check your connection and try again.');
+    } finally {
+      setMuteBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isSuper) return;
     const loadDrivers = async () => {
       try {
         const response = await adminAPI.getDrivers();
@@ -282,6 +443,18 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
       }
     };
     void loadDrivers();
+    const loadVehicles = async () => {
+      try {
+        const response = await adminAPI.getFleetVehicles(true);
+        const numbers = response
+          .map((vehicle) => String(vehicle.vehicleNumber || vehicle.vehicle_number || '').trim())
+          .filter((number) => number !== '');
+        setVehicles(Array.from(new Set(numbers)).sort((a, b) => a.localeCompare(b)));
+      } catch {
+        setVehicles([]);
+      }
+    };
+    void loadVehicles();
   }, [isSuper]);
 
   const loadInternal = useCallback(
@@ -297,6 +470,7 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
           fromDate: fromDate || undefined,
           toDate: toDate || undefined,
           driverId: driverId && driverId > 0 ? driverId : undefined,
+          vehicleNumber: vehicleNumber || undefined,
           tripLimit: PAGE_SIZE,
           tripOffset: tripP * PAGE_SIZE,
           fuelLimit: PAGE_SIZE,
@@ -313,13 +487,83 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
         setRefreshing(false);
       }
     },
-    [isSuper, search, status, paymentType, fromDate, toDate, driverId]
+    [isSuper, search, status, paymentType, fromDate, toDate, driverId, vehicleNumber]
   );
+
+  useEffect(() => {
+    const code = (route.params?.bookingNumber ?? '').trim();
+    if (!code) return;
+    setSearch(code);
+    setStatus('all');
+    setFromDate('');
+    setToDate('');
+    setDriverId(null);
+    setVehicleNumber('');
+    setPaymentType('all');
+    setTripPage(0);
+    setMainTab('trips');
+  }, [route.params?.bookingNumber]);
 
   useEffect(() => {
     if (!isSuper) return;
     void loadInternal(tripPage, fuelPage);
   }, [isSuper, tripPage, fuelPage, loadInternal]);
+
+  useEffect(() => {
+    if (!isSuper || mainTab !== 'live') return;
+    let cancelled = false;
+    let first = true;
+    const pull = async () => {
+      if (first) setLiveLoading(true);
+      try {
+        const day = todayIso();
+        const [moving, assignedToday] = await Promise.all([
+          driverDashboardAPI.getDashboard({
+            status: 'in_progress',
+            tripLimit: 100,
+            tripOffset: 0,
+            fuelLimit: 1,
+            fuelOffset: 0,
+            skipCache: true,
+          }),
+          driverDashboardAPI.getDashboard({
+            status: 'assigned',
+            fromDate: day,
+            toDate: day,
+            tripLimit: 100,
+            tripOffset: 0,
+            fuelLimit: 1,
+            fuelOffset: 0,
+            skipCache: true,
+          }),
+        ]);
+        if (cancelled) return;
+        const merged = new Map<number, DriverDashboardTrip>();
+        [...moving.trips.items, ...assignedToday.trips.items].forEach((trip) => {
+          merged.set(trip.tripId, trip);
+        });
+        const next = Array.from(merged.values()).sort((a, b) => {
+          const aLive = a.liveLat != null ? 0 : 1;
+          const bLive = b.liveLat != null ? 0 : 1;
+          return aLive - bLive || (a.driverName || '').localeCompare(b.driverName || '');
+        });
+        setLiveTrips(next);
+      } catch {
+        if (!cancelled) setLiveTrips([]);
+      } finally {
+        first = false;
+        if (!cancelled) setLiveLoading(false);
+      }
+    };
+    void pull();
+    const timer = setInterval(() => {
+      void pull();
+    }, 20000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [isSuper, mainTab]);
 
   const driverOptions = useMemo(() => {
     const fromApi = drivers.map((d) => ({ id: d.id, name: d.name }));
@@ -372,6 +616,7 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
     setFromDate('');
     setToDate('');
     setDriverId(null);
+    setVehicleNumber('');
     setStatus('all');
     setPaymentType('all');
     setTripPage(0);
@@ -394,10 +639,76 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
     }
   };
 
+  const vehicleOptions = useMemo(() => {
+    const numbers = new Set(vehicles);
+    data.trips.items.forEach((trip) => {
+      const number = (trip.vehicleNumber || '').trim();
+      if (number && number !== '—') numbers.add(number);
+    });
+    return Array.from(numbers).sort((a, b) => a.localeCompare(b));
+  }, [vehicles, data.trips.items]);
+
   const selectedDriverLabel =
     driverId && driverId > 0
       ? driverOptions.find((d) => d.id === driverId)?.name ?? `Driver #${driverId}`
-      : 'All drivers';
+      : 'All Drivers';
+  const selectedVehicleLabel = vehicleNumber || 'All Vehicles';
+  const selectedPaymentLabel = PAYMENT_OPTIONS.find((option) => option.id === paymentType)?.label ?? 'All Payments';
+  const dateRangeLabel =
+    !fromDate && !toDate
+      ? 'All dates'
+      : fromDate && toDate && fromDate === toDate
+        ? formatIsoDayLabel(fromDate)
+        : `${fromDate ? formatIsoDayLabel(fromDate) : 'Start'} to ${toDate ? formatIsoDayLabel(toDate) : 'latest'}`;
+  const dateStripDays = Array.from(
+    { length: DATE_STRIP_PAST_DAYS + 1 + DATE_STRIP_FUTURE_DAYS },
+    (_, index) => shiftIsoDay(todayIso(), index - DATE_STRIP_PAST_DAYS),
+  );
+  const dayStripRef = useRef<ScrollView>(null);
+  const didScrollToToday = useRef(false);
+
+  const openDatePicker = (which: 'from' | 'to') => {
+    setIosDraftDate(parseIsoDate(which === 'from' ? fromDate : toDate));
+    setDatePicker(which);
+  };
+
+  const onAndroidDate = (event: DateTimePickerEvent, date?: Date) => {
+    const which = datePicker;
+    setDatePicker(null);
+    if (event.type === 'dismissed' || !date || !which) return;
+    const iso = toIsoDate(date);
+    if (which === 'from') setFromDate(iso);
+    else setToDate(iso);
+  };
+
+  const openTripMenu = (trip: DriverDashboardTrip) => {
+    const actions: Array<{ text: string; style?: 'cancel'; onPress?: () => void }> = [];
+    if (trip.liveLat != null && trip.liveLng != null) {
+      actions.push({
+        text: 'Live location',
+        onPress: () => {
+          void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${trip.liveLat},${trip.liveLng}`);
+        },
+      });
+    }
+    actions.push(
+      {
+        text: 'Edit trip',
+        onPress: () => {
+          setEditTrip(trip);
+          setEditOpen(true);
+        },
+      },
+      {
+        text: 'Duty slip',
+        onPress: () => {
+          void shareBookingDutySlip(trip.tripId, trip.tripCode);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    );
+    Alert.alert(trip.tripCode, undefined, actions);
+  };
 
   if (!isSuper) {
     return (
@@ -426,17 +737,43 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Driver ops
-        </Text>
-        <View style={styles.backBtn} />
+        <View style={styles.headerCopy}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Driver Dashboard</Text>
+          <Text style={styles.headerSub} numberOfLines={1}>Trips for {dateRangeLabel}</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => {
+            setRefreshing(true);
+            void loadInternal(tripPage, fuelPage, { skipLoadingSpinner: true });
+          }}
+          style={styles.headerAction}
+          accessibilityLabel="Refresh"
+        >
+          <Ionicons name="refresh" size={16} color={colors.foreground} />
+          <Text style={styles.headerActionText}>{loading ? '…' : 'Refresh'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            void handleToggleAlerts();
+          }}
+          style={styles.headerIconBtn}
+          disabled={muteBusy}
+          accessibilityLabel={alertsMuted ? 'Unmute office alerts' : 'Mute alerts'}
+        >
+          <Ionicons
+            name={alertsMuted ? 'notifications-off-outline' : 'notifications-outline'}
+            size={18}
+            color={alertsMuted ? '#b45309' : colors.foreground}
+          />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
+        scrollEnabled={!mapHeld}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -449,120 +786,157 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
         }
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.lead}>Unified trips, fuel and earnings (super admin).</Text>
+        <View style={styles.metricStrip}>
+          <StripMetric title="Completed" value={String(data.summary.totalTripsCompleted)} />
+          <StripMetric title="Km" value={toSafeNumber(data.summary.totalKilometers).toFixed(0)} />
+          <StripMetric title="Hours" value={toSafeNumber(data.summary.totalHours).toFixed(1)} />
+          <StripMetric title="Fuel" value={`₹${toSafeNumber(data.summary.totalFuelSpend).toFixed(0)}`} />
+          <StripMetric title="Net" value={`₹${toSafeNumber(data.summary.netEarnings).toFixed(0)}`} />
+          <StripMetric title="Profit" value={`₹${toSafeNumber(data.summary.profitEstimation).toFixed(0)}`} />
+        </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.metricsRow}>
-          <MetricCard title="Completed" value={data.summary.totalTripsCompleted} />
-          <MetricCard title="Km" value={toSafeNumber(data.summary.totalKilometers).toFixed(1)} />
-          <MetricCard title="Hours" value={toSafeNumber(data.summary.totalHours).toFixed(1)} />
-          <MetricCard title="Fuel ₹" value={toSafeNumber(data.summary.totalFuelSpend).toFixed(0)} />
-          <MetricCard title="Net ₹" value={toSafeNumber(data.summary.netEarnings).toFixed(0)} />
-          <MetricCard title="Profit est. ₹" value={toSafeNumber(data.summary.profitEstimation).toFixed(0)} />
+        <View style={styles.dayRow}>
+          <TouchableOpacity
+            style={[styles.dayCell, !fromDate && !toDate && styles.dayCellActive]}
+            onPress={() => {
+              setFromDate('');
+              setToDate('');
+              setTripPage(0);
+            }}
+          >
+            <Text style={[styles.dayCellTop, !fromDate && !toDate && styles.dayCellTopActive]}>All</Text>
+            <Text style={[styles.dayCellSub, !fromDate && !toDate && styles.dayCellSubActive]}>dates</Text>
+          </TouchableOpacity>
+          <ScrollView
+            ref={dayStripRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.dayScroll}
+            contentContainerStyle={styles.dayStrip}
+          >
+          {dateStripDays.map((iso) => {
+            const [year, month, day] = iso.split('-').map(Number);
+            const date = new Date(year, (month || 1) - 1, day || 1);
+            const selected = fromDate === iso && toDate === iso;
+            const isToday = iso === todayIso();
+            return (
+              <TouchableOpacity
+                key={iso}
+                style={[styles.dayCell, selected && styles.dayCellActive]}
+                onLayout={isToday ? (event) => {
+                  if (didScrollToToday.current) return;
+                  const x = event.nativeEvent.layout.x;
+                  requestAnimationFrame(() => {
+                    dayStripRef.current?.scrollTo({ x, animated: false });
+                    didScrollToToday.current = true;
+                  });
+                } : undefined}
+                onPress={() => {
+                  setFromDate(iso);
+                  setToDate(iso);
+                  setTripPage(0);
+                  setMainTab('trips');
+                }}
+              >
+                <Text style={[styles.dayCellTop, selected && styles.dayCellTopActive]}>
+                  {date.toLocaleDateString('en-IN', { weekday: 'short' })}
+                </Text>
+                <Text style={[styles.dayCellNum, selected && styles.dayCellNumActive]}>{String(day).padStart(2, '0')}</Text>
+                <Text style={[styles.dayCellSub, selected && styles.dayCellSubActive]}>
+                  {date.toLocaleDateString('en-IN', { month: 'short' })}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+          </ScrollView>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterStrip}>
+          <TextInput
+            style={styles.filterInput}
+            placeholder="Trip / driver"
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={applyFilters}
+            placeholderTextColor={colors.gray400}
+            returnKeyType="search"
+          />
+          <TouchableOpacity style={styles.searchBtn} onPress={applyFilters}>
+            <Text style={styles.searchBtnText}>Search</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterChip} onPress={() => setDriverPickerOpen(true)}>
+            <Text style={styles.filterChipText} numberOfLines={1}>{selectedDriverLabel}</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.gray500} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterChip} onPress={() => setVehiclePickerOpen(true)}>
+            <Text style={styles.filterChipText} numberOfLines={1}>{selectedVehicleLabel}</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.gray500} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterChip} onPress={() => openDatePicker('from')}>
+            <Text style={styles.filterChipText}>From {fromDate ? formatFilterDate(fromDate) : '—'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterChip} onPress={() => openDatePicker('to')}>
+            <Text style={styles.filterChipText}>To {toDate ? formatFilterDate(toDate) : '—'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterChip} onPress={() => setPaymentPickerOpen(true)}>
+            <Text style={styles.filterChipText} numberOfLines={1}>{selectedPaymentLabel}</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.gray500} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterChip} onPress={() => void resetFiltersAndLoad()}>
+            <Text style={styles.filterChipText}>Reset</Text>
+          </TouchableOpacity>
         </ScrollView>
 
         {loadError ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorText}>Unable to load: {loadError}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setRefreshing(true);
+                void loadInternal(tripPage, fuelPage, { skipLoadingSpinner: true });
+              }}
+            >
+              <Text style={styles.retryLink}>Try again</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Filters</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Search Trip ID / Driver ID"
-            value={search}
-            onChangeText={setSearch}
-            placeholderTextColor={colors.gray500}
-          />
-          <View style={styles.dateRow}>
-            <TextInput
-              style={[styles.input, styles.dateHalf]}
-              placeholder="From YYYY-MM-DD"
-              value={fromDate}
-              onChangeText={setFromDate}
-              placeholderTextColor={colors.gray500}
-            />
-            <TextInput
-              style={[styles.input, styles.dateHalf]}
-              placeholder="To YYYY-MM-DD"
-              value={toDate}
-              onChangeText={setToDate}
-              placeholderTextColor={colors.gray500}
-            />
-          </View>
-          <TouchableOpacity style={styles.driverPickBtn} onPress={() => setDriverPickerOpen(true)}>
-            <Text style={styles.driverPickText}>{selectedDriverLabel}</Text>
-            <Ionicons name="chevron-down" size={20} color={colors.gray600} />
-          </TouchableOpacity>
-
-          <Text style={styles.filterLabel}>Status</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-            {(['all', 'assigned', 'in_progress', 'completed'] as const).map((s) => (
-              <TouchableOpacity
-                key={s}
-                style={[styles.chip, status === s && styles.chipActive]}
-                onPress={() => setStatus(s)}
-              >
-                <Text style={[styles.chipText, status === s && styles.chipTextActive]}>
-                  {s === 'all' ? 'All' : s.replace('_', ' ')}
-                </Text>
+        <View style={styles.pillTabs}>
+          {MAIN_TABS.map((tab) => {
+            const active = mainTab === tab.key;
+            return (
+              <TouchableOpacity key={tab.key} style={[styles.pillTab, active && styles.pillTabActive]} onPress={() => setMainTab(tab.key)}>
+                <Text style={[styles.pillTabText, active && styles.pillTabTextActive]}>{tab.label}</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <Text style={styles.filterLabel}>Payment</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-            {(
-              [
-                'all',
-                'company_paid',
-                'company_phonepe',
-                'self_paid',
-                'corporate_booking',
-                'agent_booking',
-              ] as const
-            ).map((p) => (
-              <TouchableOpacity
-                key={p}
-                style={[styles.chip, paymentType === p && styles.chipActive]}
-                onPress={() => setPaymentType(p)}
-              >
-                <Text style={[styles.chipText, paymentType === p && styles.chipTextActive]}>
-                  {p === 'all' ? 'All' : formatTripPaymentLabel(p)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <View style={styles.filterActions}>
-            <TouchableOpacity style={styles.applyBtn} onPress={applyFilters}>
-              <Text style={styles.applyBtnText}>Apply filters</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.resetBtn} onPress={() => void resetFiltersAndLoad()}>
-              <Text style={styles.resetBtnText}>Reset</Text>
-            </TouchableOpacity>
-          </View>
+            );
+          })}
         </View>
 
-        <View style={styles.tabRow}>
-          {(
-            [
-              { key: 'dashboard', label: 'Dashboard' },
-              { key: 'trips', label: 'Trips' },
-              { key: 'fuel', label: 'Fuel' },
-              { key: 'reports', label: 'Reports' },
-            ] as const
-          ).map((t) => (
-            <TouchableOpacity
-              key={t.key}
-              style={[styles.tab, mainTab === t.key && styles.tabActive]}
-              onPress={() => setMainTab(t.key)}
-            >
-              <Text style={[styles.tabText, mainTab === t.key && styles.tabTextActive]}>{t.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {mainTab === 'trips' ? (
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            style={styles.statusScroll}
+            contentContainerStyle={styles.statusScrollContent}
+          >
+            {OPS_STATUS_TABS.map((tab) => {
+              const active = status === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[styles.statusChip, active && styles.statusChipActive]}
+                  onPress={() => {
+                    setStatus(tab.id);
+                    setTripPage(0);
+                  }}
+                >
+                  <Text style={[styles.statusChipText, active && styles.statusChipTextActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        ) : null}
 
         {loading && !refreshing ? (
           <View style={styles.centerPad}>
@@ -611,56 +985,120 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
               </View>
             )}
 
+            {mainTab === 'live' && (
+              <View>
+                <DriverLiveMap
+                  trips={liveTrips}
+                  focusId={selectedLiveId}
+                  onSelect={setSelectedLiveId}
+                  onGestureStart={() => setMapHeld(true)}
+                  onGestureEnd={() => setMapHeld(false)}
+                />
+                {liveLoading && liveTrips.length === 0 ? (
+                  <Text style={styles.emptyInline}>Loading live trips…</Text>
+                ) : null}
+                {!liveLoading && liveTrips.length === 0 ? (
+                  <Text style={styles.emptyInline}>No assigned or in-progress trips to track right now.</Text>
+                ) : null}
+                {liveTrips.map((trip) => {
+                  const sharing = trip.liveLat != null && trip.liveLng != null;
+                  const selected = selectedLiveId === trip.tripId;
+                  return (
+                    <TouchableOpacity
+                      key={trip.tripId}
+                      style={[styles.webTripCard, selected && styles.liveCardSelected]}
+                      onPress={() => setSelectedLiveId(trip.tripId)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.webTripTop}>
+                        <Text style={styles.webTripCode} numberOfLines={1}>
+                          {trip.driverName || `Driver #${trip.driverId}`}
+                        </Text>
+                        <Text style={[styles.liveShare, sharing && styles.liveShareOn]}>
+                          {sharing ? formatTrackedAgo(trip.liveTrackedAt) : 'No GPS yet'}
+                        </Text>
+                      </View>
+                      <Text style={styles.webTripRoute} numberOfLines={1}>
+                        {trip.vehicleNumber || 'No vehicle'} · {trip.tripCode} · {opsStatusLabel(trip.opsStatus)}
+                      </Text>
+                      <Text style={styles.webTripRoute} numberOfLines={1}>
+                        {compactLocation(trip.pickupLocation)} → {compactLocation(trip.dropLocation)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
             {mainTab === 'trips' && (
-              <View style={styles.card}>
-                <View style={styles.cardTitleRow}>
-                  <Text style={[styles.cardTitle, styles.cardTitleInRow]}>Trips ({data.trips.total})</Text>
+              <View>
+                <View style={styles.sectionHead}>
+                  <Text style={styles.sectionTitle}>Trips ({data.trips.total})</Text>
                   <TouchableOpacity
                     style={[styles.csvBtn, exporting !== null && styles.csvBtnDisabled]}
                     onPress={() => void exportTripsCsv()}
                     disabled={exporting !== null}
                   >
-                    <Ionicons name="download-outline" size={18} color={colors.primary} style={styles.csvBtnIcon} />
-                    <Text style={styles.csvBtnText}>{exporting === 'trips' ? '…' : 'CSV'}</Text>
+                    <Ionicons name="download-outline" size={16} color={colors.primary} />
+                    <Text style={styles.csvBtnText}>{exporting === 'trips' ? 'Exporting…' : 'Download CSV'}</Text>
                   </TouchableOpacity>
                 </View>
-                {data.trips.items.map((trip, idx) => (
-                  <View key={`${trip.tripCode ?? trip.tripId}-${trip.tripId}-${idx}`} style={styles.tripCard}>
-                    <View style={styles.tripTop}>
-                      <Text style={styles.tripCode}>{trip.tripCode}</Text>
-                      <View style={[styles.badge, { backgroundColor: STATUS_COLORS[trip.status] }]}>
-                        <Text style={styles.badgeText}>{trip.status.replace('_', ' ')}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.tripMeta}>
-                      {formatJourneyDate(trip.startTime)} · {trip.driverName || `Driver #${trip.driverId}`}
-                    </Text>
-                    <Text style={styles.tripRoute}>{compactLocation(trip.pickupLocation)} → {compactLocation(trip.dropLocation)}</Text>
-                    <Text style={styles.tripMeta}>
-                      {toSafeNumber(trip.totalKilometers).toFixed(1)} km · {toSafeNumber(trip.totalDurationHours).toFixed(1)} hr · Fuel{' '}
-                      {toSafeNumber(trip.fuelLitres) > 0 ? `${toSafeNumber(trip.fuelLitres).toFixed(2)} L · ` : ''}
-                      ₹{toSafeNumber(trip.fuelSpend).toFixed(0)} · {trip.driverCollectsPayment === false ? 'Do not collect' : `₹${toSafeNumber(trip.tripAmount).toFixed(0)}`}
-                    </Text>
+                {data.trips.items.map((trip, idx) => {
+                  const tone = opsStatusTone(trip.opsStatus);
+                  const hours = toSafeNumber(trip.totalDurationHours);
+                  const km = toSafeNumber(trip.endingOdometer) > 0 ? toSafeNumber(trip.totalKilometers) : 0;
+                  return (
                     <TouchableOpacity
-                      style={styles.editLink}
-                      onPress={() => { void shareBookingDutySlip(trip.tripId, trip.tripCode); }}
-                    >
-                      <Ionicons name="document-text-outline" size={16} color={colors.primary} style={styles.editIcon} />
-                      <Text style={styles.editLinkText}>Duty slip</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.editLink}
+                      key={`${trip.tripCode ?? trip.tripId}-${trip.tripId}-${idx}`}
+                      style={styles.webTripCard}
+                      activeOpacity={0.8}
                       onPress={() => {
-                        setEditTrip(trip);
-                        setEditOpen(true);
+                        if (!isSuper) return;
+                        navigation.navigate('DriverTripDetail', { trip: dashboardTripToDriverTrip(trip) });
                       }}
                     >
-                      <Ionicons name="pencil" size={16} color={colors.primary} style={styles.editIcon} />
-                      <Text style={styles.editLinkText}>Edit trip</Text>
+                      <View style={styles.webTripTop}>
+                        <View style={styles.webTripCopy}>
+                          <Text style={styles.webTripCode} numberOfLines={1}>{trip.tripCode}</Text>
+                          <Text style={styles.webTripWhen}>{formatJourneyDate(trip.startTime)}</Text>
+                        </View>
+                        <View style={[styles.statusPill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+                          <Text style={[styles.statusPillText, { color: tone.text }]}>{opsStatusLabel(trip.opsStatus)}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.webTripDriver} numberOfLines={1}>
+                        {trip.driverName || `Driver #${trip.driverId}`} · {trip.vehicleNumber || '—'}
+                      </Text>
+                      <Text style={styles.webTripRoute} numberOfLines={1}>
+                        {compactLocation(trip.pickupLocation)} → {compactLocation(trip.dropLocation)}
+                      </Text>
+                      {toSafeNumber(trip.fuelSpend) > 0 ? (
+                        <Text style={styles.webTripMeta}>
+                          Fuel ₹{toSafeNumber(trip.fuelSpend).toFixed(0)}
+                          {trip.fuelTiming === 'after'
+                            ? ' · After trip end'
+                            : trip.fuelTiming === 'before'
+                              ? ' · Before trip end'
+                              : trip.fuelTiming === 'mixed'
+                                ? ' · Before and after trip end'
+                                : ''}
+                        </Text>
+                      ) : null}
+                      <View style={styles.webTripFoot}>
+                        <Text style={styles.webTripMeta}>
+                          {trip.driverCollectsPayment === false ? 'Do not collect' : `₹${toSafeNumber(trip.tripAmount).toFixed(0)}`}
+                          {hours > 0 ? ` · ${hours.toFixed(1)} h` : ''}
+                          {km > 0 ? ` · ${km.toFixed(0)} km` : ''}
+                          {trip.liveLat != null ? ' · GPS on' : ''}
+                        </Text>
+                        <TouchableOpacity style={styles.menuBtn} onPress={() => openTripMenu(trip)}>
+                          <Ionicons name="ellipsis-horizontal" size={18} color={colors.gray600} />
+                        </TouchableOpacity>
+                      </View>
                     </TouchableOpacity>
-                  </View>
-                ))}
-                {data.trips.items.length === 0 ? <Text style={styles.emptyInline}>No trips.</Text> : null}
+                  );
+                })}
+                {data.trips.items.length === 0 ? <Text style={styles.emptyInline}>No trips for this filter.</Text> : null}
                 <Pager
                   page={tripPage}
                   totalPages={tripPages}
@@ -751,6 +1189,82 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
         </TouchableOpacity>
       </Modal>
 
+      <Modal visible={vehiclePickerOpen} transparent animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setVehiclePickerOpen(false)}>
+          <View style={styles.driverModal}>
+            <Text style={styles.driverModalTitle}>Vehicle</Text>
+            <ScrollView style={styles.driverScroll} keyboardShouldPersistTaps="handled">
+              {['All Vehicles', ...vehicleOptions].map((number) => (
+                <TouchableOpacity
+                  key={number}
+                  style={styles.driverRow}
+                  onPress={() => {
+                    setVehicleNumber(number === 'All Vehicles' ? '' : number);
+                    setVehiclePickerOpen(false);
+                  }}
+                >
+                  <Text style={styles.driverRowText}>{number}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={paymentPickerOpen} transparent animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setPaymentPickerOpen(false)}>
+          <View style={styles.driverModal}>
+            <Text style={styles.driverModalTitle}>Payment</Text>
+            {PAYMENT_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option.id}
+                style={styles.driverRow}
+                onPress={() => {
+                  setPaymentType(option.id);
+                  setPaymentPickerOpen(false);
+                }}
+              >
+                <Text style={styles.driverRowText}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {datePicker && Platform.OS === 'android' ? (
+        <DateTimePicker
+          value={parseIsoDate(datePicker === 'from' ? fromDate : toDate)}
+          mode="date"
+          display="calendar"
+          onChange={onAndroidDate}
+        />
+      ) : null}
+      {datePicker && Platform.OS === 'ios' ? (
+        <Modal transparent animationType="fade" onRequestClose={() => setDatePicker(null)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.driverModal}>
+              <DateTimePicker
+                value={iosDraftDate}
+                mode="date"
+                display="spinner"
+                onChange={(_, date) => { if (date) setIosDraftDate(date); }}
+              />
+              <TouchableOpacity
+                style={styles.applyBtn}
+                onPress={() => {
+                  const iso = toIsoDate(iosDraftDate);
+                  if (datePicker === 'from') setFromDate(iso);
+                  else setToDate(iso);
+                  setDatePicker(null);
+                }}
+              >
+                <Text style={styles.applyBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
+
       <AdminDriverOpsTripEditModal
         visible={editOpen}
         trip={editTrip}
@@ -781,6 +1295,71 @@ function MetricCard({
   );
 }
 
+function StripMetric({ title, value }: { title: string; value: string }) {
+  return (
+    <View style={styles.stripCell}>
+      <Text style={styles.stripLabel}>{title}</Text>
+      <Text style={styles.stripValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+function SummaryTile({
+  title,
+  value,
+  icon,
+  tint,
+  wash,
+}: {
+  title: string;
+  value: string | number;
+  icon: keyof typeof Ionicons.glyphMap;
+  tint: string;
+  wash: string;
+}) {
+  return (
+    <View style={styles.summaryTile}>
+      <View style={[styles.summaryIcon, { backgroundColor: wash }]}>
+        <Ionicons name={icon} size={18} color={tint} />
+      </View>
+      <Text style={styles.summaryValue} numberOfLines={1}>{value}</Text>
+      <Text style={styles.summaryTitle} numberOfLines={1}>{title}</Text>
+    </View>
+  );
+}
+
+function FilterField({
+  label,
+  icon,
+  value,
+  onPress,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  value: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.filterField} onPress={onPress}>
+      <Text style={styles.filterFieldLabel}>{label}</Text>
+      <View style={styles.filterFieldRow}>
+        <Ionicons name={icon} size={16} color={colors.primary} />
+        <Text style={styles.filterFieldValue} numberOfLines={1}>{value}</Text>
+        <Ionicons name="chevron-down" size={16} color={colors.gray400} />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.statCell}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{value}</Text>
+    </View>
+  );
+}
+
 function FuelRow({ fuel }: { fuel: DriverFuelRecord }) {
   const when = fuel.dateTime ? new Date(fuel.dateTime).toLocaleString() : '—';
   const veh = (fuel.vehicleNumber || '').trim();
@@ -790,6 +1369,8 @@ function FuelRow({ fuel }: { fuel: DriverFuelRecord }) {
       <Text style={styles.fuelAmt}>₹{toSafeNumber(fuel.fuelAmount).toFixed(0)} · {toSafeNumber(fuel.fuelQuantityLitres).toFixed(2)} L</Text>
       <Text style={styles.fuelTrip}>Vehicle: {veh || '—'}</Text>
       <Text style={styles.fuelTrip}>Trip: {fuel.linkedTripId ?? 'None'}</Text>
+      {fuel.loggedAfterTripEnd === true ? <Text style={styles.fuelTrip}>After trip end</Text> : null}
+      {fuel.loggedAfterTripEnd === false ? <Text style={styles.fuelTrip}>Before trip end</Text> : null}
     </View>
   );
 }
@@ -808,35 +1389,294 @@ function Pager({
   return (
     <View style={styles.pager}>
       <TouchableOpacity style={styles.pagerBtn} onPress={onPrev} disabled={page <= 0}>
-        <Text style={[styles.pagerBtnText, page <= 0 && styles.pagerBtnDisabled]}>Prev</Text>
+        <Ionicons name="chevron-back" size={18} color={page <= 0 ? colors.gray300 : colors.gray700} />
       </TouchableOpacity>
-      <Text style={styles.pagerInfo}>
-        Page {page + 1} / {totalPages}
-      </Text>
+      <View style={styles.pagerCurrent}>
+        <Text style={styles.pagerCurrentText}>{page + 1}</Text>
+      </View>
       <TouchableOpacity style={styles.pagerBtn} onPress={onNext} disabled={page + 1 >= totalPages}>
-        <Text style={[styles.pagerBtnText, page + 1 >= totalPages && styles.pagerBtnDisabled]}>Next</Text>
+        <Ionicons name="chevron-forward" size={18} color={page + 1 >= totalPages ? colors.gray300 : colors.gray700} />
       </TouchableOpacity>
+      <Text style={styles.pagerInfo}>Page {page + 1} of {totalPages}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray50 },
+  container: { flex: 1, backgroundColor: '#f4f7fb' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray200,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    backgroundColor: '#f4f7fb',
+    gap: 10,
   },
-  backBtn: { padding: 8, minWidth: 40 },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: colors.foreground },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  headerCopy: { flex: 1, minWidth: 0 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.foreground },
+  headerSub: { fontSize: 12, color: colors.gray500, marginTop: 1 },
+  headerAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 32,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  headerActionText: { fontSize: 12, fontWeight: '600', color: colors.foreground },
+  headerIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#e2e8f0',
+    marginBottom: 10,
+  },
+  stripCell: {
+    width: '33.33%',
+    backgroundColor: '#fff',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e2e8f0',
+  },
+  stripLabel: { fontSize: 10, fontWeight: '700', color: colors.gray500, textTransform: 'uppercase' },
+  stripValue: { fontSize: 15, fontWeight: '700', color: colors.foreground, marginTop: 2 },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
+  dayScroll: { flex: 1 },
+  dayStrip: { gap: 4, paddingBottom: 8, paddingRight: 8 },
+  dayCell: {
+    minWidth: 52,
+    alignItems: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  dayCellActive: { backgroundColor: colors.primary },
+  dayCellTop: { fontSize: 10, fontWeight: '700', color: colors.gray500, textTransform: 'uppercase' },
+  dayCellTopActive: { color: 'rgba(255,255,255,0.85)' },
+  dayCellNum: { fontSize: 16, fontWeight: '700', color: colors.foreground },
+  dayCellNumActive: { color: '#fff' },
+  dayCellSub: { fontSize: 10, fontWeight: '600', color: colors.gray500, textTransform: 'uppercase' },
+  dayCellSubActive: { color: 'rgba(255,255,255,0.85)' },
+  filterStrip: { gap: 8, alignItems: 'center', paddingBottom: 8 },
+  filterInput: {
+    width: 150,
+    height: 36,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff',
+    color: colors.foreground,
+    fontSize: 13,
+  },
+  searchBtn: {
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  filterChip: {
+    height: 36,
+    maxWidth: 180,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  filterChipText: { fontSize: 13, color: colors.foreground, maxWidth: 140 },
+  retryLink: { color: colors.primary, fontWeight: '700', fontSize: 13, marginTop: 6 },
+  pillTabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    backgroundColor: '#eef2f7',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 10,
+  },
+  pillTab: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  pillTabActive: { backgroundColor: '#fff' },
+  pillTabText: { fontSize: 13, fontWeight: '600', color: colors.gray500 },
+  pillTabTextActive: { color: colors.foreground },
+  webTripCard: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+  },
+  webTripTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  webTripCopy: { flex: 1, minWidth: 0 },
+  webTripCode: { fontSize: 14, fontWeight: '700', color: colors.foreground },
+  webTripWhen: { fontSize: 12, color: colors.gray500, marginTop: 2 },
+  webTripDriver: { fontSize: 14, color: colors.foreground, marginTop: 8 },
+  webTripRoute: { fontSize: 12, color: colors.gray500, marginTop: 2 },
+  webTripFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 8 },
+  webTripMeta: { flex: 1, fontSize: 12, color: colors.gray500 },
+  liveCardSelected: { borderColor: colors.primary, backgroundColor: '#eff6ff' },
+  liveShare: { fontSize: 10, fontWeight: '700', color: colors.gray500 },
+  liveShareOn: { color: '#059669' },
+  accordion: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 14,
+    ...Platform.select({
+      ios: { shadowColor: '#0f172a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 10 },
+      android: { elevation: 2 },
+    }),
+  },
+  accordionHead: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
+  accordionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accordionCopy: { flex: 1 },
+  accordionTitle: { fontSize: 15, fontWeight: '800', color: colors.foreground },
+  accordionHint: { fontSize: 12, color: colors.gray500, marginTop: 2 },
+  accordionBody: { paddingHorizontal: 12, paddingBottom: 12 },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: colors.primary, fontWeight: '800', fontSize: 15 },
   scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 32 },
-  lead: { fontSize: 13, color: colors.gray600, marginBottom: 12 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
+  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 14 },
+  summaryTile: {
+    width: '31.5%',
+    marginBottom: 10,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 12,
+    ...Platform.select({
+      ios: { shadowColor: '#0f172a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 10 },
+      android: { elevation: 2 },
+    }),
+  },
+  summaryIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  summaryValue: { fontSize: 18, fontWeight: '800', color: colors.foreground },
+  summaryTitle: { fontSize: 11, color: colors.gray500, marginTop: 2 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e8eef5',
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  searchInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: colors.foreground },
+  pairRow: { flexDirection: 'row', gap: 10 },
+  filterField: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e8eef5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  filterFieldLabel: { fontSize: 11, color: colors.gray500, marginBottom: 4 },
+  filterFieldRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  filterFieldValue: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.foreground },
+  applyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 2,
+  },
+  applyBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  resetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e8eef5',
+    paddingVertical: 14,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  resetBtnText: { color: colors.gray700, fontWeight: '700', fontSize: 15 },
+  tabRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8eef5',
+  },
+  mainTab: { flex: 1, alignItems: 'center', paddingBottom: 10, gap: 4 },
+  mainTabText: { fontSize: 11, fontWeight: '600', color: colors.gray500 },
+  mainTabTextActive: { color: colors.primary },
+  mainTabLine: { position: 'absolute', left: 12, right: 12, bottom: 0, height: 2, borderRadius: 2, backgroundColor: colors.primary },
+  statusScroll: { marginBottom: 10, backgroundColor: '#eef2f7', borderRadius: 8 },
+  statusScrollContent: { padding: 4, gap: 4, alignItems: 'center' },
+  statusChip: {
+    height: 30,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusChipActive: { backgroundColor: '#fff' },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusChipText: { fontSize: 13, fontWeight: '700', color: '#334155' },
+  statusChipTextActive: { color: colors.foreground },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: colors.foreground },
   metricsRow: { flexDirection: 'row', gap: 10, paddingVertical: 4, marginBottom: 12 },
   metricCard: {
     width: 112,
@@ -891,76 +1731,7 @@ const styles = StyleSheet.create({
   },
   csvBtnIcon: { marginRight: 6 },
   csvBtnDisabled: { opacity: 0.5 },
-  csvBtnText: { fontSize: 13, fontWeight: '700', color: colors.primary },
-  input: {
-    backgroundColor: colors.gray50,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    marginBottom: 10,
-    color: colors.foreground,
-  },
-  dateRow: { flexDirection: 'row', gap: 10 },
-  dateHalf: { flex: 1 },
-  driverPickBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.gray50,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
-  },
-  driverPickText: { fontSize: 15, color: colors.foreground },
-  filterLabel: { fontSize: 12, fontWeight: '600', color: colors.gray700, marginBottom: 8 },
-  chipsScroll: { marginBottom: 12 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.gray100,
-    marginRight: 8,
-  },
-  chipActive: { backgroundColor: '#dbeafe' },
-  chipText: { fontSize: 13, color: colors.gray700 },
-  chipTextActive: { color: colors.primary, fontWeight: '600' },
-  filterActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  applyBtn: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  applyBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  resetBtn: {
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.gray300,
-    justifyContent: 'center',
-  },
-  resetBtnText: { color: colors.gray700, fontWeight: '600' },
-  tabRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.gray100,
-  },
-  tabActive: { backgroundColor: colors.primary },
-  tabText: { fontSize: 13, color: colors.gray700, fontWeight: '600' },
-  tabTextActive: { color: '#fff' },
+  csvBtnText: { fontSize: 13, fontWeight: '700', color: colors.primary, marginLeft: 6 },
   centerPad: { paddingVertical: 24, alignItems: 'center' },
   loadingText: { marginTop: 8, color: colors.gray600, fontSize: 13 },
   chartRow: {
@@ -976,19 +1747,49 @@ const styles = StyleSheet.create({
   barDate: { fontSize: 9, color: colors.gray600, marginTop: 4 },
   emptyInline: { fontSize: 14, color: colors.gray500, fontStyle: 'italic', marginTop: 8 },
   tripCard: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray100,
-    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    ...Platform.select({
+      ios: { shadowColor: '#0f172a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 10 },
+      android: { elevation: 2 },
+    }),
   },
-  tripTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tripCode: { fontSize: 16, fontWeight: '700', color: colors.foreground },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  badgeText: { fontSize: 11, fontWeight: '700', color: '#fff', textTransform: 'capitalize' },
-  tripMeta: { fontSize: 12, color: colors.gray600, marginTop: 4 },
-  tripRoute: { fontSize: 14, color: colors.foreground, marginTop: 4 },
-  editLink: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  editIcon: { marginRight: 6 },
-  editLinkText: { fontSize: 14, fontWeight: '600', color: colors.primary },
+  tripTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tripIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tripCode: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.foreground },
+  statusPill: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 10 },
+  statusPillText: { fontSize: 12, fontWeight: '700' },
+  metaLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 8 },
+  metaDate: { fontSize: 14, fontWeight: '600', color: colors.gray700 },
+  driverName: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.foreground },
+  chevronBtn: { padding: 2 },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
+  tripRoute: { flex: 1, fontSize: 13, fontWeight: '600', color: '#1d4ed8' },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 },
+  statCell: { width: '25%', paddingVertical: 6, paddingRight: 6 },
+  statLabel: { fontSize: 10, color: colors.gray500 },
+  statValue: { fontSize: 13, fontWeight: '700', color: colors.foreground, marginTop: 2 },
+  tripFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  payBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f8fafc',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  payBadgeText: { fontSize: 12, fontWeight: '600', color: colors.gray700 },
+  menuBtn: { padding: 6 },
   fuelRow: {
     borderBottomWidth: 1,
     borderBottomColor: colors.gray100,
@@ -1002,14 +1803,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 12,
-    paddingTop: 8,
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 8,
   },
-  pagerBtn: { paddingVertical: 8, paddingHorizontal: 12 },
-  pagerBtnText: { fontSize: 14, fontWeight: '600', color: colors.primary },
-  pagerBtnDisabled: { color: colors.gray400 },
-  pagerInfo: { fontSize: 12, color: colors.gray600 },
+  pagerBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pagerCurrent: {
+    minWidth: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  pagerCurrentText: { color: '#fff', fontWeight: '800' },
+  pagerInfo: { fontSize: 13, color: colors.gray600, marginLeft: 4 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

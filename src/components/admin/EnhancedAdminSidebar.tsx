@@ -317,7 +317,7 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
   const visibleMenuItems = menuItems.filter(item => item.show);
 
   return (
-    <aside className="h-full min-h-screen w-full bg-gray-900 text-white flex flex-col">
+    <aside className="flex h-full w-full flex-col overflow-hidden bg-gray-900 text-white">
       {/* Sidebar Header/Logo */}
       <div className="h-16 flex items-center justify-between px-6 border-b border-gray-800">
         <Link to="/admin" className="hidden md:flex items-center space-x-2">
@@ -357,7 +357,7 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       </div>
       
       {/* Main Menu */}
-      <div className="flex-1 py-6 px-4 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto px-4 py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <nav className="space-y-1">
           {visibleMenuItems.map((item) => (
             <Button

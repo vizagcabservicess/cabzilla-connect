@@ -164,10 +164,10 @@ export default function BookingEditPage() {
     try {
       const bookingIdNumber = parseInt(bookingId, 10);
       
-      await bookingAPI.deleteBooking(bookingIdNumber);
+      const result = await bookingAPI.deleteBooking(bookingIdNumber);
       toast({
         title: "Booking Deleted",
-        description: "The booking has been successfully deleted",
+        description: result?.message || "The booking has been deleted, including its Google Sheet row when one was found",
       });
       navigate('/dashboard');
     } catch (error) {

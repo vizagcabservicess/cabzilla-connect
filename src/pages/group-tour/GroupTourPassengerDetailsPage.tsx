@@ -201,7 +201,7 @@ export default function GroupTourPassengerDetailsPage() {
           order_id: orderRes.order.id,
           prefill: { name: primaryName, email: contactEmail, contact: fullPhone },
           theme: { color: '#2563eb' },
-          handler: (response: RazorpayResponse) => handlePaymentSuccess(response, reservationIdToUse),
+          handler: () => undefined,
           modal: {
             ondismiss: () => {
               setPaying(false);

@@ -10,12 +10,12 @@ function rpmContextNear(text: string, idx: number, len: number): boolean {
 
 /** When several "NNN km" fragments exist, total odometer is typically the largest. */
 function resolveKmTaggedValues(vals: number[]): number {
-  const uniq = [...new Set(vals.filter((n) => n >= 1000 && n <= 9_999_999))];
+  const uniq = [...new Set(vals.filter((n) => n >= 1 && n <= 9_999_999))];
   if (uniq.length === 0) return 0;
   return Math.max(...uniq);
 }
 
-export function parseOdometerFromText(text: string): number | null {
+function normalizeOdometerText(text: string): string {
   const normalized = text.replace(/[０-９]/g, (ch) => String('０１２３４５６７８９'.indexOf(ch)));
   let collapsed = normalized.replace(/(\d),(\d{3})\b/g, '$1$2');
   for (let i = 0; i < 6; i++) {
@@ -23,7 +23,26 @@ export function parseOdometerFromText(text: string): number | null {
     if (next === collapsed) break;
     collapsed = next;
   }
-  const stripped = collapsed.replace(/\b\d{1,3}\s*-\s*\d{2,4}\b/gu, ' ');
+  return collapsed.replace(/\b\d{1,3}\s*-\s*\d{2,4}\b/gu, ' ');
+}
+
+/** The number printed next to km. Range and the odometer can both match; the larger one is the total. */
+export function kmLabeledOdometer(text: string): number | null {
+  const stripped = normalizeOdometerText(text);
+  const kmGlobal = [
+    ...stripped.matchAll(/(\d{1,3}(?:,\d{3})*|\d{1,7})\s*[.,]*\s*k\s*m?s?\b/gi),
+  ];
+  const vals = kmGlobal
+    .map((m) => parseInt(m[1]!.replace(/,/g, ''), 10))
+    .filter((n) => n >= 1 && n <= 9_999_999);
+  const picked = resolveKmTaggedValues(vals);
+  return picked > 0 ? picked : null;
+}
+
+export function parseOdometerFromText(text: string): number | null {
+  const labeled = kmLabeledOdometer(text);
+  if (labeled != null) return labeled;
+  const stripped = normalizeOdometerText(text);
 
   // "189531 km" / "189 531 km" / "189531km"
   const kmGlobal = [
@@ -90,9 +109,34 @@ export function parseOdometerFromText(text: string): number | null {
   const candidates = hasLarge ? numbers.filter((n) => n < 800 || n > 6000) : numbers;
   const pool = candidates.length > 0 ? candidates : numbers;
   const large = pool.filter((n) => n >= 10_000);
-  if (large.length > 1) {
-    // Total odometer is almost always the largest number on the cluster (not trip A/B in hundreds).
+  if (large.length > 0) {
+    // The km total is longer than the trip meter (6604 above 100305 km).
     return Math.max(...large);
   }
   return Math.max(...pool);
+}
+
+function digitCount(value: number): number {
+  return String(Math.round(value)).length;
+}
+
+/**
+ * A number printed with km is the odometer, at any length.
+ * Expo Go often gets the trip meter from the server and the full km total from photo text.
+ * The longer text reading wins in that case. A short reading is kept when it is the only one.
+ */
+export function chooseOdometerReading(
+  fromText: number | null,
+  fromVision: number | null,
+  kmLabeled: number | null = null,
+): number | null {
+  if (kmLabeled != null && kmLabeled >= 1 && (fromVision == null || kmLabeled >= fromVision)) {
+    return kmLabeled;
+  }
+  if (fromVision != null && fromText != null && fromVision !== fromText && digitCount(fromText) > digitCount(fromVision)) {
+    return fromText;
+  }
+  if (fromVision != null && fromVision >= 1) return fromVision;
+  if (fromText != null && fromText >= 1) return fromText;
+  return null;
 }

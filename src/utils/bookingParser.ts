@@ -1,5 +1,5 @@
 import { AI_VEHICLE_TYPES, emptyTripTerms, type ParsedBooking } from '@/services/api/aiBookingAPI';
-import { applyExplicitFare, applyTripTerms, parseAgentBookings, splitPickup } from '@/utils/bookingTripTerms';
+import { applyExplicitFare, applyKeptNotes, applyTripTerms, normalizeBookingPhone, parseAgentBookings, splitPickup } from '@/utils/bookingTripTerms';
 
 export type ParseResult = {
   data: ParsedBooking;
@@ -151,10 +151,7 @@ function parseCustomerName(raw: string): string {
 }
 
 function parseMobile(raw: string): string {
-  let digits = raw.replace(/\D/g, '');
-  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
-  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
-  return digits.length === 10 ? digits : '';
+  return normalizeBookingPhone(raw);
 }
 
 function tempoBySeating(seating: number): string {
@@ -441,6 +438,7 @@ export function parseBookingText(input: string): ParseResult {
 
   const agentBookings = parseAgentBookings(text, EMPTY_BOOKING());
   if (agentBookings && agentBookings.length > 0) {
+    for (const booking of agentBookings) applyKeptNotes(booking, text);
     const first = agentBookings[0];
     const errors = collectErrors(first, true).filter((code) => code !== 'cost' && code !== 'vehicle_type');
     return { data: first, bookings: agentBookings, parse_errors: errors };

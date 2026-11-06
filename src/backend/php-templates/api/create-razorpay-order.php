@@ -74,7 +74,8 @@ try {
             'amount' => $amountPaise,
             'currency' => 'INR',
             'receipt' => $receipt_id,
-            'payment_capture' => 1  // Auto capture
+            'payment_capture' => 1,  // Auto capture
+            'notes' => $booking_id ? ['booking_id' => (string)$booking_id] : new stdClass(),
         ]),
         CURLOPT_HTTPHEADER => [
             "Authorization: Basic " . base64_encode($key_id . ":" . $key_secret),
@@ -106,26 +107,52 @@ try {
         exit;
     }
     
-    // Store the order in the database (best-effort)
-    if ($dbAvailable) {
+    // Store the order in the database (best-effort). Checkout still succeeds if this fails.
+    if ($dbAvailable && !empty($order['id'])) {
         try {
             $conn = getDbConnection();
-            if ($booking_id) {
-                $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, booking_id, created_at, status) VALUES (?, ?, ?, ?, NOW(), ?)");
-                $stmt->bind_param("sisss", $order['id'], $order['amount'], $receipt_id, $booking_id, $order['status']);
-            } else {
+            $conn->query("CREATE TABLE IF NOT EXISTS razorpay_orders (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id VARCHAR(100) NOT NULL,
+                amount INT NOT NULL,
+                receipt VARCHAR(100) NULL,
+                booking_id VARCHAR(32) NULL,
+                status VARCHAR(32) NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_razorpay_order_id (order_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $bookingCol = $conn->query("SHOW COLUMNS FROM razorpay_orders LIKE 'booking_id'");
+            if ($bookingCol && $bookingCol->num_rows === 0) {
+                $conn->query("ALTER TABLE razorpay_orders ADD COLUMN booking_id VARCHAR(32) NULL");
+            }
+
+            $orderId = (string)$order['id'];
+            $orderAmount = (int)$order['amount'];
+            $orderStatus = (string)($order['status'] ?? 'created');
+            $bookingIdValue = $booking_id !== null ? (string)$booking_id : null;
+
+            $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, booking_id, created_at, status) VALUES (?, ?, ?, ?, NOW(), ?)");
+            if (!$stmt) {
+                file_put_contents(__DIR__ . '/order_debug.log', 'DB PREPARE FAILED: ' . $conn->error . PHP_EOL, FILE_APPEND);
                 $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, created_at, status) VALUES (?, ?, ?, NOW(), ?)");
-                $stmt->bind_param("siss", $order['id'], $order['amount'], $receipt_id, $order['status']);
             }
-            $stmt->execute();
-            if ($stmt->error) {
-                file_put_contents(__DIR__ . '/order_debug.log', 'DB ERROR: ' . $stmt->error . PHP_EOL, FILE_APPEND);
+            if (!$stmt) {
+                file_put_contents(__DIR__ . '/order_debug.log', 'DB PREPARE FAILED (no booking_id): ' . $conn->error . PHP_EOL, FILE_APPEND);
+            } else {
+                $withBooking = $stmt->param_count === 5;
+                if ($withBooking) {
+                    $stmt->bind_param("sisss", $orderId, $orderAmount, $receipt_id, $bookingIdValue, $orderStatus);
+                } else {
+                    $stmt->bind_param("siss", $orderId, $orderAmount, $receipt_id, $orderStatus);
+                }
+                if (!$stmt->execute()) {
+                    file_put_contents(__DIR__ . '/order_debug.log', 'DB ERROR: ' . $stmt->error . PHP_EOL, FILE_APPEND);
+                }
+                $stmt->close();
             }
-            $stmt->close();
             $conn->close();
         } catch (Throwable $e) {
             file_put_contents(__DIR__ . '/order_debug.log', 'DB EXCEPTION: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
-            // Do not fail the API if DB write fails
         }
     }
     

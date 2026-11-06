@@ -100,10 +100,12 @@ export default {
 			keyframes: {
 				'accordion-down': {
 					from: {
-						height: '0'
+						height: '0',
+						overflow: 'hidden'
 					},
 					to: {
-						height: 'var(--radix-accordion-content-height)'
+						height: 'var(--radix-accordion-content-height)',
+						overflow: 'hidden'
 					}
 				},
 				'accordion-up': {

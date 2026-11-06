@@ -20,10 +20,10 @@ import {
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { compressImageForUpload } from '../../utils/compressImageForUpload';
+import { FuelCaptureCameraModal } from '../FuelCaptureCameraModal';
 import {
   billableDutyEnd,
   canCloseOdometer,
@@ -81,22 +81,6 @@ function isParkingPrompt(duty: DriverDuty): boolean {
     && duty.dutyPlace !== 'parking'
     && duty.parkingPromptNonce,
   );
-}
-
-async function captureOdometer(): Promise<UploadPart | null> {
-  const permission = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permission.granted) {
-    Alert.alert('Camera', 'Allow camera access to take the odometer photo.');
-    return null;
-  }
-  const result = await ImagePicker.launchCameraAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: true,
-    quality: 0.85,
-  });
-  if (result.canceled || !result.assets[0]) return null;
-  const uri = await compressImageForUpload(result.assets[0].uri);
-  return { uri, name: `odometer-${Date.now()}.jpg`, type: 'image/jpeg' };
 }
 
 export function EventDriverDutyView({
@@ -627,6 +611,7 @@ function DutyCapture({
   const [ocrState, setOcrState] = useState<'idle' | 'reading' | 'found' | 'missed'>('idle');
   const [gps, setGps] = useState<GpsFix | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const missing = CHECKS.filter((item) => !checks[item.id]);
   const ready = Boolean(photo) && (starting ? missing.length === 0 : true);
 
@@ -641,9 +626,9 @@ function DutyCapture({
     return () => { cancelled = true; };
   }, []);
 
-  const takePhoto = async () => {
-    const next = await captureOdometer();
-    if (!next) return;
+  const applyOdometerPhoto = async (uri: string) => {
+    const prepared = await compressImageForUpload(uri, { geminiVisionPreset: true });
+    const next: UploadPart = { uri: prepared, name: `odometer-${Date.now()}.jpg`, type: 'image/jpeg' };
     setPhoto(next);
     setOcrState('reading');
     setOcr(null);
@@ -781,7 +766,8 @@ function DutyCapture({
           <Text style={styles.captureSub}>Photograph the odometer, then confirm the closing kilometres.</Text>
         )}
         <Text style={styles.section}>{starting ? 'Opening kilometres' : 'Closing kilometres'}</Text>
-        <TouchableOpacity style={styles.shutter} onPress={() => { void takePhoto(); }}>
+        <Text style={styles.captureSub}>Move back until the kilometres look sharp, then hold still. A soft photo cannot be read.</Text>
+        <TouchableOpacity style={styles.shutter} onPress={() => setCameraOpen(true)}>
           {photo ? (
             <Image source={{ uri: photo.uri }} style={styles.odoPreview} />
           ) : (
@@ -792,7 +778,7 @@ function DutyCapture({
           )}
         </TouchableOpacity>
         {photo ? (
-          <TouchableOpacity onPress={() => { void takePhoto(); }}>
+          <TouchableOpacity onPress={() => setCameraOpen(true)}>
             <Text style={styles.retake}>Retake photo</Text>
           </TouchableOpacity>
         ) : null}
@@ -822,6 +808,15 @@ function DutyCapture({
           )}
         </TouchableOpacity>
       </View>
+      <FuelCaptureCameraModal
+        visible={cameraOpen}
+        phase="odometer"
+        onDismiss={() => setCameraOpen(false)}
+        onCaptured={(uri) => {
+          setCameraOpen(false);
+          void applyOdometerPhoto(uri);
+        }}
+      />
     </View>
   );
 }

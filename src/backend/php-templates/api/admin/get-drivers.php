@@ -36,6 +36,67 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
+function driverPhoneKey($phone) {
+    $digits = preg_replace('/\D/', '', (string)$phone);
+    if (strlen($digits) >= 10) {
+        return substr($digits, -10);
+    }
+    return $digits;
+}
+
+function driverIsAssignable(array $row, array $inactiveUserIds, array $inactivePhones) {
+    $status = strtolower(trim((string)($row['status'] ?? '')));
+    if (in_array($status, ['offline', 'inactive', 'blocked'], true)) {
+        return false;
+    }
+    $userId = isset($row['user_id']) ? (int)$row['user_id'] : 0;
+    if ($userId > 0 && isset($inactiveUserIds[$userId])) {
+        return false;
+    }
+    $phoneKey = driverPhoneKey($row['phone'] ?? '');
+    if ($phoneKey !== '' && isset($inactivePhones[$phoneKey])) {
+        return false;
+    }
+    return true;
+}
+
+function driverDedupeKey(array $row) {
+    $phoneKey = driverPhoneKey($row['phone'] ?? '');
+    if (strlen($phoneKey) >= 10) {
+        return 'p:' . $phoneKey;
+    }
+    $emailKey = strtolower(trim((string)($row['email'] ?? '')));
+    if ($emailKey !== '') {
+        return 'e:' . $emailKey;
+    }
+    return 'id:' . (int)($row['id'] ?? 0);
+}
+
+function loadInactiveDriverUsers($conn) {
+    $inactiveUserIds = [];
+    $inactivePhones = [];
+    $usersTable = $conn->query("SHOW TABLES LIKE 'users'");
+    if (!$usersTable || $usersTable->num_rows === 0) {
+        return [$inactiveUserIds, $inactivePhones];
+    }
+    $activeColumn = $conn->query("SHOW COLUMNS FROM users LIKE 'is_active'");
+    if (!$activeColumn || $activeColumn->num_rows === 0) {
+        return [$inactiveUserIds, $inactivePhones];
+    }
+    $result = $conn->query("SELECT id, phone FROM users WHERE is_active = 0");
+    if (!$result) {
+        return [$inactiveUserIds, $inactivePhones];
+    }
+    while ($user = $result->fetch_assoc()) {
+        $inactiveUserIds[(int)$user['id']] = true;
+        $phoneKey = driverPhoneKey($user['phone'] ?? '');
+        if ($phoneKey !== '') {
+            $inactivePhones[$phoneKey] = true;
+        }
+    }
+    return [$inactiveUserIds, $inactivePhones];
+}
+
 // Function to log errors with details
 function logDriversError($message, $data = []) {
     error_log("DRIVERS ERROR: $message " . json_encode($data));
@@ -140,8 +201,23 @@ try {
                 throw new Exception("Query failed: " . $conn->error);
             }
             
-            $drivers = [];
+            list($inactiveUserIds, $inactivePhones) = loadInactiveDriverUsers($conn);
+            $chosen = [];
             while ($row = $result->fetch_assoc()) {
+                if (!driverIsAssignable($row, $inactiveUserIds, $inactivePhones)) {
+                    continue;
+                }
+                $key = driverDedupeKey($row);
+                if (!isset($chosen[$key]) || (int)$row['id'] < (int)$chosen[$key]['id']) {
+                    $chosen[$key] = $row;
+                }
+            }
+            $rows = array_values($chosen);
+            usort($rows, function ($a, $b) {
+                return strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+            });
+            $drivers = [];
+            foreach ($rows as $row) {
                 $drivers[] = [
                     'id' => (int)$row['id'],
                     'name' => $row['name'],

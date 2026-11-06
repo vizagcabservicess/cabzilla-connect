@@ -302,7 +302,7 @@ export function StartDutyCheckScreen({
                   {starting ? 'Required to start duty' : 'Required to end duty'}
                 </span>
               </div>
-              <p className="mt-0.5 text-sm text-slate-500">Take a clear photo showing the current KM reading.</p>
+              <p className="mt-0.5 text-sm text-slate-500">Fill the frame with the kilometre digits. Tap the screen to focus, wait until they look sharp, then shoot. A soft photo cannot be read.</p>
             </div>
           </div>
           <label className="mt-3 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-200 text-sm font-semibold text-[#2f6bff] transition-colors duration-200 hover:bg-blue-50">
@@ -319,7 +319,7 @@ export function StartDutyCheckScreen({
           </label>
           {previewUrl && (
             <div className="mt-3 space-y-2 transition-all duration-300 ease-out">
-              <img src={previewUrl} alt="Odometer" className="h-36 w-full rounded-xl object-cover" />
+              <img src={previewUrl} alt="Odometer" className="h-48 w-full rounded-xl bg-slate-900 object-contain" />
               <div className="text-xs text-slate-500">
                 {ocrState === 'reading' && 'Reading kilometres from the photo…'}
                 {ocrState === 'found' && ocr != null && `Detected ${ocr.toLocaleString('en-IN')} km. Confirm or edit it.`}

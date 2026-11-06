@@ -53,7 +53,8 @@ export async function verifyRazorpayPayment(
   paymentId: string,
   orderId: string,
   signature: string,
-  bookingId?: number | string
+  bookingId?: number | string,
+  amount?: number
 ): Promise<boolean> {
   try {
     const { data } = await axios.post(`${BASE}/api/verify-razorpay-payment.php`, {
@@ -61,6 +62,7 @@ export async function verifyRazorpayPayment(
       razorpay_order_id: orderId,
       razorpay_signature: signature,
       booking_id: bookingId != null ? String(bookingId) : undefined,
+      amount: amount != null ? Math.round(amount) : undefined,
     }, {
       headers: { 'Content-Type': 'application/json' },
     });

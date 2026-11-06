@@ -15,6 +15,7 @@ import {
   TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Switch,
 } from 'react-native';
 import { resetTabsAfterLogout, type TabParentForReset } from '../navigation/resetTabsAfterLogout';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +24,11 @@ import { Feather } from '@expo/vector-icons';
 import type { RootStackParamList } from '../navigation/types';
 import { colors } from '../theme/colors';
 import { useAuth } from '../providers/AuthProvider';
+import {
+  loadSuperAdminPushMute,
+  setSuperAdminPushMute,
+  subscribeSuperAdminPushMute,
+} from '../lib/superAdminPushMute';
 
 const PHONE_NUMBER = '+919966363662';
 const WHATSAPP_NUMBER = '919966363662';
@@ -68,6 +74,8 @@ export function ProfileScreen({ navigation }: Props) {
   const [editPhone, setEditPhone] = useState(user?.phone ?? '');
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
+  const [alertsMuted, setAlertsMuted] = useState(false);
+  const [muteBusy, setMuteBusy] = useState(false);
 
   useEffect(() => {
     if (showEditProfile && user) {
@@ -97,6 +105,25 @@ export function ProfileScreen({ navigation }: Props) {
       setEditError(e instanceof Error ? e.message : 'Failed to update');
     } finally {
       setEditLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.role !== 'super_admin') return;
+    const unsubscribe = subscribeSuperAdminPushMute(setAlertsMuted);
+    void loadSuperAdminPushMute();
+    return unsubscribe;
+  }, [user?.role]);
+
+  const handleToggleAlerts = async (next: boolean) => {
+    if (muteBusy) return;
+    setMuteBusy(true);
+    try {
+      await setSuperAdminPushMute(next);
+    } catch {
+      Alert.alert('Notifications', 'Could not save that setting. Check your connection and try again.');
+    } finally {
+      setMuteBusy(false);
     }
   };
 
@@ -170,6 +197,29 @@ export function ProfileScreen({ navigation }: Props) {
             <Text style={styles.quickBtnText}>WhatsApp</Text>
           </TouchableOpacity>
         </View>
+
+        {user?.role === 'super_admin' ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            <View style={styles.linkList}>
+              <View style={[styles.linkRow, styles.linkRowLast]}>
+                <View style={styles.muteCopy}>
+                  <Text style={styles.linkLabel}>Mute office alerts</Text>
+                  <Text style={styles.muteHint}>New bookings, duty updates, and fuel refills</Text>
+                </View>
+                <Switch
+                  value={alertsMuted}
+                  onValueChange={(next) => {
+                    void handleToggleAlerts(next);
+                  }}
+                  disabled={muteBusy}
+                  trackColor={{ false: colors.gray300, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         {/* Account & Bookings */}
         <ProfileSection title="Account & Bookings" links={accountLinks} navigation={navigation} />
@@ -393,6 +443,8 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     fontWeight: '500',
   },
+  muteCopy: { flex: 1, paddingRight: 12 },
+  muteHint: { fontSize: 13, color: colors.gray600, marginTop: 2 },
   logoutLabel: { color: '#dc2626' },
   socialRow: {
     flexDirection: 'row',

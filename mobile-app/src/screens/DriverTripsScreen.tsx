@@ -18,6 +18,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { driverAPI } from '../services/driverAPI';
 import { driverTripsAPI, DriverTrip } from '../services/driverTripsAPI';
+import { officeNotes } from '../lib/tripPackageLines';
 import type { RootStackParamList } from '../navigation/types';
 
 const TAB_BAR_HEIGHT = 56;
@@ -123,7 +124,9 @@ export function DriverTripsScreen() {
               <Text style={styles.emptyDesc}>You have no assigned or ongoing trips.</Text>
             </View>
           }
-          renderItem={({ item }) => (
+          renderItem={({ item }) => {
+            const notes = officeNotes(item);
+            return (
             <TouchableOpacity
               style={styles.card}
               onPress={() => navigation.navigate('DriverTripDetail', { trip: item })}
@@ -137,6 +140,9 @@ export function DriverTripsScreen() {
               </View>
               <Text style={styles.pickup} numberOfLines={1}>{item.pickupLocation}</Text>
               <Text style={styles.drop} numberOfLines={1}>{item.dropLocation || '—'}</Text>
+              {notes.length > 0 ? (
+                <Text style={styles.notes} numberOfLines={2}>{notes.join(' · ')}</Text>
+              ) : null}
               <View style={styles.cardFooter}>
                 <Text style={styles.date}>
                   {formatDate(item.pickupDate)}
@@ -148,7 +154,8 @@ export function DriverTripsScreen() {
                 <Text style={styles.passenger}>{item.passengerName}</Text>
               </View>
             </TouchableOpacity>
-          )}
+            );
+          }}
         />
       )}
     </SafeAreaView>
@@ -182,6 +189,7 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 12, fontWeight: '600', color: colors.foreground, textTransform: 'capitalize' },
   pickup: { fontSize: 14, color: colors.foreground, marginBottom: 4 },
   drop: { fontSize: 14, color: colors.gray600, marginBottom: 8 },
+  notes: { fontSize: 13, color: colors.foreground, fontWeight: '600', marginBottom: 8 },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   date: { fontSize: 12, color: colors.gray600 },
   passenger: { fontSize: 12, color: colors.gray600 },

@@ -345,6 +345,9 @@ function vth_driver_start(mysqli $conn, array $event, array $asg, array $token, 
     $fresh->execute();
     $row = $fresh->get_result()->fetch_assoc();
     $fresh->close();
+    if ($row) {
+        vth_event_notify_admin_trip($row, 'start');
+    }
     return vth_admin_duty_row($row, $conn);
 }
 
@@ -411,6 +414,9 @@ function vth_driver_end(mysqli $conn, array $event, array $asg, array $token, ar
     $fresh->execute();
     $row = $fresh->get_result()->fetch_assoc();
     $fresh->close();
+    if ($row) {
+        vth_event_notify_admin_trip($row, 'end');
+    }
     return vth_admin_duty_row($row, $conn);
 }
 

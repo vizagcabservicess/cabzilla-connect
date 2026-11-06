@@ -114,6 +114,7 @@ const EventsPage = lazy(() => import('./pages/admin/EventsPage'));
 const EventDetailPage = lazy(() => import('./pages/admin/EventDetailPage'));
 const EventDailyReportPage = lazy(() => import('./pages/admin/EventDailyReportPage'));
 const DriverPortalPage = lazy(() => import('./pages/event-duty/DriverPortalPage'));
+const VendorTripPage = lazy(() => import('./pages/vendor/VendorTripPage'));
 const EventSharePage = lazy(() => import('./pages/event-duty/EventSharePage'));
 const Index = lazy(() => import('./pages/Index'));
 const VehicleDetailPage = lazy(() => import('@/pages/VehicleDetailPage'));
@@ -239,6 +240,8 @@ const LazyRoute = ({ component: Component }: { component: React.LazyExoticCompon
 function Root() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const isStaff = user?.role === 'admin' || user?.role === 'super_admin';
 
   const getWhatsAppMessage = () => {
     const path = location.pathname;
@@ -334,9 +337,12 @@ function Root() {
     }
   }, [location.pathname]);
 
-  const publicChrome = !location.pathname.startsWith('/admin')
-    && !location.pathname.startsWith('/driver/register')
-    && !location.pathname.startsWith('/event/share');
+  const onStaffPath = location.pathname.startsWith('/admin')
+    || location.pathname.startsWith('/driver')
+    || location.pathname.startsWith('/event/share')
+    || location.pathname.startsWith('/ride/');
+  const publicChrome = !isStaff && !onStaffPath;
+  const showBuildTrip = !onStaffPath && (user?.role === 'super_admin' || !isStaff);
 
   return (
     <>
@@ -347,7 +353,7 @@ function Root() {
         </Suspense>
       </RedirectHandler>
       
-      {publicChrome && searchParams.get('search') !== '1' && searchParams.get('step') !== 'guest' && (
+      {showBuildTrip && searchParams.get('search') !== '1' && searchParams.get('step') !== 'guest' && (
         <Suspense fallback={null}>
           <MyTourListPanel />
         </Suspense>
@@ -736,6 +742,10 @@ const router = createBrowserRouter([
       {
         path: 'driver/register/:token',
         element: <LazyRoute component={DriverPortalPage} />,
+      },
+      {
+        path: 'ride/:token',
+        element: <LazyRoute component={VendorTripPage} />,
       },
       {
         path: 'event/share/:token',

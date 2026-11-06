@@ -78,6 +78,12 @@ if (!function_exists('verifyJwtToken')) {
                 error_log("JWT signature verification failed");
                 return false;
             }
+
+            $userId = (int) ($payload['user_id'] ?? $payload['userId'] ?? 0);
+            if ($userId > 0 && !jwt_user_is_active($userId)) {
+                error_log("JWT rejected for inactive user: " . $userId);
+                return false;
+            }
             
             error_log("JWT verification successful for user: " . ($payload['user_id'] ?? 'unknown'));
             return $payload;
@@ -85,6 +91,46 @@ if (!function_exists('verifyJwtToken')) {
         } catch (Exception $e) {
             error_log("JWT verification error: " . $e->getMessage());
             return false;
+        }
+    }
+}
+
+if (!function_exists('jwt_user_is_active')) {
+    function jwt_user_is_active($userId) {
+        static $cache = [];
+        $userId = (int) $userId;
+        if ($userId <= 0) {
+            return false;
+        }
+        if (array_key_exists($userId, $cache)) {
+            return $cache[$userId];
+        }
+        if (!function_exists('getDbConnection')) {
+            return true;
+        }
+        try {
+            $conn = getDbConnection();
+            $stmt = $conn->prepare('SELECT is_active FROM users WHERE id = ? LIMIT 1');
+            if (!$stmt) {
+                $conn->close();
+                $cache[$userId] = true;
+                return true;
+            }
+            $stmt->bind_param('i', $userId);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $conn->close();
+            if (!$row) {
+                $cache[$userId] = false;
+                return false;
+            }
+            $active = !isset($row['is_active']) || (int) $row['is_active'] === 1;
+            $cache[$userId] = $active;
+            return $active;
+        } catch (Throwable $e) {
+            error_log('JWT active check skipped: ' . $e->getMessage());
+            return true;
         }
     }
 }

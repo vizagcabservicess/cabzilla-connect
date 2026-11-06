@@ -843,6 +843,17 @@ export const adminExtendedAPI = {
   },
 
   /** Users - update role (mirrors web userAPI.updateUserRole) */
+  usersSetActive: async (userId: number | string, isActive: boolean) => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const res = await axios.put(`${base}/api/admin/users.php`, { userId, isActive }, {
+      headers,
+      timeout: 15000,
+    });
+    if (res.data?.status === 'error') throw new Error(res.data?.message || 'Failed to update status');
+    return res.data;
+  },
+
   usersUpdateRole: async (userId: number | string, role: string, access?: string) => {
     const base = getBase();
     const headers = await authHeaders();

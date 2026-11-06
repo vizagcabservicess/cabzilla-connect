@@ -213,7 +213,8 @@ try {
     // Handle GET request to fetch all users
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // Query to get all users with booking counts (include authProvider: google | email)
-        $baseCols = "u.id, u.name, u.email, u.phone, u.role, u.created_at";
+        @$conn->query("ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1");
+        $baseCols = "u.id, u.name, u.email, u.phone, u.role, u.created_at, COALESCE(u.is_active, 1) AS is_active";
         $hasAuthProvider = $conn->query("SHOW COLUMNS FROM users LIKE 'auth_provider'");
         if ($hasAuthProvider && $hasAuthProvider->num_rows > 0) {
             $baseCols .= ", COALESCE(u.auth_provider, 'email') as authProvider";
@@ -249,6 +250,7 @@ try {
                 'email' => $row['email'],
                 'phone' => $row['phone'],
                 'role' => $row['role'],
+                'is_active' => !isset($row['is_active']) || (int) $row['is_active'] === 1,
                 'appAccess' => $savedAccess,
                 'createdAt' => $row['created_at'],
                 'authProvider' => $row['authProvider'] ?? 'email',
@@ -268,26 +270,38 @@ try {
         
         $requestData = json_decode($requestBody, true);
         
-        if (!isset($requestData['userId']) || !isset($requestData['role'])) {
+        $hasRole = isset($requestData['role']) && $requestData['role'] !== '';
+        $hasActive = array_key_exists('isActive', $requestData) || array_key_exists('is_active', $requestData);
+        if (!isset($requestData['userId']) || (!$hasRole && !$hasActive)) {
             secureLog("Invalid request data - missing userId or role", "WARNING");
-            sendJsonResponse(['status' => 'error', 'message' => 'User ID and role are required'], 400);
+            sendJsonResponse(['status' => 'error', 'message' => 'User ID and role or active status are required'], 400);
             exit;
         }
         
-        $targetUserId = $requestData['userId'];
-        $newRole = $requestData['role'];
+        $targetUserId = (int) $requestData['userId'];
+        $newRole = $hasRole ? $requestData['role'] : null;
+        $activeInt = null;
+        if ($hasActive) {
+            $activeRaw = array_key_exists('isActive', $requestData) ? $requestData['isActive'] : $requestData['is_active'];
+            $activeInt = ($activeRaw === true || $activeRaw === 1 || $activeRaw === '1') ? 1 : 0;
+        }
         
         // Validate role
-        if (!in_array($newRole, ['guest', 'user', 'admin', 'super_admin', 'driver', 'provider', 'customer'])) {
+        if ($hasRole && !in_array($newRole, ['guest', 'user', 'admin', 'super_admin', 'driver', 'provider', 'customer'])) {
             secureLog("Invalid role: $newRole", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'Invalid role. Must be one of: "guest", "user", "admin", "super_admin", "driver", "provider", "customer"'], 400);
             exit;
         }
         
         // Prevent admins from removing their own admin status
-        if ($targetUserId == $userId && $newRole !== 'admin') {
+        if ($hasRole && $targetUserId == $userId && $newRole !== 'admin' && $newRole !== 'super_admin') {
             secureLog("Attempt to remove own admin status", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'You cannot remove your own admin status'], 403);
+            exit;
+        }
+
+        if ($hasActive && $activeInt === 0 && $targetUserId == (int) $userId) {
+            sendJsonResponse(['status' => 'error', 'message' => 'You cannot deactivate your own account'], 403);
             exit;
         }
         
@@ -303,23 +317,35 @@ try {
             exit;
         }
         
-        // Update user role
-        $stmt = $conn->prepare("UPDATE users SET role = ?, updated_at = NOW() WHERE id = ?");
-        $stmt->bind_param("si", $newRole, $targetUserId);
-        $success = $stmt->execute();
-        
-        if (!$success) {
-            secureLog("Failed to update user role: " . $conn->error, "ERROR");
-            throw new Exception("Failed to update user role: " . $conn->error);
+        if ($hasRole) {
+            $stmt = $conn->prepare("UPDATE users SET role = ?, updated_at = NOW() WHERE id = ?");
+            $stmt->bind_param("si", $newRole, $targetUserId);
+            $success = $stmt->execute();
+            if (!$success) {
+                secureLog("Failed to update user role: " . $conn->error, "ERROR");
+                throw new Exception("Failed to update user role: " . $conn->error);
+            }
+        }
+
+        if ($hasActive) {
+            @$conn->query("ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1");
+            $stmt = $conn->prepare("UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception("Failed to prepare active-status update: " . $conn->error);
+            }
+            $stmt->bind_param("ii", $activeInt, $targetUserId);
+            if (!$stmt->execute()) {
+                throw new Exception("Failed to update active status: " . $stmt->error);
+            }
         }
 
         $accessSaved = true;
-        if (isset($requestData['access']) && $requestData['access'] !== '') {
+        if ($hasRole && isset($requestData['access']) && $requestData['access'] !== '') {
             $accessSaved = vth_users_save_app_access($conn, (int) $targetUserId, (string) $requestData['access']);
         }
 
         $linkPath = __DIR__ . '/../utils/driver_user_link.php';
-        if (is_readable($linkPath)) {
+        if ($hasRole && is_readable($linkPath)) {
             try {
                 require_once $linkPath;
                 if (function_exists('syncDriverFleetLinkForUserRole')) {
@@ -334,7 +360,7 @@ try {
         }
         
         // Get updated user info
-        $stmt = $conn->prepare("SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?");
+        $stmt = $conn->prepare("SELECT id, name, email, phone, role, is_active, created_at FROM users WHERE id = ?");
         $stmt->bind_param("i", $targetUserId);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -350,14 +376,15 @@ try {
             'email' => $userData['email'],
             'phone' => $userData['phone'],
             'role' => $userData['role'],
+            'is_active' => !isset($userData['is_active']) || (int) $userData['is_active'] === 1,
             'appAccess' => $accessSaved ? $updatedAccess : 'full',
             'createdAt' => $userData['created_at']
         ];
         
-        secureLog("Successfully updated user role for user $targetUserId to $newRole", "INFO");
+        secureLog("Successfully updated user $targetUserId", "INFO");
         sendJsonResponse([
             'status' => 'success',
-            'message' => 'User role updated successfully',
+            'message' => $hasActive && !$hasRole ? 'User status updated successfully' : 'User role updated successfully',
             'accessSaved' => $accessSaved,
             'data' => $updatedUser,
         ]);

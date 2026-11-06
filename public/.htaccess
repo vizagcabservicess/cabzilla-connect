@@ -25,8 +25,14 @@ RewriteRule ^vehicle/tempo-traveller/?$ /index-vehicle-tempo-traveller.html [L]
 # Force HTTPS redirect (optional - only if you want to force HTTPS)
 # RewriteCond %{HTTPS} off
 # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# Full policy HTML for every client, including Play Console. Must run before the crawler rewrite.
+RewriteRule ^privacy-policy/?$ /privacy-policy.html [L]
+RewriteRule ^privacy/?$ /privacy-policy.html [L]
+# Vendor driver links. /vendor/ is the Composer folder, so the public page is /ride/.
+RewriteRule ^vendor/trip/([a-f0-9]{64})/?$ /ride/$1 [R=302,L]
+RewriteRule ^ride/ /index.html [L]
 RewriteCond %{HTTP_USER_AGENT} (googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|slackbot|discordbot|ahrefsbot|semrushbot|mozbot|rogerbot|dotbot|ia_archiver|archive\.org_bot|ia_archiver-web\.archive\.org|screamingfrog|sitebulb|deepcrawl|botify|oncrawl|seolyzer|seoptimer|seositecheckup|seochecker|seoanalyzer|seotools|seomoz|semrush|ahrefs|majestic|sistrix|searchmetrics|conductor|brightedge|seoclarity|seoprofiler|seopanel|bot|crawler|spider|scraper|indexer|fetcher|Mozilla/5\.0.*compatible.*Googlebot) [NC]
-RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php|\.well-known/assetlinks\.json|assetlinks\.php)$
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|privacy-policy\.html|seo-handler\.php|\.well-known/assetlinks\.json|assetlinks\.php)$
 RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php|\.well-known)/
 # Bots: seo-handler.php serves unique HTML for /vehicle/*, tempo URLs, etc. (see seo-handler.php thin-page block)
 RewriteRule ^(.*)$ /seo-handler.php?url=$1 [L,QSA]
@@ -234,6 +240,7 @@ RewriteRule ^api/driver/trips/?$ /api/driver/trips.php [L,NC,QSA]
 RewriteRule ^api/driver/trip-status/?$ /api/driver/trip-status.php [L,NC,QSA]
 RewriteRule ^api/driver/odometer-readings/?$ /api/driver/odometer-readings.php [L,NC,QSA]
 RewriteRule ^api/driver/location-updates/?$ /api/driver/location-updates.php [L,NC,QSA]
+RewriteRule ^api/vendor/trip-link/?$ /api/vendor/trip-link.php [L,NC,QSA]
 RewriteRule ^api/driver/fuel-entry/?$ /api/driver/fuel-entry.php [L,NC,QSA]
 RewriteRule ^api/driver/upload-fuel-odometer/?$ /api/driver/upload-fuel-odometer.php [L,NC,QSA]
 RewriteRule ^api/driver/fuel-odometer-history/?$ /api/driver/fuel-odometer-history.php [L,NC,QSA]

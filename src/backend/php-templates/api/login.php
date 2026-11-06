@@ -92,7 +92,7 @@ try {
     $conn = getDbConnection();
     
     // Check if user exists
-    $stmt = $conn->prepare("SELECT id, name, email, phone, password, role FROM users WHERE email = ?");
+    $stmt = $conn->prepare("SELECT id, name, email, phone, password, role, is_active FROM users WHERE email = ?");
     if (!$stmt) {
         logLoginInfo("Statement preparation failed", ['error' => $conn->error]);
         sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
@@ -178,6 +178,11 @@ try {
         // Special case for testing/development
         if (isset($_GET['dev_mode']) && $_GET['dev_mode'] === 'true' && 
             ($password === 'admin123' || $password === 'password' || $password === 'test123')) {
+
+            if (isset($user['is_active']) && (int) $user['is_active'] !== 1) {
+                logLoginInfo("Login blocked - account inactive", ['email' => $email]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Account is inactive'], 403);
+            }
                 
             logLoginInfo("Dev mode login with bypass password", ['email' => $email]);
             
@@ -222,6 +227,11 @@ try {
         }
         
         sendJsonResponse(['status' => 'error', 'message' => 'Invalid email or password'], 401);
+    }
+
+    if (isset($user['is_active']) && (int) $user['is_active'] !== 1) {
+        logLoginInfo("Login blocked - account inactive", ['email' => $email]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Account is inactive'], 403);
     }
     
     // Remove password from user data

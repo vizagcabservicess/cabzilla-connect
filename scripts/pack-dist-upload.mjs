@@ -55,6 +55,11 @@ if (!/connect-src[^"]*https:\/\/vizagup\.com/.test(indexRaw)) {
 if (!/wss:\/\/vizagup\.com/.test(indexRaw)) {
   fail('dist/index.html CSP is missing wss://vizagup.com. Fix root index.html and rebuild.');
 }
+if (!/connect-src[^"]*https:\/\/places\.googleapis\.com/.test(indexRaw)) {
+  fail(
+    'dist/index.html CSP is missing https://places.googleapis.com in connect-src. Fix root index.html and rebuild.',
+  );
+}
 
 const assetsDir = path.join(dist, 'assets');
 if (!fs.existsSync(assetsDir)) fail('dist/assets/ missing.');

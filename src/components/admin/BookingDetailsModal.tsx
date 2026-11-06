@@ -10,6 +10,7 @@ interface BookingDetailsModalProps {
   onClose: () => void;
   onEdit: (updatedData: Partial<Booking>) => Promise<void>;
   onAssignDriver: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
+  onRemoveAssignment?: () => Promise<void>;
   onCancel: () => Promise<void>;
   onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any) => Promise<any>;
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
@@ -23,6 +24,7 @@ export function BookingDetailsModal({
   onClose,
   onEdit,
   onAssignDriver,
+  onRemoveAssignment,
   onCancel,
   onGenerateInvoice,
   onStatusChange,
@@ -309,6 +311,7 @@ export function BookingDetailsModal({
             onClose={onClose}
             onEdit={onEdit}
             onAssignDriver={onAssignDriver}
+            onRemoveAssignment={onRemoveAssignment}
             onCancel={onCancel}
             onGenerateInvoice={onGenerateInvoice}
             onStatusChange={onStatusChange}

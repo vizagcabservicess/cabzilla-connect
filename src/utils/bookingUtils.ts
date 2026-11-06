@@ -47,6 +47,12 @@ export function getEffectiveBookingStatus(booking: EffectiveStatusInput): Bookin
   return 'pending';
 }
 
+/** Guest can be sent driver and vehicle details only after the trip is assigned. */
+export function bookingCanShareAssignedDriver(status: string | null | undefined): boolean {
+  const normalized = normalizeStatusToken(String(status ?? ''));
+  return normalized === 'assigned' || normalized === 'in_progress' || normalized === 'started' || normalized === 'completed';
+}
+
 /**
  * Determines if a booking is editable based on its status
  * @param status - The current status of the booking

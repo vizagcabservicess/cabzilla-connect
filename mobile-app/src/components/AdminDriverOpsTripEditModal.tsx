@@ -35,10 +35,22 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
-function parseIsoToDate(iso: string | null | undefined): Date {
-  if (!iso) return new Date();
+function parseIsoToDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const match = iso.trim().match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (match) {
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5]),
+      0,
+      0,
+    );
+  }
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? new Date() : d;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function toMysqlDateTime(d: Date): string {
@@ -63,6 +75,8 @@ type Props = {
 export function AdminDriverOpsTripEditModal({ visible, trip, onClose, onSaved }: Props) {
   const [journeyDate, setJourneyDate] = useState(new Date());
   const [completedDate, setCompletedDate] = useState(new Date());
+  const [journeyTouched, setJourneyTouched] = useState(false);
+  const [completedTouched, setCompletedTouched] = useState(false);
   const [showJourneyPicker, setShowJourneyPicker] = useState(false);
   const [showCompletedPicker, setShowCompletedPicker] = useState(false);
   const [driverName, setDriverName] = useState('');
@@ -89,8 +103,10 @@ export function AdminDriverOpsTripEditModal({ visible, trip, onClose, onSaved }:
 
   useEffect(() => {
     if (!trip || !visible) return;
-    setJourneyDate(parseIsoToDate(trip.startTime));
-    setCompletedDate(parseIsoToDate(trip.completedAt || trip.endTime || trip.startTime));
+    setJourneyTouched(false);
+    setCompletedTouched(false);
+    setJourneyDate(parseIsoToDate(trip.startTime) ?? new Date());
+    setCompletedDate(parseIsoToDate(trip.completedAt || trip.endTime) ?? parseIsoToDate(trip.startTime) ?? new Date());
     setDriverName(trip.driverName || '');
     setVehicleNumber(trip.vehicleNumber || '');
     setPickupLocation(trip.pickupLocation || '');
@@ -121,7 +137,9 @@ export function AdminDriverOpsTripEditModal({ visible, trip, onClose, onSaved }:
     setSaving(true);
     setError(null);
     try {
-      const pickupSql = toMysqlDateTime(journeyDate);
+      const pickupSql = journeyTouched
+        ? toMysqlDateTime(journeyDate)
+        : toMysqlDateTime(parseIsoToDate(trip.startTime) ?? journeyDate);
       if (!pickupSql) {
         setError('Journey date & time is required');
         setSaving(false);
@@ -140,7 +158,10 @@ export function AdminDriverOpsTripEditModal({ visible, trip, onClose, onSaved }:
         totalAmount: parseFloat(totalAmount) || 0,
         paymentType: paymentType.trim(),
       };
-      const comp = toMysqlDateTime(completedDate);
+      const savedCompleted = parseIsoToDate(trip.completedAt || trip.endTime);
+      const comp = completedTouched
+        ? toMysqlDateTime(completedDate)
+        : (savedCompleted ? toMysqlDateTime(savedCompleted) : '');
       payload.completedAt = comp || null;
       const cTrim = collected.trim();
       if (cTrim === '') {
@@ -217,7 +238,10 @@ export function AdminDriverOpsTripEditModal({ visible, trip, onClose, onSaved }:
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(_, d) => {
                   if (Platform.OS === 'android') setShowJourneyPicker(false);
-                  if (d) setJourneyDate(d);
+                  if (d) {
+                    setJourneyTouched(true);
+                    setJourneyDate(d);
+                  }
                 }}
               />
               {Platform.OS === 'ios' && (
@@ -266,9 +290,10 @@ export function AdminDriverOpsTripEditModal({ visible, trip, onClose, onSaved }:
             </View>
           </View>
 
+          <Text style={styles.hint}>Saving replaces the photo reading, so the trip list and duty slip use these numbers.</Text>
+
           <Text style={styles.label}>Distance (km)</Text>
           <TextInput style={styles.input} value={distanceKm} onChangeText={setDistanceKm} keyboardType="decimal-pad" />
-          <Text style={styles.hint}>Stored on booking; list may show odometer-derived km when higher.</Text>
 
           <Text style={styles.label}>Trip end (completed at)</Text>
           <TouchableOpacity style={styles.dateBtn} onPress={() => setShowCompletedPicker(true)}>
@@ -282,7 +307,10 @@ export function AdminDriverOpsTripEditModal({ visible, trip, onClose, onSaved }:
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(_, d) => {
                   if (Platform.OS === 'android') setShowCompletedPicker(false);
-                  if (d) setCompletedDate(d);
+                  if (d) {
+                    setCompletedTouched(true);
+                    setCompletedDate(d);
+                  }
                 }}
               />
               {Platform.OS === 'ios' && (

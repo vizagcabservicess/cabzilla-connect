@@ -33,7 +33,9 @@ import {
 import {
   formatBookingStatus,
   getEffectiveBookingStatus,
+  bookingCanShareAssignedDriver,
 } from '../utils/bookingStatusDisplay';
+import { generateDriverAssignmentMessage } from '../services/adminWhatsAppMessages';
 
 type BookingDetailRoute = RouteProp<RootStackParamList, 'BookingDetail'>;
 
@@ -437,6 +439,31 @@ export function BookingDetailScreen() {
     Linking.openURL(url).catch(() => Alert.alert('Error', 'Could not open WhatsApp.'));
   };
 
+  const canShareAssignedDriver = bookingCanShareAssignedDriver(effectiveStatus);
+
+  const handleShareDriverWithGuest = () => {
+    if (!canShareAssignedDriver) return;
+    const waDigits = passengerPhoneE164Digits(passengerPhone, passengerCountryCode);
+    if (!waDigits) {
+      Alert.alert('WhatsApp', 'Add the guest phone number before sharing driver details.');
+      return;
+    }
+    const text = generateDriverAssignmentMessage({
+      ...(b as object),
+      passengerName,
+      passengerPhone,
+      passengerCountryCode,
+      driverName,
+      driverPhone,
+      vehicleNumber,
+      id: bookingId,
+      bookingNumber,
+    } as never);
+    Linking.openURL(`https://wa.me/${waDigits}?text=${encodeURIComponent(text)}`).catch(() =>
+      Alert.alert('Error', 'Could not open WhatsApp.')
+    );
+  };
+
   const handleShareDetails = async () => {
     try {
       await Share.share({
@@ -607,7 +634,7 @@ export function BookingDetailScreen() {
           <DetailRow icon="mail" label="Email" value={passengerEmail} />
         </View>
 
-        {(driverName || driverPhone || vehicleNumber) && (
+        {(isAdmin || driverName || driverPhone || vehicleNumber) && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Driver & Vehicle</Text>
             <DetailRow icon="user" label="Driver" value={driverName} />
@@ -618,6 +645,18 @@ export function BookingDetailScreen() {
               onPress={driverPhone ? () => handleCall(driverPhone) : undefined}
             />
             <DetailRow icon="hash" label="Vehicle No" value={vehicleNumber} />
+            {isAdmin && (
+            <TouchableOpacity
+              style={[styles.driverShareBtn, !canShareAssignedDriver && styles.driverShareBtnDisabled]}
+              onPress={handleShareDriverWithGuest}
+              disabled={!canShareAssignedDriver}
+            >
+              <Feather name="message-circle" size={18} color={canShareAssignedDriver ? '#fff' : '#9ca3af'} />
+              <Text style={[styles.driverShareBtnText, !canShareAssignedDriver && styles.driverShareBtnTextDisabled]}>
+                WhatsApp driver details to guest
+              </Text>
+            </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -901,6 +940,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   adminFlowText: { fontSize: 15, fontWeight: '600', color: colors.foreground },
+  driverShareBtn: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#25D366',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  driverShareBtnDisabled: { backgroundColor: '#e5e7eb' },
+  driverShareBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  driverShareBtnTextDisabled: { color: '#9ca3af' },
   sendToCustomerCard: {
     backgroundColor: '#fff',
     borderRadius: 12,

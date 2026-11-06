@@ -13,18 +13,21 @@ import {
   Vibration,
   ActivityIndicator,
   ScrollView,
+  AppState,
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import Constants from 'expo-constants';
 import { CommonActions } from '@react-navigation/native';
 import { useAuth } from '../providers/AuthProvider';
 import { navigationRef } from '../navigation/navigationRef';
 import { driverTripsAPI } from '../services/driverTripsAPI';
+import { ensureTripAssignmentNotificationChannel } from '../services/pushNotificationService';
 import {
-  ensureTripAssignmentNotificationChannel,
-  TRIP_ASSIGNMENT_CHANNEL_ID,
-} from '../services/pushNotificationService';
+  clearPendingLockTrip,
+  readPendingLockTrip,
+  startTripAssignmentChimes,
+  stopTripAssignmentChimes,
+} from '../lib/tripAssignmentAlarm';
 import { colors } from '../theme/colors';
 
 /** Dev + EAS internal: set EXPO_PUBLIC_SHOW_TRIP_ASSIGNMENT_DEBUG=1 to see why the overlay did/didn't open */
@@ -90,6 +93,7 @@ function parseTripAssignedData(
   data: Record<string, unknown> | undefined
 ): Pick<PendingAssignment, 'bookingId' | 'bookingNumber'> | null {
   if (!data) return null;
+  if (String(data.alarm ?? '') === 'chime') return null;
   const typeNorm = String(data.type ?? '').trim();
   if (typeNorm !== 'trip_assigned') return null;
 
@@ -159,7 +163,6 @@ export function DriverTripAssignmentOverlay() {
   const [opening, setOpening] = useState(false);
   const [, setDebugTick] = useState(0);
   const debugLinesRef = useRef<string[]>([]);
-  const scheduledIdRef = useRef<string | null>(null);
   const vibrationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const pushDebug = useCallback((line: string) => {
@@ -179,19 +182,16 @@ export function DriverTripAssignmentOverlay() {
       clearInterval(vibrationIntervalRef.current);
       vibrationIntervalRef.current = null;
     }
-    const sid = scheduledIdRef.current;
-    scheduledIdRef.current = null;
-    if (sid) {
-      try {
-        await Notifications.cancelScheduledNotificationAsync(sid);
-      } catch {
-        /* ignore */
-      }
-    }
+    await stopTripAssignmentChimes();
   }, []);
 
   const startAlarm = useCallback(async (p: PendingAssignment) => {
-    await stopAlarm();
+    Vibration.cancel();
+    if (vibrationIntervalRef.current) {
+      clearInterval(vibrationIntervalRef.current);
+      vibrationIntervalRef.current = null;
+    }
+    await stopTripAssignmentChimes(false);
     await ensureTripAssignmentNotificationChannel();
 
     if (Platform.OS === 'android') {
@@ -203,32 +203,17 @@ export function DriverTripAssignmentOverlay() {
       }, 1400);
     }
 
-    const repeatSeconds = Platform.OS === 'ios' ? 60 : 12;
     try {
-      const nid = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: p.title,
-          body: p.body,
-          sound: true,
-          data: {
-            type: 'trip_assigned',
-            bookingId: p.bookingId != null ? String(p.bookingId) : '',
-            bookingNumber: p.bookingNumber,
-          },
-          ...(Platform.OS === 'android' ? { vibrate: [0, 500, 200, 500] } : {}),
-        },
-        trigger: {
-          type: SchedulableTriggerInputTypes.TIME_INTERVAL,
-          seconds: repeatSeconds,
-          repeats: true,
-          ...(Platform.OS === 'android' ? { channelId: TRIP_ASSIGNMENT_CHANNEL_ID } : {}),
-        },
-      });
-      scheduledIdRef.current = nid;
+      await startTripAssignmentChimes(
+        p.title,
+        p.body,
+        p.bookingId != null ? String(p.bookingId) : '',
+        p.bookingNumber
+      );
     } catch (e) {
       if (__DEV__) console.warn('[trip assignment] schedule repeat failed', e);
     }
-  }, [stopAlarm]);
+  }, []);
 
   const setPendingFromNotification = useCallback(
     (notification: Notifications.Notification, source: string) => {
@@ -271,13 +256,37 @@ export function DriverTripAssignmentOverlay() {
         }
       });
     };
+    const openStoredTrip = (label: string) => {
+      void readPendingLockTrip().then((stored) => {
+        if (!stored) return;
+        const bookingIdNumber = Number(stored.bookingId);
+        const bookingId = Number.isFinite(bookingIdNumber) && bookingIdNumber > 0 ? bookingIdNumber : null;
+        const bookingNumber = stored.bookingNumber || (bookingId != null ? `#${bookingId}` : '');
+        if (bookingNumber === '') return;
+        pushDebug(`${label}: OPEN stored ${bookingNumber}`);
+        setPending((prev) => (prev?.bookingNumber === bookingNumber ? prev : {
+          bookingId,
+          bookingNumber,
+          title: stored.title,
+          body: stored.body,
+        }));
+      });
+    };
     openFromLastResponse('coldStart-0');
+    openStoredTrip('stored-0');
     const timers = [600, 2000, 4500, 8000].map((ms) =>
-      setTimeout(() => openFromLastResponse(`coldStart-${ms}`), ms)
+      setTimeout(() => {
+        openFromLastResponse(`coldStart-${ms}`);
+        openStoredTrip(`stored-${ms}`);
+      }, ms)
     );
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') openStoredTrip('resume');
+    });
 
     return () => {
       for (const t of timers) clearTimeout(t);
+      appStateSub.remove();
       sub.remove();
       subTap.remove();
     };
@@ -311,6 +320,7 @@ export function DriverTripAssignmentOverlay() {
         return;
       }
       await stopAlarm();
+      await clearPendingLockTrip();
       setPending(null);
 
       let tries = 0;
@@ -336,6 +346,7 @@ export function DriverTripAssignmentOverlay() {
 
   const onMuteLater = useCallback(async () => {
     await stopAlarm();
+    await clearPendingLockTrip();
     setPending(null);
   }, [stopAlarm]);
 
@@ -367,7 +378,7 @@ export function DriverTripAssignmentOverlay() {
             <Text style={styles.badge}>NEW TRIP</Text>
             <Text style={styles.title}>{pending?.title ?? 'Trip assigned'}</Text>
             <Text style={styles.body}>{pending?.body}</Text>
-            <Text style={styles.hint}>Sound and alerts repeat until you open the trip.</Text>
+            <Text style={styles.hint}>The phone keeps ringing, even on the lock screen, until you open the trip.</Text>
             <TouchableOpacity
               style={[styles.btnPrimary, opening && styles.btnDisabled]}
               onPress={() => void navigateToTrip()}

@@ -783,17 +783,31 @@ export const driverTripsAPI = {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
-    const response = await axios.get(`${base}/api/driver/trips.php?bookingId=${encodeURIComponent(String(bookingId))}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 15000,
-    });
-    const data = response.data;
-    if (data?.status !== 'success' || data?.trip == null) {
-      throw new Error(data?.message || 'Failed to load trip');
+    let response;
+    try {
+      response = await axios.get(`${base}/api/driver/trips.php?bookingId=${encodeURIComponent(String(bookingId))}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+        validateStatus: () => true,
+      });
+    } catch {
+      throw new Error('Could not reach the server');
     }
-    return mapApiTripToDriverTrip(data.trip as Record<string, unknown>);
+    const data = response.data as { status?: string; message?: string; trip?: unknown; trips?: unknown } | string | null;
+    if (!data || typeof data !== 'object') {
+      throw new Error('Failed to load trip');
+    }
+    if (data.status === 'success' && data.trip && typeof data.trip === 'object') {
+      return mapApiTripToDriverTrip(data.trip as Record<string, unknown>);
+    }
+    if (data.status === 'success' && Array.isArray(data.trips)) {
+      const rows = data.trips.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object');
+      const match = rows.find((row) => Number(row.id) === bookingId) ?? (rows.length === 1 ? rows[0] : undefined);
+      if (match) return mapApiTripToDriverTrip(match);
+    }
+    throw new Error(data.message || 'Failed to load trip');
   },
 };

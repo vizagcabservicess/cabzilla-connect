@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { getResolvedApiOrigin } from '../config';
 import { authAPI } from './authAPI';
-import type { DriverDashboardData, DriverDashboardFilters, DriverDashboardTrip, DriverFuelRecord } from '../types/driverDashboard';
+import type { DriverDashboardData, DriverDashboardFilters, DriverDashboardTrip, DriverFuelRecord, OpsTripStatus, TripStatus } from '../types/driverDashboard';
 import { deriveTripDurationHours } from '../utils/tripDurationFromStamps';
 
 function toNum(v: unknown): number {
@@ -10,10 +10,37 @@ function toNum(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function optionalCoord(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function toStringSafe(v: unknown, fallback = ''): string {
   if (typeof v === 'string') return v;
   if (v == null) return fallback;
   return String(v);
+}
+
+function parseTripStatus(value: unknown): TripStatus {
+  if (value === 'completed' || value === 'in_progress' || value === 'assigned') return value;
+  return 'assigned';
+}
+
+function parseOpsStatus(value: unknown, coarse: TripStatus): OpsTripStatus {
+  switch (value) {
+    case 'assigned':
+    case 'receipt_accepted':
+    case 'in_progress':
+    case 'day_closed':
+    case 'completed':
+    case 'cancelled':
+      return value;
+    default:
+      if (coarse === 'completed') return 'completed';
+      if (coarse === 'in_progress') return 'in_progress';
+      return 'assigned';
+  }
 }
 
 function normalizeFuelItem(raw: Record<string, unknown>): DriverFuelRecord {
@@ -26,6 +53,12 @@ function normalizeFuelItem(raw: Record<string, unknown>): DriverFuelRecord {
     fuelQuantityLitres: toNum(raw.fuelQuantityLitres ?? raw.fuel_quantity_litres ?? raw.quantity),
     vehicleNumber: raw.vehicleNumber != null ? String(raw.vehicleNumber) : raw.vehicle_number != null ? String(raw.vehicle_number) : null,
     linkedTripId: (raw.linkedTripId ?? raw.linked_trip_id ?? raw.booking_id ?? null) as number | null,
+    loggedAfterTripEnd: (() => {
+      const flag = raw.loggedAfterTripEnd ?? raw.logged_after_trip_end;
+      if (flag === true || flag === 1 || flag === '1') return true;
+      if (flag === false || flag === 0 || flag === '0') return false;
+      return null;
+    })(),
     pumpDisplayTotal:
       pump != null && pump !== '' ? toNum(pump) : null,
     amountVariance: amtVar != null && amtVar !== '' ? toNum(amtVar) : null,
@@ -50,6 +83,7 @@ function buildQuery(filters?: DriverDashboardFilters): string {
   if (typeof filters?.driverId === 'number' && filters.driverId > 0) {
     searchParams.set('driver_id', String(filters.driverId));
   }
+  if (filters?.vehicleNumber) searchParams.set('vehicle', filters.vehicleNumber);
   if (typeof filters?.tripLimit === 'number') searchParams.set('trip_limit', String(filters.tripLimit));
   if (typeof filters?.tripOffset === 'number') searchParams.set('trip_offset', String(filters.tripOffset));
   if (typeof filters?.fuelLimit === 'number') searchParams.set('fuel_limit', String(filters.fuelLimit));
@@ -89,11 +123,17 @@ function mapDashboardTripItem(raw: Record<string, unknown>): DriverDashboardTrip
     cabType: toStringSafe(t.cabType ?? t.cab_type),
     fuelSpend: toNum(t.fuelSpend ?? t.fuel_spend),
     fuelLitres: toNum(t.fuelLitres ?? t.fuel_litres ?? t.fuel_quantity),
+    fuelTiming: (() => {
+      const raw = t.fuelTiming ?? t.fuel_timing;
+      if (raw === 'before' || raw === 'after' || raw === 'mixed') return raw;
+      return null;
+    })(),
     startTime,
     endTime,
     pickupLocation: toStringSafe(t.pickupLocation ?? t.pickup_location ?? t.pickup),
     dropLocation: toStringSafe(t.dropLocation ?? t.drop_location ?? t.drop),
-    status: (t.status ?? 'assigned') as DriverDashboardTrip['status'],
+    status: parseTripStatus(t.status),
+    opsStatus: parseOpsStatus(t.opsStatus ?? t.ops_status, parseTripStatus(t.status)),
     bookingStatusRaw: toStringSafe(t.bookingStatusRaw ?? t.booking_status_raw ?? t.status ?? ''),
     completedAt,
     storedDistanceKm: toNum(t.storedDistanceKm ?? t.stored_distance_km ?? t.distance_km),
@@ -118,6 +158,9 @@ function mapDashboardTripItem(raw: Record<string, unknown>): DriverDashboardTrip
     pickupMapUrl: toStringSafe(t.pickupMapUrl ?? t.pickup_map_url),
     pickupLat: t.pickupLat != null && t.pickupLat !== '' ? toNum(t.pickupLat) : t.pickup_lat != null && t.pickup_lat !== '' ? toNum(t.pickup_lat) : null,
     pickupLng: t.pickupLng != null && t.pickupLng !== '' ? toNum(t.pickupLng) : t.pickup_lng != null && t.pickup_lng !== '' ? toNum(t.pickup_lng) : null,
+    liveLat: optionalCoord(t.liveLat ?? t.live_lat),
+    liveLng: optionalCoord(t.liveLng ?? t.live_lng),
+    liveTrackedAt: toStringSafe(t.liveTrackedAt ?? t.live_tracked_at) || null,
     tripTerms: parseTripTerms(t.tripTerms ?? t.trip_terms),
   };
 }
@@ -160,12 +203,14 @@ export const driverDashboardAPI = {
     const cacheKey = await dashboardCacheKey();
     const user = await authAPI.getStoredUser();
     const driverView = user?.role === 'driver';
+    const skipCache = filters?.skipCache === true;
+    const queryFilters = filters ? { ...filters, skipCache: undefined } : undefined;
     if (process.env.EXPO_PUBLIC_SHOW_TRIP_ASSIGNMENT_DEBUG === '1') {
       console.warn('[driverDashboard] GET', `${base || '(relative)'}/api/driver/dashboard.php`);
     }
 
     try {
-      const response = await axios.get(`${base}/api/driver/dashboard.php${buildQuery(filters)}`, {
+      const response = await axios.get(`${base}/api/driver/dashboard.php${buildQuery(queryFilters)}`, {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 20000,
       });
@@ -197,9 +242,12 @@ export const driverDashboardAPI = {
         },
       };
       const visible = driverView ? withoutCompletedTrips(mapped) : mapped;
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(visible));
+      if (!skipCache) {
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(visible));
+      }
       return visible;
     } catch (error) {
+      if (skipCache) throw error;
       const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached) as DriverDashboardData;

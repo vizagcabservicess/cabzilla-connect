@@ -2,7 +2,7 @@
  * Admin Fuel - dynamic fuel management matching web FuelManagementPage
  * Fuel prices, stats, records list, add/edit/delete
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -50,10 +50,36 @@ type FuelRecord = {
   calculatedMileage?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  driverName?: string | null;
+  loggedAfterTripEnd?: boolean | null;
 };
 
 const FUEL_TYPES = ['Petrol', 'Diesel', 'CNG', 'Electric'] as const;
 const PAYMENT_METHODS = ['Cash', 'Card', 'Company', 'Customer'] as const;
+
+const DATE_STRIP_PAST_DAYS = 180;
+const DATE_STRIP_FUTURE_DAYS = 21;
+
+function todayIso(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function shiftIsoDay(iso: string, days: number): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  date.setDate(date.getDate() + days);
+  const nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+  const nextDay = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${nextMonth}-${nextDay}`;
+}
+
+function dateFromIso(iso: string): Date {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
 
 function parseNum(val: unknown): number {
   if (val == null) return 0;
@@ -105,6 +131,16 @@ function normalizeFuelRecord(r: Record<string, unknown>): FuelRecord {
     paymentMethod: String(r.paymentMethod ?? r.payment_method ?? 'Cash'),
     vehicleName: (r.vehicleName ?? r.vehicle_name) as string | undefined,
     vehicleNumber: (r.vehicleNumber ?? r.vehicle_number) as string | undefined,
+    driverName: (() => {
+      const name = r.driverName ?? r.driver_name;
+      return typeof name === 'string' && name.trim() !== '' ? name.trim() : null;
+    })(),
+    loggedAfterTripEnd: (() => {
+      const flag = r.loggedAfterTripEnd ?? r.logged_after_trip_end;
+      if (flag === true || flag === 1 || flag === '1') return true;
+      if (flag === false || flag === 0 || flag === '0') return false;
+      return null;
+    })(),
     latitude:
       r.latitude != null && r.latitude !== '' && !Number.isNaN(parseNum(r.latitude)) ? parseNum(r.latitude) : null,
     longitude:
@@ -188,14 +224,9 @@ export function AdminFuelScreen() {
   const [formLongitude, setFormLongitude] = useState('');
   const [saving, setSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [fuelPicker, setFuelPicker] = useState<null | 'vehicle' | 'fuel' | 'payment'>(null);
   const [showRangeStartPicker, setShowRangeStartPicker] = useState(false);
   const [showRangeEndPicker, setShowRangeEndPicker] = useState(false);
-
-  const selectDateRange = () => {
-    setDateRangeType('custom');
-    if (!startDate) setStartDate(subDays(new Date(), 30));
-    if (!endDate) setEndDate(new Date());
-  };
 
   const load = useCallback(async () => {
     try {
@@ -222,14 +253,25 @@ export function AdminFuelScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const getEffectiveQuantity = (r: FuelRecord) => {
+    const q = r.quantity ?? 0;
+    if (q > 0) return q;
+    const cost = r.totalCost ?? 0;
+    const price = r.pricePerUnit ?? 0;
+    if (cost > 0 && price > 0) return cost / price;
+    return 0;
+  };
+
   const filteredRecords = React.useMemo(() => {
-    let list = [...records];
+    const withMileage = calculateMileage(records, getEffectiveQuantity);
+    let list = withMileage;
     if (searchTerm.trim()) {
       const s = searchTerm.toLowerCase();
       list = list.filter(
         (r) =>
           (r.vehicleNumber ?? '').toLowerCase().includes(s) ||
           (r.vehicleName ?? '').toLowerCase().includes(s) ||
+          (r.driverName ?? '').toLowerCase().includes(s) ||
           (r.fuelStation ?? '').toLowerCase().includes(s) ||
           (r.fuelType ?? '').toLowerCase().includes(s)
       );
@@ -257,17 +299,8 @@ export function AdminFuelScreen() {
         return t >= from && t <= to;
       });
     }
-    return calculateMileage(list, getEffectiveQuantity);
+    return list;
   }, [records, searchTerm, filterVehicle, filterFuelType, filterPayment, dateRangeType, startDate, endDate]);
-
-  const getEffectiveQuantity = (r: FuelRecord) => {
-    const q = r.quantity ?? 0;
-    if (q > 0) return q;
-    const cost = r.totalCost ?? 0;
-    const price = r.pricePerUnit ?? 0;
-    if (cost > 0 && price > 0) return cost / price;
-    return 0;
-  };
 
   const openEditRecord = useCallback((r: FuelRecord) => {
     setEditingRecord(r);
@@ -456,15 +489,69 @@ export function AdminFuelScreen() {
     }
   };
 
+  const dayStrip = Array.from(
+    { length: DATE_STRIP_PAST_DAYS + 1 + DATE_STRIP_FUTURE_DAYS },
+    (_, index) => shiftIsoDay(todayIso(), index - DATE_STRIP_PAST_DAYS),
+  );
+  const dayStripRef = useRef<ScrollView>(null);
+  const didScrollToToday = useRef(false);
+  const selectedDay =
+    dateRangeType === 'custom' && startDate && endDate && format(startDate, 'yyyy-MM-dd') === format(endDate, 'yyyy-MM-dd')
+      ? format(startDate, 'yyyy-MM-dd')
+      : '';
+  const fuelDateLabel = dateRangeType === 'all'
+    ? 'All dates'
+    : selectedDay
+      ? format(dateFromIso(selectedDay), 'dd MMM yyyy')
+      : dateRangeType === 'custom' && startDate && endDate
+        ? `${format(startDate, 'dd MMM')} – ${format(endDate, 'dd MMM yyyy')}`
+        : dateRangeType === 'today'
+          ? 'Today'
+          : dateRangeType === 'week'
+            ? 'This week'
+            : dateRangeType === 'month'
+              ? 'This month'
+              : dateRangeType === 'year'
+                ? 'This year'
+                : 'All dates';
+  const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === filterVehicle);
+  const selectedVehicleLabel = selectedVehicle
+    ? (selectedVehicle.vehicleNumber ?? (selectedVehicle as { vehicle_number?: string }).vehicle_number ?? selectedVehicle.name ?? 'Vehicle')
+    : 'All vehicles';
+  const pickerOptions: Array<{ id: string; label: string }> = fuelPicker === 'vehicle'
+    ? [{ id: '', label: 'All vehicles' }, ...vehicles.map((vehicle) => ({
+      id: String(vehicle.id),
+      label: vehicle.vehicleNumber ?? (vehicle as { vehicle_number?: string }).vehicle_number ?? vehicle.name ?? String(vehicle.id),
+    }))]
+    : fuelPicker === 'fuel'
+      ? [{ id: '', label: 'All fuel' }, ...FUEL_TYPES.map((type) => ({ id: type, label: type }))]
+      : fuelPicker === 'payment'
+        ? [{ id: '', label: 'All payments' }, ...PAYMENT_METHODS.map((method) => ({ id: method, label: method }))]
+        : [];
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={styles.title}>Fuel Management</Text>
-        <TouchableOpacity onPress={openAddRecord} style={styles.addBtn}>
-          <Ionicons name="add" size={24} color={colors.primary} />
+        <View style={styles.headerCopy}>
+          <Text style={styles.title} numberOfLines={1}>Fuel Management</Text>
+          <Text style={styles.headerSub} numberOfLines={1}>Records for {fuelDateLabel}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.headerAction}
+          onPress={() => {
+            setRefreshing(true);
+            load();
+          }}
+        >
+          <Ionicons name="refresh" size={16} color={colors.foreground} />
+          <Text style={styles.headerActionText}>{loading ? '…' : 'Refresh'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.addRecordBtn} onPress={openAddRecord}>
+          <Ionicons name="add" size={16} color="#fff" />
+          <Text style={styles.addRecordText}>Add</Text>
         </TouchableOpacity>
       </View>
 
@@ -500,76 +587,119 @@ export function AdminFuelScreen() {
             </View>
           </View>
 
-          {/* Stats */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Total Cost</Text>
-              <Text style={styles.statValue}>{formatAmount(totalCost)}</Text>
+          <View style={styles.metricStrip}>
+            <View style={styles.stripCell}>
+              <Text style={styles.stripLabel}>Fuel cost</Text>
+              <Text style={styles.stripValue}>{formatAmount(totalCost)}</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Liters</Text>
-              <Text style={styles.statValue}>{totalLiters.toFixed(1)} L</Text>
+            <View style={styles.stripCell}>
+              <Text style={styles.stripLabel}>Litres</Text>
+              <Text style={styles.stripValue}>{totalLiters.toFixed(1)} L</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Avg ₹/L</Text>
-              <Text style={styles.statValue}>{avgCostPerLiter.toFixed(2)}</Text>
+            <View style={styles.stripCell}>
+              <Text style={styles.stripLabel}>Avg price</Text>
+              <Text style={styles.stripValue}>₹{avgCostPerLiter.toFixed(2)}</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Avg Mileage</Text>
-              <Text style={styles.statValue}>{avgMileage.toFixed(1)} km/L</Text>
+            <View style={styles.stripCell}>
+              <Text style={styles.stripLabel}>Mileage</Text>
+              <Text style={styles.stripValue}>{avgMileage.toFixed(1)} km/L</Text>
             </View>
           </View>
 
-          {/* Search & Filters */}
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by station, vehicle..."
-            placeholderTextColor={colors.gray600}
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-          />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-            <TouchableOpacity style={[styles.chip, !filterVehicle && styles.chipActive]} onPress={() => setFilterVehicle('')}>
-              <Text style={[styles.chipText, !filterVehicle && styles.chipTextActive]}>All vehicles</Text>
+          <View style={styles.dayRow}>
+            <TouchableOpacity
+              style={[styles.dayCell, dateRangeType === 'all' && styles.dayCellActive]}
+              onPress={() => {
+                setDateRangeType('all');
+                setStartDate(undefined);
+                setEndDate(undefined);
+              }}
+            >
+              <Text style={[styles.dayCellTop, dateRangeType === 'all' && styles.dayCellOn]}>All</Text>
+              <Text style={[styles.dayCellSub, dateRangeType === 'all' && styles.dayCellOn]}>dates</Text>
             </TouchableOpacity>
-            {vehicles.slice(0, 8).map((v) => (
-              <TouchableOpacity key={v.id} style={[styles.chip, filterVehicle === String(v.id) && styles.chipActive]} onPress={() => setFilterVehicle(filterVehicle === String(v.id) ? '' : String(v.id))}>
-                <Text style={[styles.chipText, filterVehicle === String(v.id) && styles.chipTextActive]} numberOfLines={1}>{v.vehicleNumber ?? (v as { vehicle_number?: string }).vehicle_number ?? v.id}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-            {['', ...FUEL_TYPES].map((ft) => (
-              <TouchableOpacity key={ft || 'all'} style={[styles.chip, (ft ? filterFuelType === ft : !filterFuelType) && styles.chipActive]} onPress={() => setFilterFuelType(ft || '')}>
-                <Text style={[styles.chipText, (ft ? filterFuelType === ft : !filterFuelType) && styles.chipTextActive]}>{ft || 'All fuel'}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-            {['all', ...PAYMENT_METHODS].map((pm) => (
-              <TouchableOpacity key={pm} style={[styles.chip, (pm === 'all' ? !filterPayment : filterPayment === pm) && styles.chipActive]} onPress={() => setFilterPayment(pm === 'all' ? '' : pm)}>
-                <Text style={[styles.chipText, (pm === 'all' ? !filterPayment : filterPayment === pm) && styles.chipTextActive]}>{pm === 'all' ? 'All payment' : pm}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateRow}>
-            <TouchableOpacity style={[styles.dateBtn, dateRangeType === 'all' && styles.dateBtnActive]} onPress={() => setDateRangeType('all')}>
-              <Text style={[styles.dateBtnText, dateRangeType === 'all' && styles.dateBtnTextActive]}>All</Text>
+            <ScrollView
+              ref={dayStripRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.dayScroll}
+              contentContainerStyle={styles.dayStrip}
+            >
+            {dayStrip.map((iso) => {
+              const date = dateFromIso(iso);
+              const selected = selectedDay === iso;
+              const isToday = iso === todayIso();
+              return (
+                <TouchableOpacity
+                  key={iso}
+                  style={[styles.dayCell, selected && styles.dayCellActive]}
+                  onLayout={isToday ? (event) => {
+                    if (didScrollToToday.current) return;
+                    const x = event.nativeEvent.layout.x;
+                    requestAnimationFrame(() => {
+                      dayStripRef.current?.scrollTo({ x, animated: false });
+                      didScrollToToday.current = true;
+                    });
+                  } : undefined}
+                  onPress={() => {
+                    const day = dateFromIso(iso);
+                    setDateRangeType('custom');
+                    setStartDate(day);
+                    setEndDate(day);
+                  }}
+                >
+                  <Text style={[styles.dayCellTop, selected && styles.dayCellOn]}>
+                    {date.toLocaleDateString('en-IN', { weekday: 'short' })}
+                  </Text>
+                  <Text style={[styles.dayCellNum, selected && styles.dayCellOn]}>{format(date, 'dd')}</Text>
+                  <Text style={[styles.dayCellSub, selected && styles.dayCellOn]}>
+                    {date.toLocaleDateString('en-IN', { month: 'short' })}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            </ScrollView>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterStrip}>
+            <TextInput
+              style={styles.filterInput}
+              placeholder="Driver, vehicle, station"
+              placeholderTextColor={colors.gray600}
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+            />
+            <TouchableOpacity style={styles.filterChip} onPress={() => setFuelPicker('vehicle')}>
+              <Text style={styles.filterChipText} numberOfLines={1}>{selectedVehicleLabel}</Text>
+              <Ionicons name="chevron-down" size={14} color={colors.gray500} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.dateBtn, dateRangeType === 'today' && styles.dateBtnActive]} onPress={() => setDateRangeType('today')}>
-              <Text style={[styles.dateBtnText, dateRangeType === 'today' && styles.dateBtnTextActive]}>Today</Text>
+            <TouchableOpacity style={styles.filterChip} onPress={() => setFuelPicker('fuel')}>
+              <Text style={styles.filterChipText}>{filterFuelType || 'All fuel'}</Text>
+              <Ionicons name="chevron-down" size={14} color={colors.gray500} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.dateBtn, dateRangeType === 'week' && styles.dateBtnActive]} onPress={() => setDateRangeType('week')}>
-              <Text style={[styles.dateBtnText, dateRangeType === 'week' && styles.dateBtnTextActive]}>Week</Text>
+            <TouchableOpacity style={styles.filterChip} onPress={() => setFuelPicker('payment')}>
+              <Text style={styles.filterChipText}>{filterPayment || 'All payments'}</Text>
+              <Ionicons name="chevron-down" size={14} color={colors.gray500} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.dateBtn, dateRangeType === 'month' && styles.dateBtnActive]} onPress={() => setDateRangeType('month')}>
-              <Text style={[styles.dateBtnText, dateRangeType === 'month' && styles.dateBtnTextActive]}>Month</Text>
+            <TouchableOpacity style={styles.filterChip} onPress={() => setShowRangeStartPicker(true)}>
+              <Text style={styles.filterChipText}>From {startDate ? format(startDate, 'dd MMM') : '—'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.dateBtn, dateRangeType === 'year' && styles.dateBtnActive]} onPress={() => setDateRangeType('year')}>
-              <Text style={[styles.dateBtnText, dateRangeType === 'year' && styles.dateBtnTextActive]}>Year</Text>
+            <TouchableOpacity style={styles.filterChip} onPress={() => setShowRangeEndPicker(true)}>
+              <Text style={styles.filterChipText}>To {endDate ? format(endDate, 'dd MMM') : '—'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.dateBtn, dateRangeType === 'custom' && styles.dateBtnActive]} onPress={selectDateRange}>
-              <Text style={[styles.dateBtnText, dateRangeType === 'custom' && styles.dateBtnTextActive]}>Range</Text>
+            <TouchableOpacity
+              style={styles.filterChip}
+              onPress={() => {
+                setSearchTerm('');
+                setFilterVehicle('');
+                setFilterFuelType('');
+                setFilterPayment('');
+                setDateRangeType('all');
+                setStartDate(undefined);
+                setEndDate(undefined);
+              }}
+            >
+              <Text style={styles.filterChipText}>Reset</Text>
             </TouchableOpacity>
           </ScrollView>
           {dateRangeType === 'custom' && (
@@ -598,7 +728,11 @@ export function AdminFuelScreen() {
               maximumDate={endDate ?? new Date()}
               onChange={(_, d) => {
                 if (Platform.OS === 'android') setShowRangeStartPicker(false);
-                if (d) setStartDate(d);
+                if (d) {
+                  setDateRangeType('custom');
+                  setStartDate(d);
+                  setEndDate((current) => current ?? d);
+                }
               }}
             />
           )}
@@ -616,7 +750,11 @@ export function AdminFuelScreen() {
               maximumDate={new Date()}
               onChange={(_, d) => {
                 if (Platform.OS === 'android') setShowRangeEndPicker(false);
-                if (d) setEndDate(d);
+                if (d) {
+                  setDateRangeType('custom');
+                  setEndDate(d);
+                  setStartDate((current) => current ?? d);
+                }
               }}
             />
           )}
@@ -647,6 +785,10 @@ export function AdminFuelScreen() {
                     </View>
                   </View>
                   <Text style={styles.recordVehicle}>{getVehicleLabel(String(r.vehicleId))}</Text>
+                  <Text style={styles.recordMetaText}>
+                    {r.driverName || '—'}
+                    {r.loggedAfterTripEnd === true ? ' · After trip end' : r.loggedAfterTripEnd === false ? ' · Before trip end' : ''}
+                  </Text>
                   <View style={styles.recordMeta}>
                     <Text style={styles.recordMetaText}>{getEffectiveQuantity(r).toFixed(1)} L</Text>
                     <Text style={styles.recordMetaText}>₹{getEffectivePricePerUnit(r).toFixed(2)}/L</Text>
@@ -719,11 +861,35 @@ export function AdminFuelScreen() {
         </View>
       </Modal>
 
-      {/* Record form modal */}
-      <Modal visible={showRecordForm} transparent animationType="slide">
+      <Modal visible={fuelPicker != null} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
-            <View style={styles.modalContent}>
+          <TouchableOpacity style={styles.pickerBackdrop} activeOpacity={1} onPress={() => setFuelPicker(null)} />
+          <View style={styles.pickerSheet}>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {pickerOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.id || 'all'}
+                  style={styles.pickerRow}
+                  onPress={() => {
+                    if (fuelPicker === 'vehicle') setFilterVehicle(option.id);
+                    if (fuelPicker === 'fuel') setFilterFuelType(option.id);
+                    if (fuelPicker === 'payment') setFilterPayment(option.id);
+                    setFuelPicker(null);
+                  }}
+                >
+                  <Text style={styles.pickerRowText}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Record form modal */}
+      <Modal visible={showRecordForm} animationType="slide">
+        <SafeAreaView style={styles.formSheet} edges={['top', 'bottom']}>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.formSheetContent} keyboardShouldPersistTaps="handled">
+            <View>
               <Text style={styles.modalTitle}>{editingRecord ? 'Edit Fuel Record' : 'Add Fuel Record'}</Text>
               <Text style={styles.label}>Vehicle *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.formChipRow}>
@@ -820,7 +986,7 @@ export function AdminFuelScreen() {
               </View>
             </View>
           </ScrollView>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* Delete confirm */}
@@ -846,9 +1012,38 @@ export function AdminFuelScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.gray50 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: colors.gray200 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8, backgroundColor: colors.gray50 },
+  headerCopy: { flex: 1, minWidth: 0 },
+  headerSub: { fontSize: 12, color: colors.gray600, marginTop: 1 },
+  headerAction: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.gray200, backgroundColor: '#fff' },
+  headerActionText: { fontSize: 12, fontWeight: '600', color: colors.foreground },
+  addRecordBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, height: 32, paddingHorizontal: 10, borderRadius: 8, backgroundColor: colors.primary },
+  addRecordText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  metricStrip: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 10, backgroundColor: '#fff' },
+  stripCell: { width: '50%', paddingVertical: 8, paddingHorizontal: 10, borderRightWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#e2e8f0' },
+  stripLabel: { fontSize: 10, fontWeight: '700', color: colors.gray600, textTransform: 'uppercase' },
+  stripValue: { fontSize: 15, fontWeight: '700', color: colors.foreground, marginTop: 2 },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
+  dayScroll: { flex: 1 },
+  dayStrip: { gap: 4, paddingBottom: 8, paddingRight: 8 },
+  dayCell: { minWidth: 52, alignItems: 'center', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  dayCellActive: { backgroundColor: colors.primary },
+  dayCellTop: { fontSize: 10, fontWeight: '700', color: colors.gray600, textTransform: 'uppercase' },
+  dayCellNum: { fontSize: 16, fontWeight: '700', color: colors.foreground },
+  dayCellSub: { fontSize: 10, fontWeight: '600', color: colors.gray600, textTransform: 'uppercase' },
+  dayCellOn: { color: '#fff' },
+  filterStrip: { gap: 8, alignItems: 'center', paddingBottom: 10 },
+  filterInput: { width: 180, height: 36, borderWidth: 1, borderColor: colors.gray200, borderRadius: 8, paddingHorizontal: 10, backgroundColor: '#fff', color: colors.foreground, fontSize: 13 },
+  filterChip: { height: 36, maxWidth: 180, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.gray200, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', gap: 4 },
+  filterChipText: { fontSize: 13, color: colors.foreground, maxWidth: 140 },
+  pickerBackdrop: { ...StyleSheet.absoluteFillObject },
+  pickerSheet: { backgroundColor: '#fff', borderRadius: 12, maxHeight: 420, width: '100%' },
+  pickerRow: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.gray200 },
+  pickerRowText: { fontSize: 15, color: colors.foreground },
+  formSheet: { flex: 1, backgroundColor: '#fff' },
+  formSheetContent: { padding: 16, paddingBottom: 32 },
   backBtn: { padding: 4, marginRight: 8 },
-  title: { flex: 1, fontSize: 18, fontWeight: '700', color: colors.foreground },
+  title: { fontSize: 18, fontWeight: '700', color: colors.foreground },
   addBtn: { padding: 4 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1 },

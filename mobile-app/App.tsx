@@ -18,6 +18,7 @@ import { GoogleMapsProvider } from './src/providers/GoogleMapsProvider';
 import { AuthProvider } from './src/providers/AuthProvider';
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap';
 import { DriverTripAssignmentOverlay } from './src/components/DriverTripAssignmentOverlay';
+import { BackgroundLocationDisclosureHost } from './src/components/BackgroundLocationDisclosureHost';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { EventDutyScreen } from './src/screens/EventDutyScreen';
 import { EventShareScreen } from './src/screens/EventShareScreen';
@@ -92,6 +93,7 @@ export default function App() {
           </NavigationContainer>
           {/* Modal must sit outside the navigator tree — otherwise some Android builds never show it above tabs */}
           <DriverTripAssignmentOverlay />
+          <BackgroundLocationDisclosureHost />
           <StatusBar style="auto" />
         </GoogleMapsProvider>
       </AuthProvider>

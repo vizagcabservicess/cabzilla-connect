@@ -9,6 +9,14 @@ import { EXTRA_COLLECTED_CATEGORIES, extraCollectedAmount } from '@/lib/bookingE
 import { convertUTCToLocal, formatDateForAPI } from '@/lib/dateUtils';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
+/** Indian mobiles (10 digits) and other countries (E.164, 8–15 digits, optional +). */
+function isValidBookingPhone(phone: string): boolean {
+  const trimmed = phone.trim();
+  if (!/^\+?[\d\s().-]+$/.test(trimmed)) return false;
+  const digits = trimmed.replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15;
+}
+
 function resolveBookingPickupDate(booking: Booking): Date {
   const raw =
     booking.pickupDate ??
@@ -160,8 +168,8 @@ export function BookingEditForm({
     
     if (!formData.passengerPhone.trim()) {
       newErrors.passengerPhone = 'Phone number is required';
-    } else if (!/^\d{10}$/.test(formData.passengerPhone.replace(/\D/g, ''))) {
-      newErrors.passengerPhone = 'Invalid phone number format';
+    } else if (!isValidBookingPhone(formData.passengerPhone)) {
+      newErrors.passengerPhone = 'Enter a valid phone number. Include the country code for numbers outside India.';
     }
     
     if (formData.passengerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.passengerEmail)) {

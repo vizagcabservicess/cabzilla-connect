@@ -132,6 +132,7 @@ try {
         SELECT 
             b.*,
             tf.tour_name,
+            COALESCE(p.paid_amount, 0) AS payments_paid_amount,
             CASE
                 WHEN b.status = 'cancelled' THEN 'cancelled'
                 WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) >= b.total_amount AND (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'paid'
@@ -224,7 +225,9 @@ try {
             'tourName' => $row['tour_name'] ?? null,
             'payment_status' => $row['calculated_payment_status'] ?? 'pending',
             'payment_method' => $row['payment_method'] ?? '',
-            'advance_paid_amount' => (float)($row['advance_paid_amount'] ?? 0),
+            'advance_paid_amount' => ((float)($row['advance_paid_amount'] ?? 0)) > 0
+                ? (float)$row['advance_paid_amount']
+                : (float)($row['payments_paid_amount'] ?? 0),
             'createdAt' => $row['created_at'],
             'updatedAt' => $row['updated_at'] ?? $row['created_at'],
             // Prefill GST info

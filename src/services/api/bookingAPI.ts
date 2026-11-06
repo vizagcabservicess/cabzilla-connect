@@ -495,6 +495,28 @@ export const bookingAPI = {
       throw error;
     }
   },
+
+  /**
+   * Clear the driver and fleet vehicle on a booking.
+   */
+  unassignDriver: async (bookingId: number | string) => {
+    try {
+      const response = await axios.post(
+        getApiUrl('/api/admin/assign-driver.php'),
+        { bookingId, unassign: true },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error removing driver assignment:', error);
+      const body = (error as { response?: { data?: { message?: unknown } } })?.response?.data;
+      const serverMessage = body && typeof body.message === 'string' ? body.message.trim() : '';
+      if (serverMessage) {
+        throw new Error(serverMessage);
+      }
+      throw error;
+    }
+  },
   
   /**
    * Get pending bookings that need assignment

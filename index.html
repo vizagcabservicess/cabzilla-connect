@@ -114,7 +114,7 @@
     <link rel="dns-prefetch" href="https://analytics.google.com" />
     
     <!-- Content Security Policy to allow Google Maps, Razorpay, Clarity, Cloudflare, and Social Login with iOS support -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://cdn.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms https://static.cloudflareinsights.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com https://cdn.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://vizagup.com https://www.vizagup.com wss://vizagup.com wss://www.vizagup.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://ad.doubleclick.net https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com https://cdn.razorpay.com https://checkout.razorpay.com https://api.razorpay.com;">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://cdn.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms https://static.cloudflareinsights.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com https://cdn.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://places.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://vizagup.com https://www.vizagup.com wss://vizagup.com wss://www.vizagup.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://ad.doubleclick.net https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com https://cdn.razorpay.com https://checkout.razorpay.com https://api.razorpay.com;">
   </head>
 
   <body>
@@ -241,15 +241,19 @@
         })(window, document, 'clarity', 'script', 'htvvpivvo1');
       }
       function scheduleAnalyticsIdle() {
-        var run = function() { loadAnalyticsAfterLoad(); };
-        if (typeof requestIdleCallback !== 'undefined') {
-          requestIdleCallback(run, { timeout: 5000 });
-        } else {
-          setTimeout(run, 2000);
-        }
+        var started = false;
+        var run = function() {
+          if (started) return;
+          started = true;
+          window.removeEventListener('pointerdown', run);
+          window.removeEventListener('keydown', run);
+          loadAnalyticsAfterLoad();
+        };
+        window.addEventListener('pointerdown', run, { passive: true });
+        window.addEventListener('keydown', run);
+        setTimeout(run, 15000);
       }
-      if (document.readyState === 'complete') scheduleAnalyticsIdle();
-      else window.addEventListener('load', scheduleAnalyticsIdle);
+      scheduleAnalyticsIdle();
     </script>
 
     <!-- Google Consent Mode v2 - at end of body so it does not block first paint -->

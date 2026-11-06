@@ -25,5 +25,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "mobile-app/src/lib/tripPackageLines.ts"]
 }

@@ -282,6 +282,10 @@ export interface FuelRecord {
   vehicleName?: string;
   vehicleNumber?: string;
   vehicleModel?: string;
+  driverId?: string | number | null;
+  driverName?: string | null;
+  /** True when the fill was saved after the trip ended, false when it was saved before. */
+  loggedAfterTripEnd?: boolean | null;
 }
 
 export interface FuelPrice {

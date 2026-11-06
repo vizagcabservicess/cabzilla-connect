@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import { getResolvedApiOrigin } from '../config';
+import { ensureBackgroundLocationAccess } from './backgroundLocationDisclosure';
 import { EVENT_DUTY_ALERT_CHANNEL_ID, ensureEventDutyAlertChannel } from '../services/pushNotificationService';
 
 export const EVENT_DUTY_LOCATION_TASK = 'EVENT_DUTY_LOCATION_TASK';
@@ -90,9 +91,13 @@ export async function startEventDutyTracking(token: string, dutyIds: number[]): 
   if (Platform.OS === 'web' || !token || dutyIds.length === 0) return;
   const apiOrigin = getResolvedApiOrigin() || 'https://www.vizagtaxihub.com';
   await AsyncStorage.setItem(STORE_KEY, JSON.stringify({ token, dutyIds, apiOrigin }));
-  const fg = await Location.requestForegroundPermissionsAsync();
-  if (fg.status !== 'granted') return;
-  await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
+  const backgroundGranted = await ensureBackgroundLocationAccess();
+  const fg = await Location.getForegroundPermissionsAsync();
+  if (fg.status !== 'granted') {
+    const requested = await Location.requestForegroundPermissionsAsync();
+    if (requested.status !== 'granted') return;
+  }
+  if (!backgroundGranted) return;
   await Notifications.requestPermissionsAsync().catch(() => undefined);
   await ensureEventDutyAlertChannel().catch(() => undefined);
   const running = await Location.hasStartedLocationUpdatesAsync(EVENT_DUTY_LOCATION_TASK);

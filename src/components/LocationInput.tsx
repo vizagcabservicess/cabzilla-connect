@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useId, forwardRef, useImperativeHandle } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { Input } from "@/components/ui/input";
-import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
+import { requestGoogleMaps, useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { ArrowLeft, X, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { locationMatchesSearchQuery, resolveCanonicalVizagAirport, type Location } from '@/lib/locationData';
@@ -30,6 +30,8 @@ const PREDICTION_DEBOUNCE_MS = 320;
 const SELECT_FROM_LIST_MESSAGE_DEFAULT = 'Please select a location from the suggestions list';
 const LOCAL_LAST_DROP_MESSAGE =
   'Last drop must be within 35 km of Visakhapatnam. Outstation places cannot be used on the Local tab.';
+
+const EMPTY_SUGGESTIONS: Location[] = [];
 
 const EMPTY_LOCATION: Location = {
   id: '',
@@ -61,28 +63,6 @@ function getDistanceFromLatLng(lat1: number, lng1: number, lat2: number, lng2: n
 // Helper to check if a location is within distance from Vizag
 function isWithinVizagRange(lat: number, lng: number, maxDistance: number = MAX_DISTANCE_KM): boolean {
   return getDistanceFromLatLng(VIZAG_LAT, VIZAG_LNG, lat, lng) <= maxDistance;
-}
-
-function isVizagAirportPlace(args: {
-  name?: string;
-  address?: string;
-  id?: string;
-  lat?: number;
-  lng?: number;
-}): boolean {
-  return isVizagAirportLocation({
-    id: args.id || '',
-    name: args.name || '',
-    address: args.address || '',
-    city: '',
-    state: '',
-    lat: args.lat ?? 0,
-    lng: args.lng ?? 0,
-    type: `${args.name || ''}`.toLowerCase().includes('airport')
-      ? 'airport'
-      : 'other',
-    popularityScore: 0,
-  });
 }
 
 function canonicalizePickedLocation(location: Location, typedQuery: string): Location {
@@ -190,7 +170,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   onChange,
   required = false,
   placeholder = "Enter location",
-  suggestions = [],
+  suggestions = EMPTY_SUGGESTIONS,
   disabled = false,
   className = "",
   location,
@@ -250,7 +230,6 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   const { isLoaded, google, error } = useGoogleMaps();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fieldTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const lastTypedQueryRef = useRef('');
   const [isFocused, setIsFocused] = useState(false);
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
@@ -283,6 +262,11 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   const [suggestionPanelBox, setSuggestionPanelBox] = useState<{ top: number; left: number; width: number } | null>(null);
   const predictionsRequestSeq = useRef(0);
   const justSelectedPlaceRef = useRef(false);
+  /** True while a suggestion tap is resolving coordinates, so blur cannot clear it. */
+  const selectionPendingRef = useRef(false);
+  /** After a real pick, do not open the suggestion list again until the guest types. */
+  const keepSuggestionsClosedRef = useRef(false);
+  const selectionSeqRef = useRef(0);
   /** Full input row (pin + field); Google `.pac-container` is on `body` — we sync its box to this. */
   const pacAnchorRef = useRef<HTMLDivElement | null>(null);
   /** Bottom edge of fullscreen search pill — `.pac-container` opens below here (mobile Urbania sheet). */
@@ -324,6 +308,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
 
     const inputEl = inputRef.current;
     if (
+      selectionPendingRef.current ||
       mobileSearchSheetOpen ||
       (typeof document !== 'undefined' && inputEl && document.activeElement === inputEl)
     ) {
@@ -389,9 +374,13 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
          });
        }
        
-       setFilteredSuggestions(filtered);
+       setFilteredSuggestions((prev) =>
+         prev.length === filtered.length && prev.every((item, index) => item === filtered[index])
+           ? prev
+           : filtered
+       );
      } else {
-       setFilteredSuggestions([]);
+       setFilteredSuggestions((prev) => (prev.length === 0 ? prev : []));
      }
    }, [inputValue, suggestions, enforceVizag35Km, tripType, hideRestrictedAirportDrops, isPickupLocation, airportOnly, isTourPickup, isLocalLastDrop]);
 
@@ -399,18 +388,22 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     if (!isLoaded || !google) return;
 
     const q = inputValue.trim();
-    const useDesktopGoogleInSheet = fullscreenMobileSearchSheet && mobileSearchSheetOpen;
-    if (useDesktopGoogleInSheet || airportOnly || readOnly || q.length < 2 || (!isFocused && !mobileSearchSheetOpen)) {
+    if (keepSuggestionsClosedRef.current) {
       setPredictionsLoading(false);
-      if (!useDesktopGoogleInSheet) {
-        setNoGooglePredictions(false);
-        setPlacePredictions([]);
-      }
+      setNoGooglePredictions(false);
+      setPlacePredictions([]);
+      return;
+    }
+    if (airportOnly || readOnly || q.length < 2 || (!isFocused && !mobileSearchSheetOpen)) {
+      setPredictionsLoading(false);
+      setNoGooglePredictions(false);
+      setPlacePredictions([]);
       return;
     }
 
     setPredictionsLoading(true);
     setNoGooglePredictions(false);
+    setSheetHasNoMatchingPlaces(false);
     const seq = ++predictionsRequestSeq.current;
 
     const timer = window.setTimeout(() => {
@@ -460,7 +453,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   ]);
 
   useEffect(() => {
-    if (placePredictions.length === 0 || !isFocused) {
+    if (mobileSearchSheetOpen || placePredictions.length === 0 || !isFocused) {
       setSuggestionPanelBox(null);
       return;
     }
@@ -475,11 +468,16 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         margin,
         Math.min(Math.round(rect.left), viewportWidth - width - margin)
       );
-      setSuggestionPanelBox({
+      const next = {
         top: Math.round(rect.bottom + 4),
         left,
         width,
-      });
+      };
+      setSuggestionPanelBox((prev) =>
+        prev && prev.top === next.top && prev.left === next.left && prev.width === next.width
+          ? prev
+          : next
+      );
     };
     sync();
     window.addEventListener('resize', sync);
@@ -492,7 +490,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
       window.visualViewport?.removeEventListener('resize', sync);
       window.visualViewport?.removeEventListener('scroll', sync);
     };
-  }, [placePredictions, isFocused, inputValue]);
+  }, [placePredictions, isFocused, inputValue, mobileSearchSheetOpen]);
 
   // Keep Google Places `.pac-container` aligned to this field so it does not spill into sibling columns (desktop row) or fullscreen sheet.
   useEffect(() => {
@@ -738,25 +736,25 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   useEffect(() => {
     if (!mobileSearchSheetOpen) return;
     const q = inputValue.trim();
-    if (q.length < 2) {
-      sheetHasNoMatchingPlacesRef.current = false;
-      setSheetHasNoMatchingPlaces(false);
+    if (q.length < 2 || predictionsLoading || !isLoaded) {
+      if (q.length < 2) {
+        sheetHasNoMatchingPlacesRef.current = false;
+        setSheetHasNoMatchingPlaces(false);
+      }
       return;
     }
-    const timer = window.setTimeout(() => {
-      const items = Array.from(document.querySelectorAll<HTMLElement>('.pac-item'));
-      const anyMatch = items.some(
-        (item) =>
-          googlePacItemMatchesQuery(item, q) &&
-          (!(enforceVizag35Km || isTourPickup) || googlePacItemLooksInsideVizagPickup(item))
-      );
-      if (sheetHasNoMatchingPlacesRef.current === !anyMatch) return;
-      sheetHasNoMatchingPlacesRef.current = !anyMatch;
-      setSheetHasNoMatchingPlaces(!anyMatch);
-      if (!anyMatch) hideAllPacContainers();
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [inputValue, mobileSearchSheetOpen, enforceVizag35Km, isTourPickup]);
+    const noMatch = noGooglePredictions && placePredictions.length === 0;
+    if (sheetHasNoMatchingPlacesRef.current === noMatch) return;
+    sheetHasNoMatchingPlacesRef.current = noMatch;
+    setSheetHasNoMatchingPlaces(noMatch);
+  }, [
+    inputValue,
+    mobileSearchSheetOpen,
+    predictionsLoading,
+    noGooglePredictions,
+    placePredictions.length,
+    isLoaded,
+  ]);
 
   useEffect(() => {
     if (!mobileSearchSheetOpen) return;
@@ -776,172 +774,6 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     }
   }, [airportOnly, readOnly]);
 
-  // Initialize Google Maps Autocomplete when ready (re-attaches when mobile sheet opens / input remounts).
-  useLayoutEffect(() => {
-    if (!isLoaded || !google) return;
-
-    const collapsedInfieldSheet =
-      fullscreenMobileSearchSheet && !mobileSearchSheetOpen;
-    if (collapsedInfieldSheet || readOnly || disabled || airportOnly) {
-      return undefined;
-    }
-
-    const el = inputRef.current;
-    if (!el) return undefined;
-
-    if (autocompleteRef.current && google.maps?.event) {
-      google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      autocompleteRef.current = null;
-    }
-
-    let ac: google.maps.places.Autocomplete | null = null;
-
-    try {
-      const isOutstationDrop =
-        (tripType === 'outstation' || tripType === 'custom') && !isPickupLocation;
-
-      const options: google.maps.places.AutocompleteOptions = {
-        componentRestrictions: { country: 'in' },
-      };
-
-      if (!isOutstationDrop) {
-        const biasCenter =
-          tripType === 'airport' && !isPickupLocation
-            ? new google.maps.LatLng(BHOGAPURAM_AIRPORT.lat, BHOGAPURAM_AIRPORT.lng)
-            : new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
-        const circle = new google.maps.Circle({
-          center: biasCenter,
-          radius: vizagBiasRadiusKm * 1000,
-        });
-        const bounds = circle.getBounds() as google.maps.LatLngBounds;
-        options.bounds = bounds;
-        options.strictBounds = enforceVizag35Km || isTourPickup;
-        if (enforceVizag35Km || isTourPickup) {
-          (options as google.maps.places.AutocompleteOptions & {
-            locationRestriction?: google.maps.Circle;
-          }).locationRestriction = circle;
-        }
-      }
-
-      ac = new google.maps.places.Autocomplete(el, options);
-      ac.setFields(['place_id', 'name', 'formatted_address', 'geometry', 'address_components']);
-
-      ac.addListener('place_changed', () => {
-        setNoGooglePredictions(false);
-        setPredictionsLoading(false);
-        const place = ac?.getPlace();
-        if (place && place.geometry?.location) {
-          const typedQuery = lastTypedQueryRef.current || inputRef.current?.value || '';
-
-          const lat = place.geometry.location.lat();
-          const lng = place.geometry.location.lng();
-
-          const isAirportTransfer = tripType === 'airport';
-          const placeIsVizagAirport = isVizagAirportPlace({
-            name: place.name,
-            address: place.formatted_address,
-            id: place.place_id,
-            lat,
-            lng,
-          });
-
-          if (isTourPickup && !isWithinTourPickupRadius({ lat, lng })) {
-            toast('Tour pickup must be within 20 km of Vizag Taxi Hub. Please choose a closer location.');
-            setInputValue('');
-            if (onChangeRef.current) onChangeRef.current('');
-            if (onLocationChangeRef.current) onLocationChangeRef.current(EMPTY_LOCATION);
-            return;
-          }
-
-          if (isLocalLastDrop && !isWithinVizagRange(lat, lng)) {
-            toast(LOCAL_LAST_DROP_MESSAGE);
-            setInputValue('');
-            if (onChangeRef.current) onChangeRef.current('');
-            if (onLocationChangeRef.current) onLocationChangeRef.current(EMPTY_LOCATION);
-            return;
-          }
-
-          if (enforceVizag35Km && !isTourPickup && !isLocalLastDrop && !isWithinVizagRange(lat, lng) && !placeIsVizagAirport) {
-            toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
-            setInputValue('');
-            if (onChangeRef.current) onChangeRef.current('');
-            if (onLocationChangeRef.current) onLocationChangeRef.current(EMPTY_LOCATION);
-            return;
-          }
-
-          if (isAirportTransfer && !enforceVizag35Km && !isAirportTransferOtherEnd({
-            id: place.place_id || '',
-            name: place.name || '',
-            address: place.formatted_address || '',
-            city: '',
-            state: '',
-            lat,
-            lng,
-            type: 'other',
-            popularityScore: 0,
-          }) && !placeIsVizagAirport) {
-            toast("Selected location is outside the airport transfer area. We'll automatically switch to Outstation for this trip.");
-            onRequestOutstationSwitchRef.current?.();
-          }
-
-          const picked: Location = {
-              id: place.place_id || place.formatted_address || '',
-              name: place.name || place.formatted_address || '',
-              address: place.formatted_address || '',
-              lat,
-              lng,
-              isInVizag: isWithinVizagRange(lat, lng),
-              city: '',
-              state: '',
-              type: `${place.name || ''}`.toLowerCase().includes('airport')
-                ? 'airport'
-                : 'other',
-              popularityScore: 50,
-            };
-            const resolved = canonicalizePickedLocation(picked, typedQuery);
-            justSelectedPlaceRef.current = true;
-            window.setTimeout(() => {
-              justSelectedPlaceRef.current = false;
-            }, 500);
-            setInputValue(resolved.name || resolved.address || '');
-            if (onChangeRef.current) {
-              onChangeRef.current(resolved.name || resolved.address || '');
-            }
-            onLocationChangeRef.current?.(resolved);
-          setMobileSearchSheetOpen(false);
-        }
-      });
-
-      autocompleteRef.current = ac;
-    } catch (err) {
-      console.error('Failed to initialize Google Maps Autocomplete:', err);
-      toast('Error initializing location search. Please try refreshing the page.');
-    }
-
-    return () => {
-      if (ac && google.maps?.event) {
-        google.maps.event.clearInstanceListeners(ac);
-      }
-      autocompleteRef.current = null;
-      hideAllPacContainers();
-    };
-  }, [
-    isLoaded,
-    google,
-    isPickupLocation,
-    restrictToVizagRadius,
-    tripType,
-    mobileSearchSheetOpen,
-    fullscreenMobileSearchSheet,
-    airportOnly,
-    readOnly,
-    disabled,
-    vizagBiasRadiusKm,
-    isTourPickup,
-    isLocalLastDrop,
-    enforceVizag35Km,
-  ]);
-
   const clearLocationField = () => {
     setInputValue('');
     if (inputRef.current) {
@@ -958,7 +790,18 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     }
   };
 
+  const rememberCommittedQuery = () => {
+    const committed = locationRef.current;
+    const display = (committed?.name || committed?.address || '').trim();
+    const typed = (inputRef.current?.value ?? inputValue).trim();
+    if (isSelectedMapLocation(committed) && display && typed === display) {
+      keepSuggestionsClosedRef.current = true;
+    }
+  };
+
   const openMobileSearchSheet = () => {
+    requestGoogleMaps();
+    rememberCommittedQuery();
     flushSync(() => {
       setMobileSearchSheetOpen(true);
       setIsFocused(true);
@@ -980,6 +823,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     const native = e.nativeEvent as InputEvent;
     if (native.inputType) {
       lastTypedQueryRef.current = newValue;
+      keepSuggestionsClosedRef.current = false;
     }
     const prevLoc = locationRef.current;
     const prevDisplay = (prevLoc?.name || prevLoc?.address || '').trim();
@@ -998,7 +842,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     setShowSuggestions(newValue.length > 0 && suggestions.length > 0);
   };
   
-     const handleSuggestionClick = (suggestion: Location) => {
+     const handleSuggestionClick = (suggestion: Location): boolean => {
      const isAirportTransfer = tripType === 'airport';
      const resolved = canonicalizePickedLocation(
        suggestion,
@@ -1007,18 +851,18 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
      
      if (isTourPickup && !isWithinTourPickupRadius(resolved)) {
        toast('Tour pickup must be within 20 km of Vizag Taxi Hub. Please choose a closer location.');
-       return;
+       return false;
      }
 
      if (isLocalLastDrop && !isWithinVizagRange(resolved.lat, resolved.lng)) {
        toast(LOCAL_LAST_DROP_MESSAGE);
-       return;
+       return false;
      }
      
      // Pickup: must be within 35km of Vizag (airport campus itself is allowed)
      if (enforceVizag35Km && !isTourPickup && !isLocalLastDrop && !isWithinVizagRange(resolved.lat, resolved.lng) && !isVizagAirportLocation(resolved)) {
        toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
-       return;
+       return false;
      }
      
      if (isAirportTransfer && !enforceVizag35Km && !isAirportTransferOtherEnd(resolved) && !isVizagAirportLocation(resolved)) {
@@ -1041,16 +885,64 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
       onLocationChange(resolved);
     }
     
+    keepSuggestionsClosedRef.current = true;
+    setPlacePredictions([]);
+    setSuggestionPanelBox(null);
     setShowSuggestions(false);
+    setIsFocused(false);
     if (fullscreenMobileSearchSheet) {
       setMobileSearchSheetOpen(false);
     }
+    return true;
+  };
+
+  const restoreCommittedText = () => {
+    const committed = locationRef.current;
+    const display = isSelectedMapLocation(committed)
+      ? (committed?.name || committed?.address || '').trim()
+      : '';
+    keepSuggestionsClosedRef.current = Boolean(display);
+    setInputValue(display);
+    if (inputRef.current) inputRef.current.value = display;
+  };
+
+  const rejectPendingSelection = (message: string) => {
+    restoreCommittedText();
+    toast(message);
   };
 
   const selectPlacePrediction = (prediction: PlaceSuggestionRow) => {
-    if (!google || !prediction.place_id) return;
+    if (!google || !prediction.place_id || selectionPendingRef.current) return;
+    const requestId = ++selectionSeqRef.current;
+    selectionPendingRef.current = true;
+    justSelectedPlaceRef.current = true;
+    keepSuggestionsClosedRef.current = true;
+    const label = prediction.structured_formatting?.main_text || prediction.description;
+    setInputValue(label);
+    if (inputRef.current) inputRef.current.value = label;
+    setPlacePredictions([]);
+    setSuggestionPanelBox(null);
+    setShowSuggestions(false);
+    setNoGooglePredictions(false);
+    setMobileSearchSheetOpen(false);
+    setIsFocused(false);
+    inputRef.current?.blur();
+
+    const release = () => {
+      window.setTimeout(() => {
+        if (requestId !== selectionSeqRef.current) return;
+        selectionPendingRef.current = false;
+        justSelectedPlaceRef.current = false;
+      }, 450);
+    };
+
     void resolvePlaceSuggestionGeo(google, prediction).then((geo) => {
-      if (!geo) return;
+      if (requestId !== selectionSeqRef.current) return;
+      if (!geo) {
+        rejectPendingSelection('Could not use that place. Please choose another suggestion.');
+        release();
+        return;
+      }
       const picked: Location = {
         id: geo.place_id,
         name: geo.name,
@@ -1063,9 +955,13 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         type: geo.name.toLowerCase().includes('airport') ? 'airport' : 'other',
         popularityScore: 50,
       };
-      handleSuggestionClick(
-        canonicalizePickedLocation(picked, lastTypedQueryRef.current || prediction.description || '')
+      const accepted = handleSuggestionClick(
+        canonicalizePickedLocation(picked, lastTypedQueryRef.current || prediction.description || label)
       );
+      if (!accepted) {
+        restoreCommittedText();
+      }
+      release();
     });
   };
   
@@ -1079,7 +975,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   };
 
   const revertUnselectedTypedText = (opts?: { silent?: boolean }) => {
-    if (justSelectedPlaceRef.current) return;
+    if (justSelectedPlaceRef.current || selectionPendingRef.current) return;
     const committed = committedLocationFromProps();
     const inputEl = inputRef.current;
     const typed = (inputEl?.value ?? inputValue).trim();
@@ -1126,7 +1022,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     const el = inputRef.current;
     if (!el || readOnly || disabled) return undefined;
     const tryRevert = (opts?: { silent?: boolean }) => {
-      if (justSelectedPlaceRef.current || isGooglePacOpen()) return;
+      if (justSelectedPlaceRef.current || selectionPendingRef.current || isGooglePacOpen()) return;
       revertUnselectedTypedTextRef.current(opts);
     };
     const onNativeBlur = () => {
@@ -1147,7 +1043,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         const st = window.getComputedStyle(el);
         return st.display !== 'none' && !!el.querySelector('.pac-item');
       });
-    if (pacHasItems) return;
+    if (pacHasItems || placePredictions.length > 0) return;
     e.preventDefault();
     revertUnselectedTypedText();
   };
@@ -1183,8 +1079,9 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   const committedLabel = committedSelected
     ? (committedLocation?.name || committedLocation?.address || '').trim()
     : '';
-  /** Unfocused fields never show typed-only text — only a Google / curated selection. */
-  const displayValue = isFocused ? inputValue : committedLabel;
+  /** Unfocused fields never show typed-only text — only a Google / curated selection.
+   *  A tap that is still resolving coordinates keeps the chosen label on screen. */
+  const displayValue = isFocused || selectionPendingRef.current ? inputValue : committedLabel;
 
   /** Custom empty panel only when Google Places is unavailable — otherwise it stacks on `.pac-container`. */
   const showEmptyGoogleDropdown =
@@ -1217,7 +1114,16 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         <div
           key={suggestion.id}
           className="cursor-pointer border-b border-gray-100 p-3 last:border-0 hover:bg-gray-100"
-          onMouseDown={() => handleSuggestionClick(suggestion)}
+          onMouseDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            handleSuggestionClick(suggestion);
+          }}
+          onPointerDown={(event) => {
+            if (event.pointerType === 'mouse') return;
+            event.preventDefault();
+            handleSuggestionClick(suggestion);
+          }}
         >
           <div className="font-medium">{suggestion.name}</div>
           {suggestion.address && suggestion.address !== suggestion.name && (
@@ -1419,7 +1325,10 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
           )}
           onFocus={() => {
             hideAllPacContainers();
-            setShowSuggestions(inputValue.length > 0 && suggestions.length > 0);
+            rememberCommittedQuery();
+            setShowSuggestions(
+              inputValue.length > 0 && suggestions.length > 0 && !keepSuggestionsClosedRef.current
+            );
             setIsFocused(true);
           }}
           onBlur={() => {
@@ -1474,12 +1383,14 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
       typeof document !== 'undefined'
         ? createPortal(
             <div
-              className="fixed z-[10080] max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg"
+              className="location-suggestion-panel pointer-events-auto fixed z-[10080] max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg"
               style={{
                 top: suggestionPanelBox.top,
                 left: suggestionPanelBox.left,
                 width: suggestionPanelBox.width,
+                pointerEvents: 'auto',
               }}
+              onPointerDown={(event) => event.stopPropagation()}
             >
               {placePredictions.map((prediction) => (
                 <button
@@ -1487,7 +1398,16 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
                   type="button"
                   className="flex w-full flex-col items-start border-b border-gray-100 px-3 py-3 text-left last:border-0 hover:bg-gray-50"
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => selectPlacePrediction(prediction)}
+                  onPointerDown={(event) => {
+                    if (event.pointerType === 'mouse' && event.button !== 0) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    selectPlacePrediction(prediction);
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    selectPlacePrediction(prediction);
+                  }}
                 >
                   <span className="text-[15px] font-medium text-gray-900">
                     {prediction.structured_formatting.main_text || prediction.description}
@@ -1560,7 +1480,10 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
                 className="h-11 min-h-0 min-w-0 flex-1 border-0 bg-transparent px-1 text-[16px] shadow-none outline-none placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
                 style={{ fontSize: '16px' }}
                 onFocus={() => {
-                  setShowSuggestions(inputValue.length > 0 && suggestions.length > 0);
+                  rememberCommittedQuery();
+                  setShowSuggestions(
+                    inputValue.length > 0 && suggestions.length > 0 && !keepSuggestionsClosedRef.current
+                  );
                   setIsFocused(true);
                 }}
                 onBlur={(event) => {
@@ -1622,7 +1545,16 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
                     type="button"
                     className="flex w-full flex-col items-start border-b border-gray-100 px-3 py-3 text-left last:border-0 hover:bg-gray-50"
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => selectPlacePrediction(prediction)}
+                    onPointerDown={(event) => {
+                      if (event.pointerType === 'mouse' && event.button !== 0) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      selectPlacePrediction(prediction);
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      selectPlacePrediction(prediction);
+                    }}
                   >
                     <span className="text-[15px] font-medium text-gray-900">
                       {prediction.structured_formatting?.main_text || prediction.description}

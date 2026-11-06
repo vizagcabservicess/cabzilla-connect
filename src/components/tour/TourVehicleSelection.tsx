@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
@@ -18,6 +18,8 @@ interface TourVehicleSelectionProps {
   tourDate?: Date; // Add tour date prop
   /** When set, list prices stay as the combined fare for these tours. */
   combinePricingFrom?: Array<{ pricing?: Record<string, number> }>;
+  /** Bookable vehicles for the current tour and date, after price and inactive-date filters. */
+  onAvailableVehiclesChange?: (vehicles: VehicleWithPricing[]) => void;
 }
 
 export const TourVehicleSelection = ({
@@ -26,17 +28,21 @@ export const TourVehicleSelection = ({
   selectedVehicle,
   tourDate,
   combinePricingFrom,
+  onAvailableVehiclesChange,
 }: TourVehicleSelectionProps) => {
   const [vehicles, setVehicles] = useState<CabType[]>([]);
   const [vehiclesWithPricing, setVehiclesWithPricing] = useState<VehicleWithPricing[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [fleetLoaded, setFleetLoaded] = useState(false);
+  const onAvailableVehiclesChangeRef = useRef(onAvailableVehiclesChange);
+  onAvailableVehiclesChangeRef.current = onAvailableVehiclesChange;
+  const tourTime = tourDate?.getTime() ?? 0;
 
   useEffect(() => {
     loadVehicles();
   }, []);
 
   useEffect(() => {
-    if (vehicles.length === 0) return;
+    if (!fleetLoaded) return;
     const priceSources =
       combinePricingFrom && combinePricingFrom.length > 0
         ? combinePricingFrom
@@ -56,8 +62,8 @@ export const TourVehicleSelection = ({
       .filter((v) => {
         if (v.price <= 0) return false;
 
-        if (tourDate && v.inactiveDates && Array.isArray(v.inactiveDates)) {
-          const local = new Date(tourDate);
+        if (tourTime > 0 && v.inactiveDates && Array.isArray(v.inactiveDates)) {
+          const local = new Date(tourTime);
           const tourDateStr = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`;
 
           for (const inactiveRange of v.inactiveDates) {
@@ -76,8 +82,8 @@ export const TourVehicleSelection = ({
       });
 
     setVehiclesWithPricing(vehiclesWithPrices);
-    setIsLoading(false);
-  }, [vehicles, pricing, combinePricingFrom, tourDate]);
+    onAvailableVehiclesChangeRef.current?.(vehiclesWithPrices);
+  }, [fleetLoaded, vehicles, pricing, combinePricingFrom, tourTime]);
 
   const loadVehicles = async () => {
     try {
@@ -87,7 +93,8 @@ export const TourVehicleSelection = ({
     } catch (error) {
       console.error('Error loading vehicles:', error);
       setVehicles([]);
-      setIsLoading(false);
+    } finally {
+      setFleetLoaded(true);
     }
   };
 
@@ -97,7 +104,7 @@ export const TourVehicleSelection = ({
         <CardTitle className="text-sm font-semibold">Select vehicle</CardTitle>
       </CardHeader>
       <CardContent className="px-3 py-2">
-        {isLoading ? (
+        {!fleetLoaded ? (
           <div className="flex justify-center py-8">
             <svg className="animate-spin h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

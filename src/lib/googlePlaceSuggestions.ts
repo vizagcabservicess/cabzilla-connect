@@ -39,17 +39,67 @@ function latLngOf(value: unknown): { lat: number; lng: number } | null {
   return { lat, lng };
 }
 
+type PlaceSuggestionQuery = {
+  isOutstationDrop: boolean;
+  vizagBiasRadiusKm: number;
+  enforceVizag35Km: boolean;
+  biasLat: number;
+  biasLng: number;
+};
+
+function fetchLegacyPlaceSuggestionRows(
+  google: typeof window.google,
+  input: string,
+  options: PlaceSuggestionQuery
+): Promise<PlaceSuggestionRow[]> {
+  return new Promise((resolve) => {
+    const service = new google.maps.places.AutocompleteService();
+    const request: google.maps.places.AutocompletionRequest = {
+      input,
+      componentRestrictions: { country: 'in' },
+    };
+    if (!options.isOutstationDrop) {
+      const circle = new google.maps.Circle({
+        center: new google.maps.LatLng(options.biasLat, options.biasLng),
+        radius: options.vizagBiasRadiusKm * 1000,
+      });
+      request.bounds = circle.getBounds() as google.maps.LatLngBounds;
+      if (options.enforceVizag35Km) {
+        (request as google.maps.places.AutocompletionRequest & { strictBounds?: boolean }).strictBounds = true;
+      }
+    }
+    service.getPlacePredictions(request, (predictions, status) => {
+      const ok = status === google.maps.places.PlacesServiceStatus.OK;
+      const zero = status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS;
+      if (!ok && !zero) {
+        resolve([]);
+        return;
+      }
+      resolve(
+        (predictions || []).map((prediction) => ({
+          place_id: prediction.place_id,
+          description: prediction.description,
+          structured_formatting: {
+            main_text: prediction.structured_formatting?.main_text || prediction.description,
+            secondary_text: prediction.structured_formatting?.secondary_text || '',
+          },
+        }))
+      );
+    });
+  });
+}
+
 export async function fetchPlaceSuggestionRows(
   google: typeof window.google,
   input: string,
-  options: {
-    isOutstationDrop: boolean;
-    vizagBiasRadiusKm: number;
-    enforceVizag35Km: boolean;
-    biasLat: number;
-    biasLng: number;
-  }
+  options: PlaceSuggestionQuery
 ): Promise<PlaceSuggestionRow[]> {
+  // places.googleapis.com AutocompletePlaces returns 403 for this key.
+  // The legacy predictions service still returns the suggestion list.
+  if (google.maps.places?.AutocompleteService) {
+    return fetchLegacyPlaceSuggestionRows(google, input, options);
+  }
+
   const maps = google.maps as typeof google.maps & {
     importLibrary?: (name: string) => Promise<Record<string, unknown>>;
   };
@@ -99,44 +149,7 @@ export async function fetchPlaceSuggestionRows(
       .filter((row): row is PlaceSuggestionRow => Boolean(row));
   }
 
-  if (!google.maps.places.AutocompleteService) return [];
-
-  return new Promise((resolve) => {
-    const service = new google.maps.places.AutocompleteService();
-    const request: google.maps.places.AutocompletionRequest = {
-      input,
-      componentRestrictions: { country: 'in' },
-      types: ['geocode', 'establishment'],
-    };
-    if (!options.isOutstationDrop) {
-      const circle = new google.maps.Circle({
-        center: new google.maps.LatLng(options.biasLat, options.biasLng),
-        radius: options.vizagBiasRadiusKm * 1000,
-      });
-      request.bounds = circle.getBounds() as google.maps.LatLngBounds;
-      if (options.enforceVizag35Km) {
-        (request as google.maps.places.AutocompletionRequest & { strictBounds?: boolean }).strictBounds = true;
-      }
-    }
-    service.getPlacePredictions(request, (predictions, status) => {
-      const ok = status === google.maps.places.PlacesServiceStatus.OK;
-      const zero = status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS;
-      if (!ok && !zero) {
-        resolve([]);
-        return;
-      }
-      resolve(
-        (predictions || []).map((prediction) => ({
-          place_id: prediction.place_id,
-          description: prediction.description,
-          structured_formatting: {
-            main_text: prediction.structured_formatting?.main_text || prediction.description,
-            secondary_text: prediction.structured_formatting?.secondary_text || '',
-          },
-        }))
-      );
-    });
-  });
+  return [];
 }
 
 export async function resolvePlaceSuggestionGeo(
@@ -156,29 +169,81 @@ export async function resolvePlaceSuggestionGeo(
     | undefined;
 
   if (typeof prediction?.toPlace === 'function') {
-    const place = prediction.toPlace();
-    await place.fetchFields({ fields: ['id', 'displayName', 'formattedAddress', 'location'] });
-    const coords = latLngOf(place.location);
-    if (!coords) return null;
-    return {
-      place_id: place.id || row.place_id,
-      name: textOf(place.displayName) || row.structured_formatting.main_text,
-      address: textOf(place.formattedAddress) || row.description,
-      lat: coords.lat,
-      lng: coords.lng,
-    };
+    try {
+      const place = prediction.toPlace();
+      await place.fetchFields({ fields: ['id', 'displayName', 'formattedAddress', 'location'] });
+      const coords = latLngOf(place.location);
+      if (coords) {
+        return {
+          place_id: place.id || row.place_id,
+          name: textOf(place.displayName) || row.structured_formatting.main_text,
+          address: textOf(place.formattedAddress) || row.description,
+          lat: coords.lat,
+          lng: coords.lng,
+        };
+      }
+    } catch {
+      /* Fall through to Geocoder / PlacesService. */
+    }
   }
 
-  if (!google.maps.places.PlacesService) return null;
+  const fromPlaceId = await geocodeSuggestion(google, row, { placeId: row.place_id });
+  if (fromPlaceId) return fromPlaceId;
 
+  const fromDetails = await legacyPlaceDetails(google, row);
+  if (fromDetails) return fromDetails;
+
+  const address = row.description || row.structured_formatting.main_text;
+  if (!address) return null;
+  return geocodeSuggestion(google, row, { address });
+}
+
+function geocodeSuggestion(
+  google: typeof window.google,
+  row: PlaceSuggestionRow,
+  request: google.maps.GeocoderRequest
+): Promise<PlaceSuggestionGeo | null> {
+  if (!google.maps.Geocoder) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const service = new google.maps.places.PlacesService(document.createElement('div'));
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode(request, (results, status) => {
+      const place = results?.[0];
+      if (status !== 'OK' || !place?.geometry?.location) {
+        resolve(null);
+        return;
+      }
+      resolve({
+        place_id: place.place_id || row.place_id,
+        name: row.structured_formatting.main_text || place.formatted_address || row.description,
+        address: place.formatted_address || row.description,
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng(),
+      });
+    });
+  });
+}
+
+/** PlacesService needs an attached node; a detached div fails on some mobile browsers. */
+function legacyPlaceDetails(
+  google: typeof window.google,
+  row: PlaceSuggestionRow
+): Promise<PlaceSuggestionGeo | null> {
+  if (!google.maps.places?.PlacesService || typeof document === 'undefined') {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    const host = document.createElement('div');
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
+    document.body.appendChild(host);
+    const service = new google.maps.places.PlacesService(host);
     service.getDetails(
       {
         placeId: row.place_id,
         fields: ['place_id', 'name', 'formatted_address', 'geometry'],
       },
       (place, status) => {
+        host.remove();
         if (status !== google.maps.places.PlacesServiceStatus.OK || !place?.geometry?.location) {
           resolve(null);
           return;

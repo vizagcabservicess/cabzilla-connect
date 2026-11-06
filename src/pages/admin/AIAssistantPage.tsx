@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,6 @@ import { toast } from 'sonner';
 import {
   aiBookingAPI,
   AI_SHEET_TAB_STORAGE_KEY,
-  defaultAiSheetTabName,
   formatPickupDateDisplay,
   formatRupee,
   readStoredAiSheetTab,
@@ -27,7 +27,8 @@ import {
   validateBookingClient,
 } from '@/services/api/aiBookingAPI';
 import { describeParseErrors } from '@/utils/bookingParser';
-import { applyExplicitFare, applyRouteFromText, applySightseeingFromText } from '@/utils/bookingTripTerms';
+import { applyBookingPhones, applyExplicitFare, applyKeptNotes, applyRouteFromText, applySightseeingFromText, isAcceptableBookingPhone } from '@/utils/bookingTripTerms';
+import { packageLines } from '../../../mobile-app/src/lib/tripPackageLines';
 
 const PREVIEW_FIELDS: Array<{ key: keyof ParsedBooking; label: string; format?: 'date' | 'rupee' }> = [
   { key: 'customer_name', label: 'Customer Name' },
@@ -98,6 +99,15 @@ export default function AIAssistantPage() {
     return validateBookingClient(parsed);
   }, [parsed]);
 
+  const driverTermLines = useMemo(() => {
+    if (!parsed) return [];
+    return packageLines({
+      hourlyPackage: parsed.hourly_package,
+      additionalRequirements: parsed.additional_requirements,
+      tripTerms: parsed.trip_terms,
+    });
+  }, [parsed]);
+
   const handleParse = useCallback(async () => {
     if (!rawText.trim()) {
       toast.error('Paste booking details first');
@@ -117,17 +127,28 @@ export default function AIAssistantPage() {
         applyExplicitFare(booking, rawText);
         applyRouteFromText(booking, rawText);
         applySightseeingFromText(booking, rawText);
+        applyKeptNotes(booking, rawText);
+        applyBookingPhones(booking, rawText);
         return booking;
+      });
+      const parseErrors = (res.parse_errors ?? []).filter((code) => {
+        if (code === 'customer_mobile' && bookings.every((booking) => isAcceptableBookingPhone(booking.customer_mobile ?? ''))) {
+          return false;
+        }
+        if (code === 'manager_mobile' && bookings.every((booking) => isAcceptableBookingPhone(booking.manager_mobile ?? ''))) {
+          return false;
+        }
+        return true;
       });
       setParsed(bookings[0]);
       setParsedBookings(bookings);
-      setParseErrors(res.parse_errors ?? []);
+      setParseErrors(parseErrors);
       setParsedLocally(!!res.parsed_locally);
       setLocalParseReason(res.local_parse_reason ?? null);
       setParseApiError(res.api_error ?? null);
       setShowPreview(true);
-      if ((res.parse_errors?.length ?? 0) > 0) {
-        toast.info(`Partial parse — missing: ${describeParseErrors(res.parse_errors ?? [])}`);
+      if (parseErrors.length > 0) {
+        toast.info(`Partial parse — missing: ${describeParseErrors(parseErrors)}`);
       }
     } catch (e) {
       setErrorBanner(e instanceof Error ? e.message : 'Could not parse booking text');
@@ -326,14 +347,11 @@ export default function AIAssistantPage() {
               id="sheet-tab-name"
               value={sheetTabName}
               onChange={(e) => setSheetTabName(e.target.value)}
-              placeholder="October 2026"
-              list="sheet-tab-suggestions"
+              placeholder="November 2026"
+              autoComplete="off"
             />
-            <datalist id="sheet-tab-suggestions">
-              <option value={defaultAiSheetTabName()} />
-            </datalist>
             <p className="text-xs text-muted-foreground">
-              Must match the tab name in your spreadsheet exactly (e.g. October 2026). Saved in this browser.
+              Stays on this tab until you change the name. Parsing a booking does not replace it.
             </p>
           </div>
         </div>
@@ -442,6 +460,25 @@ export default function AIAssistantPage() {
                     </Alert>
                   ) : null}
 
+                  <div className="rounded-2xl border border-[#e8edf5] bg-[#f3f6fb] p-3">
+                    <p className="px-1 pb-2 text-xs font-medium text-muted-foreground">Driver app</p>
+                    <div className="rounded-2xl border border-[#e8edf5] bg-white px-3 py-3">
+                      <p className="text-base font-extrabold text-slate-900">Package Details &amp; Terms</p>
+                      {driverTermLines.length > 0 ? (
+                        <ul className="mt-2 space-y-2.5">
+                          {driverTermLines.map((line) => (
+                            <li key={line} className="flex items-start gap-2 text-sm leading-5 text-slate-700">
+                              <span className="w-5 shrink-0 text-center text-base font-bold leading-5 text-[#2563eb]">•</span>
+                              <span>{line}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 text-sm text-muted-foreground">No package terms on this trip.</p>
+                      )}
+                    </div>
+                  </div>
+
                   <dl className="grid gap-2 text-sm">
                     {PREVIEW_FIELDS.map(({ key, label, format }) => {
                       const hasError = parseErrors.includes(key);
@@ -477,9 +514,9 @@ export default function AIAssistantPage() {
                         </div>
                       );
                     })}
-                    <div className="flex justify-between gap-4 rounded px-2 py-1">
-                      <dt className="font-medium text-muted-foreground shrink-0">Places</dt>
-                      <dd className="text-right">
+                    <div className="rounded px-2 py-1">
+                      <dt className="font-medium text-muted-foreground">Places</dt>
+                      <dd className="mt-1 space-y-0.5 text-left">
                         {parsed.trip_terms?.places?.length
                           ? parsed.trip_terms.places.map((place, index) => (
                               <div key={`${index}-${place}`}>{index + 1}. {place}</div>
@@ -513,12 +550,27 @@ export default function AIAssistantPage() {
                       <dt className="font-medium text-muted-foreground shrink-0">Flight</dt>
                       <dd className="text-right">{parsed.trip_terms?.flight_number || '—'}</dd>
                     </div>
-                    {parsed.driver_collects_payment === false ? (
-                      <div className="rounded bg-amber-50 px-2 py-1 text-amber-950">
-                        Agent trip. The driver does not see a fare and does not collect payment.
-                        {parsedBookings.length > 1 ? ` This message creates ${parsedBookings.length} bookings.` : ''}
+                    <div className="flex items-center justify-between gap-3 rounded border px-3 py-2">
+                      <div>
+                        <Label htmlFor="hide-fare">Hide fare from the driver</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Use this for an agent booking or a customer booking. The cost stays on the office record.
+                          {parsedBookings.length > 1 ? ` Applies to all ${parsedBookings.length} trips in this paste.` : ''}
+                        </p>
                       </div>
-                    ) : null}
+                      <Switch
+                        id="hide-fare"
+                        checked={parsed.driver_collects_payment === false}
+                        onCheckedChange={(hide) => {
+                          const apply = (booking: ParsedBooking): ParsedBooking => ({
+                            ...booking,
+                            driver_collects_payment: !hide,
+                          });
+                          setParsed((current) => (current ? apply(current) : current));
+                          setParsedBookings((rows) => rows.map(apply));
+                        }}
+                      />
+                    </div>
                   </dl>
 
                   <div className="flex flex-wrap gap-2 pt-2">

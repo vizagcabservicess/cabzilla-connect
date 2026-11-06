@@ -182,6 +182,8 @@ export function FleetShowcase() {
                       <img
                         src={imgUrl}
                         alt={vehicle.name}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-32 object-cover rounded-lg relative z-10"
                         onError={e => {
                           const target = e.target as HTMLImageElement;

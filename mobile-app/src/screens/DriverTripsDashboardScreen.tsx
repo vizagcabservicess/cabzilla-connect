@@ -7,7 +7,13 @@ import { colors } from '../theme/colors';
 import { driverDashboardAPI } from '../services/driverDashboardAPI';
 import type { DriverDashboardTrip, DriverFuelRecord, TripStatus } from '../types/driverDashboard';
 import { shareBookingDutySlip } from '../lib/bookingDutySlip';
+import {
+  readActiveDriverTripTracking,
+  resumeDriverTripTrackingIfNeeded,
+  startDriverTripTracking,
+} from '../lib/driverTripLocationTask';
 import type { DriverTrip } from '../services/driverTripsAPI';
+import { officeNotes } from '../lib/tripPackageLines';
 
 type ListFilter = '' | 'assigned' | 'in_progress' | 'completed';
 
@@ -126,6 +132,30 @@ function money(amount: number): string {
   return `₹${Math.round(amount).toLocaleString('en-IN')}`;
 }
 
+function pickupMillis(trip: DriverDashboardTrip): number | null {
+  const match = (trip.startTime ?? '').match(/(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2}))?/);
+  if (!match) return null;
+  const time = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    match[4] != null ? Number(match[4]) : 0,
+    match[5] != null ? Number(match[5]) : 0
+  ).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+/** Latest pickup date first. A trip with no date stays at the bottom. */
+function compareTrips(a: DriverDashboardTrip, b: DriverDashboardTrip): number {
+  const aTime = pickupMillis(a);
+  const bTime = pickupMillis(b);
+  if (aTime == null && bTime == null) return b.tripId - a.tripId;
+  if (aTime == null) return 1;
+  if (bTime == null) return -1;
+  if (aTime !== bTime) return bTime - aTime;
+  return b.tripId - a.tripId;
+}
+
 export function DriverTripsDashboardScreen() {
   const navigation = useNavigation<any>();
   const [loading, setLoading] = useState(true);
@@ -142,8 +172,24 @@ export function DriverTripsDashboardScreen() {
         tripLimit: 100,
         fuelLimit: 100,
       });
-      setTrips(data.trips.items.filter((trip) => trip.status === 'assigned' || trip.status === 'in_progress' || trip.status === 'completed'));
+      const visible = data.trips.items.filter((trip) => trip.status === 'assigned' || trip.status === 'in_progress' || trip.status === 'completed');
+      setTrips(visible);
       setFuelByTrip(fuelTotalsByTrip(data.fuelRecords.items));
+      const live = visible.find((trip) => trip.status === 'in_progress');
+      if (live) {
+        void (async () => {
+          try {
+            const active = await readActiveDriverTripTracking();
+            if (active?.bookingId === live.tripId) {
+              await resumeDriverTripTrackingIfNeeded();
+              return;
+            }
+            await startDriverTripTracking(live.tripId);
+          } catch {
+            /* the trip screen asks for location if sharing cannot start */
+          }
+        })();
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -173,8 +219,17 @@ export function DriverTripsDashboardScreen() {
   }), [searched]);
 
   const displayTrips = useMemo(() => {
-    if (!status) return searched;
-    return searched.filter((trip) => trip.status === status);
+    const rows = status ? searched.filter((trip) => trip.status === status) : searched;
+    return [...rows].sort((a, b) => {
+      if (!status) {
+        const rank = (trip: DriverDashboardTrip) => (
+          trip.status === 'in_progress' ? 0 : trip.status === 'assigned' ? 1 : 2
+        );
+        const rankDiff = rank(a) - rank(b);
+        if (rankDiff !== 0) return rankDiff;
+      }
+      return compareTrips(a, b);
+    });
   }, [searched, status]);
 
   const openTrip = (item: DriverDashboardTrip) => {
@@ -308,6 +363,7 @@ function TripCard({
   const lengthLabel = packageLengthLabel(item);
   const vehicle = vehicleParts(item);
   const collects = item.driverCollectsPayment !== false;
+  const notes = officeNotes(item);
   const statusColor = item.status === 'in_progress' ? '#d97706' : item.status === 'completed' ? '#16a34a' : '#2563eb';
   const statusLabel = item.status === 'in_progress' ? 'In Progress' : item.status === 'completed' ? 'Completed' : 'Assigned';
 
@@ -336,6 +392,12 @@ function TripCard({
           <View style={styles.placeRow}>
             <Ionicons name="location" size={14} color="#dc2626" />
             <Text style={styles.placeText}>{drop}</Text>
+          </View>
+        ) : null}
+        {notes.length > 0 ? (
+          <View style={styles.placeRow}>
+            <Ionicons name="document-text-outline" size={14} color={colors.primary} />
+            <Text style={styles.placeText} numberOfLines={2}>{notes.join(' · ')}</Text>
           </View>
         ) : null}
         <View style={styles.metrics}>

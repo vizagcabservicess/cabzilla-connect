@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vizag Taxi Hub",
     "slug": "vizag-taxi-hub",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,9 +15,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.vizagtaxihub.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Vizag Taxi Hub uses your location for live trip and event duty tracking.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "During a trip or event duty, Vizag Taxi Hub shares your location with the office. You can lock the screen; a notification stays until tracking stops.",
-        "NSLocationAlwaysUsageDescription": "During a trip or event duty, Vizag Taxi Hub shares your location with the office. You can lock the screen; a notification stays until tracking stops.",
+        "NSLocationWhenInUseUsageDescription": "Vizag Taxi Hub uses your location while the app is open for pickup, live trip tracking, and event duty.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Vizag Taxi Hub collects location data to enable pickup and live trip tracking even when the app is closed or not in use, and shares driver location with the Vizag Taxi Hub office during an active trip or duty.",
+        "NSLocationAlwaysUsageDescription": "Vizag Taxi Hub collects location data to enable pickup and live trip tracking even when the app is closed or not in use, and shares driver location with the Vizag Taxi Hub office during an active trip or duty.",
         "UIBackgroundModes": ["location"],
         "NSCameraUsageDescription": "Vizag Taxi Hub uses the camera to photograph odometer readings and fuel receipts.",
         "NSPhotoLibraryUsageDescription": "Vizag Taxi Hub may access photos you select for receipts."
@@ -42,10 +42,13 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.CAMERA",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK"
       ],
       "blockedPermissions": [
-        "android.permission.ACTIVITY_RECOGNITION"
+        "android.permission.ACTIVITY_RECOGNITION",
+        "com.google.android.gms.permission.AD_ID"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -59,8 +62,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Vizag Taxi Hub uses your location for live trip and event duty tracking.",
-          "locationAlwaysAndWhenInUsePermission": "During a trip or event duty, Vizag Taxi Hub shares your location with the office. You can lock the screen; a notification stays until tracking stops.",
+          "locationWhenInUsePermission": "Vizag Taxi Hub uses your location while the app is open for pickup, live trip tracking, and event duty.",
+          "locationAlwaysAndWhenInUsePermission": "Vizag Taxi Hub collects location data to enable pickup and live trip tracking even when the app is closed or not in use, and shares driver location with the Vizag Taxi Hub office during an active trip or duty.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
@@ -86,7 +89,9 @@
         {
           "icon": "./assets/icon.png",
           "color": "#2563eb",
-          "defaultChannel": "default"
+          "defaultChannel": "default",
+          "sounds": ["./assets/sounds/trip_alarm.wav"],
+          "enableBackgroundRemoteNotifications": true
         }
       ],
       "expo-secure-store",
@@ -103,7 +108,8 @@
         }
       ],
       "./plugins/withOptionalAndroidHardware.js",
-      "./plugins/withPlayLargeScreens.js"
+      "./plugins/withPlayLargeScreens.js",
+      "./plugins/withTripLockScreen.js"
     ],
     "extra": {
       "eas": {

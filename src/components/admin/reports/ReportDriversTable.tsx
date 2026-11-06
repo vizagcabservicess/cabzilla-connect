@@ -181,6 +181,26 @@ export function ReportDriversTable({
     }
   }, [selectedBooking, refreshDriverBookings, toast]);
 
+  const handleRemoveAssignment = useCallback(async () => {
+    if (!selectedBooking) return;
+    setIsSubmitting(true);
+    try {
+      const response = await bookingAPI.unassignDriver(selectedBooking.id);
+      const nextStatus = (response?.data?.status || 'confirmed') as Booking['status'];
+      setSelectedBooking((prev) => (prev ? {
+        ...prev,
+        driverName: '',
+        driverPhone: '',
+        vehicleNumber: '',
+        vehicleId: undefined,
+        status: nextStatus,
+      } : null));
+      await refreshDriverBookings();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [selectedBooking, refreshDriverBookings]);
+
   const handleCancelBooking = useCallback(async () => {
     if (!selectedBooking) return;
     setIsSubmitting(true);
@@ -297,8 +317,8 @@ export function ReportDriversTable({
   const handleConfirmDelete = useCallback(async () => {
     if (!bookingToDelete || !bookingToDelete.id) return;
     try {
-      await bookingAPI.deleteBooking(Number(bookingToDelete.id));
-      toast({ title: 'Booking deleted' });
+      const result = await bookingAPI.deleteBooking(Number(bookingToDelete.id));
+      toast({ title: 'Booking deleted', description: result?.message });
       setBookingToDelete(null);
       await refreshDriverBookings();
     } catch (err) {
@@ -484,6 +504,7 @@ export function ReportDriversTable({
         onClose={() => setSelectedBooking(null)}
         onEdit={handleEdit}
         onAssignDriver={handleAssignDriver}
+        onRemoveAssignment={handleRemoveAssignment}
         onCancel={handleCancelBooking}
         onGenerateInvoice={handleGenerateInvoice}
         onStatusChange={handleStatusChange}

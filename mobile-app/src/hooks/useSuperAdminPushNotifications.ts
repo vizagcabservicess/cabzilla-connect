@@ -42,7 +42,17 @@ export function useSuperAdminPushNotifications(navigation?: NativeStackNavigatio
 
     const unsubscribe = addNotificationListeners(undefined, (response) => {
       const data = response.notification.request.content.data;
-      if (data?.type === 'new_booking' && data?.bookingNumber && navigation) {
+      if ((data?.type === 'duty_update' || data?.type === 'vendor_trip_update') && navigation) {
+        const bookingNumber = String(data.bookingNumber ?? '').trim();
+        navigation.navigate('AdminDriverOpsDashboard', bookingNumber ? { bookingNumber } : undefined);
+      } else if (data?.type === 'event_duty_update' && navigation) {
+        const eventId = Number(data.eventId);
+        if (eventId > 0) {
+          navigation.navigate('AdminEventDetail', { eventId });
+        } else {
+          navigation.navigate('AdminEvents');
+        }
+      } else if (data?.type === 'new_booking' && data?.bookingNumber && navigation) {
         navigation.navigate('AdminBookingsList');
       }
     });

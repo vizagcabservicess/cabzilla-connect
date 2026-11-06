@@ -25,6 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/../common/db_helper.php';
 require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../common/fuel_record_schema.inc.php';
+require_once __DIR__ . '/../common/fuel_trip_match.inc.php';
+require_once __DIR__ . '/../common/fuel_sheet_sync.inc.php';
 
 // Handle GET request - Fetch fuel records
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -37,9 +39,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $sql = "SELECT fr.*, 
                 v.vehicle_number as vehicle_number,
                 v.name as vehicle_name,
-                v.model as vehicle_model
+                v.model as vehicle_model,
+                COALESCE(NULLIF(TRIM(d.name), ''), NULLIF(TRIM(bd.name), '')) as driver_name,
+                COALESCE(fr.driver_id, b.driver_id) as resolved_driver_id
                 FROM fuel_records fr
-                LEFT JOIN fleet_vehicles v ON fr.vehicle_id = v.id";
+                LEFT JOIN fleet_vehicles v ON fr.vehicle_id = v.id
+                LEFT JOIN drivers d ON d.id = fr.driver_id
+                LEFT JOIN bookings b ON b.id = fr.booking_id
+                LEFT JOIN drivers bd ON bd.id = b.driver_id";
         
         $where = [];
         $params = [];
@@ -119,11 +126,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
 }
 
-// Handle POST request - Create fuel record
+// Handle POST request - Create fuel record, or refill the sheet from saved fuel
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (is_array($data) && (($data['action'] ?? '') === 'fill-sheet')) {
+        $stream = !empty($data['stream']);
+        try {
+            set_time_limit(180);
+            if ($stream) {
+                @ini_set('zlib.output_compression', '0');
+                @ini_set('output_buffering', 'off');
+                @ini_set('implicit_flush', '1');
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/x-ndjson; charset=utf-8');
+                header('Cache-Control: no-cache, no-store, must-revalidate');
+                header('X-Accel-Buffering: no');
+                header('Content-Encoding: none');
+            }
+            $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+            ensureFuelRecordsTableExists($conn);
+            ensureFuelRecordsColumns($conn);
+            $onProgress = null;
+            if ($stream) {
+                $onProgress = static function (array $event): void {
+                    echo json_encode($event, JSON_UNESCAPED_UNICODE) . "\n";
+                    echo str_repeat(' ', 4096) . "\n";
+                    flush();
+                };
+            }
+            $report = fuel_sheet_fill_visible_rows($conn, $onProgress);
+            $conn->close();
+            $filled = (int) ($report['filled'] ?? 0);
+            $missing = is_array($report['missing'] ?? null) ? $report['missing'] : [];
+            $failedRows = is_array($report['failed'] ?? null) ? $report['failed'] : [];
+            $message = $filled === 1
+                ? 'Fuel on 1 trip was written onto the sheet.'
+                : 'Fuel on ' . $filled . ' trips was written onto the sheet.';
+            if (count($missing) > 0) {
+                $message .= ' ' . count($missing) . (count($missing) === 1
+                    ? ' fuel entry has no matching trip on the sheet.'
+                    : ' fuel entries have no matching trip on the sheet.');
+            }
+            if (count($failedRows) > 0) {
+                $message .= ' ' . count($failedRows) . (count($failedRows) === 1
+                    ? ' trip could not be updated.'
+                    : ' trips could not be updated.');
+            }
+            $payload = [
+                'filled' => $filled,
+                'missing' => $missing,
+                'failed' => $failedRows,
+            ];
+            if ($stream) {
+                echo json_encode([
+                    'type' => 'result',
+                    'status' => 'success',
+                    'message' => $message,
+                    'data' => $payload,
+                ], JSON_UNESCAPED_UNICODE) . "\n";
+                flush();
+                exit;
+            }
+            sendSuccessResponse($payload, $message);
+        } catch (Exception $e) {
+            if ($stream) {
+                echo json_encode([
+                    'type' => 'error',
+                    'message' => 'Failed to fill the sheet: ' . $e->getMessage(),
+                ], JSON_UNESCAPED_UNICODE) . "\n";
+                flush();
+                exit;
+            }
+            sendErrorResponse('Failed to fill the sheet: ' . $e->getMessage());
+        }
+    }
+
     try {
-        // Get request body
-        $data = json_decode(file_get_contents('php://input'), true);
         
         // Validate request data
         if (!isset($data['vehicleId']) || !isset($data['fillDate']) || 
@@ -177,6 +257,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         $stmt->execute();
         $id = $stmt->insert_id;
+
+        $postedDriverId = 0;
+        if (isset($data['driverId']) && $data['driverId'] !== '' && is_numeric($data['driverId'])) {
+            $postedDriverId = (int)$data['driverId'];
+        }
+        $recordedAt = time();
+        if ($fillDate !== date('Y-m-d')) {
+            $fillTs = strtotime($fillDate . ' 12:00:00');
+            if ($fillTs !== false) {
+                $recordedAt = $fillTs;
+            }
+        }
+        $tripLink = fuel_fill_resolve_trip($conn, [
+            'vehicleId' => (int)$vehicleId,
+            'driverId' => $postedDriverId,
+            'odometer' => $odometer,
+            'recordedAt' => $recordedAt,
+            'explicitBookingId' => isset($data['bookingId']) ? (int)$data['bookingId'] : 0,
+        ]);
+        $linkDriver = $postedDriverId > 0 ? $postedDriverId : (int)($tripLink['driverId'] ?? 0);
+        fuel_fill_store_link(
+            $conn,
+            (int)$id,
+            (int)($tripLink['bookingId'] ?? 0),
+            $linkDriver,
+            array_key_exists('loggedAfterTripEnd', $tripLink) ? $tripLink['loggedAfterTripEnd'] : null
+        );
+        fuel_sheet_sync_booking((int)($tripLink['bookingId'] ?? 0));
         
         // Get the created record
         $stmt = $conn->prepare("SELECT fr.*, 
@@ -233,6 +341,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
             sendErrorResponse('Fuel record not found', [], 404);
             exit;
         }
+        $existingFuel = $result->fetch_assoc();
+        $existingBookingId = (int)($existingFuel['booking_id'] ?? 0);
         
         // Prepare update fields
         $updateFields = [];
@@ -355,6 +465,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         $stmt = $conn->prepare($sql);
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
+        fuel_sheet_sync_booking($existingBookingId);
         
         // Get the updated record
         $stmt = $conn->prepare("SELECT fr.*, 
@@ -388,6 +499,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         // Connect to database
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         ensureFuelRecordsTableExists($conn);
+
+        $linkedBookingId = 0;
+        $lookup = $conn->prepare("SELECT booking_id FROM fuel_records WHERE id = ?");
+        if ($lookup) {
+            $lookup->bind_param("i", $recordId);
+            $lookup->execute();
+            $lookup->bind_result($linkedBookingId);
+            $lookup->fetch();
+            $lookup->close();
+            $linkedBookingId = (int)$linkedBookingId;
+        }
         
         // Delete record
         $stmt = $conn->prepare("DELETE FROM fuel_records WHERE id = ?");
@@ -398,6 +520,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
             sendErrorResponse('Fuel record not found', [], 404);
             exit;
         }
+
+        fuel_sheet_sync_booking($linkedBookingId);
         
         sendSuccessResponse([], 'Fuel record deleted successfully');
     } catch (Exception $e) {

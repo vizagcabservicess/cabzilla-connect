@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { Location } from '@/lib/locationData';
-import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
+import { requestGoogleMaps, useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { toast } from "sonner";
 
 import { GoogleMap, Marker, DirectionsRenderer } from "@react-google-maps/api";
@@ -46,6 +46,10 @@ const GoogleMapComponent = ({
   mapHeight = '400px',
 }: GoogleMapComponentProps) => {
   const { isLoaded, google } = useGoogleMaps();
+
+  useEffect(() => {
+    requestGoogleMaps();
+  }, []);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService | null>(null);

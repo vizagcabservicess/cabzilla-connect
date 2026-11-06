@@ -83,7 +83,7 @@ try {
     
     // Verify booking exists
     try {
-        $checkStmt = $conn->prepare("SELECT id, status, booking_number FROM bookings WHERE id = ?");
+        $checkStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
         if (!$checkStmt) {
             throw new Exception("Failed to prepare statement: " . $conn->error);
         }
@@ -162,14 +162,51 @@ try {
         ], 500);
     }
     
+    $sheetSync = [
+        'success' => true,
+        'skipped' => true,
+        'error' => null,
+    ];
+    try {
+        $sheetSyncFile = dirname(__DIR__) . '/ai-booking/services/OnlineBookingSheetSync.php';
+        if (is_readable($sheetSyncFile)) {
+            require_once $sheetSyncFile;
+            $sheetSync = OnlineBookingSheetSync::removeSyncedRow($booking);
+        }
+    } catch (Throwable $e) {
+        logDeleteBookingError('Google Sheet delete failed', [
+            'booking_id' => $bookingId,
+            'error' => $e->getMessage(),
+        ]);
+        $sheetSync = [
+            'success' => false,
+            'skipped' => false,
+            'error' => $e->getMessage(),
+        ];
+    }
+
+    $sheetRemoved = !empty($sheetSync['success']) && empty($sheetSync['skipped']);
+    $sheetError = $sheetRemoved ? null : ($sheetSync['error'] ?? null);
+    if ($sheetRemoved) {
+        $message = 'Booking deleted from the system and the Google Sheet';
+    } elseif ($sheetError) {
+        $message = 'Booking deleted, but it could not be removed from the Google Sheet';
+    } else {
+        $message = 'Booking deleted successfully';
+    }
+
     // Send success response
     sendJsonResponse([
         'status' => 'success', 
-        'message' => 'Booking deleted successfully',
+        'message' => $message,
         'data' => [
             'id' => (int)$bookingId,
-            'bookingNumber' => $booking['booking_number'],
-            'deletedAt' => date('Y-m-d H:i:s')
+            'bookingNumber' => $booking['booking_number'] ?? null,
+            'deletedAt' => date('Y-m-d H:i:s'),
+            'sheet_removed' => $sheetRemoved,
+            'sheet_skipped' => !empty($sheetSync['skipped']),
+            'sheet_error' => $sheetError,
+            'sheet_tab' => $sheetSync['tab_name'] ?? null,
         ]
     ]);
 

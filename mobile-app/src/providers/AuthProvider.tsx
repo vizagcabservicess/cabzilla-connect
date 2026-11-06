@@ -2,7 +2,7 @@
  * Auth context - mirrors web app AuthProvider
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Platform } from 'react-native';
+import { Alert, AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import {
   authAPI,
@@ -15,9 +15,11 @@ import {
   getPushToken,
   addNotificationListeners,
   ensureTripAssignmentNotificationChannel,
+  promptTripLockScreenAccess,
   ensureDefaultPushChannel,
 } from '../services/pushNotificationService';
 import { navigationRef } from '../navigation/navigationRef';
+import { clearSuperAdminPushMuteMemory, loadSuperAdminPushMute } from '../lib/superAdminPushMute';
 import { mobileEventAPI } from '../services/eventDutyAPI';
 
 async function withAppAccess(user: User): Promise<User> {
@@ -31,7 +33,7 @@ async function withAppAccess(user: User): Promise<User> {
 
 function navigateAdminFromNotificationData(data: Record<string, unknown> | undefined): void {
   const t = data?.type;
-  if (t !== 'driver_fuel_refill' && t !== 'new_booking') return;
+  if (t !== 'driver_fuel_refill' && t !== 'new_booking' && t !== 'duty_update' && t !== 'event_duty_update' && t !== 'vendor_trip_update') return;
 
   let tries = 0;
   const go = () => {
@@ -41,6 +43,16 @@ function navigateAdminFromNotificationData(data: Record<string, unknown> | undef
     }
     if (t === 'driver_fuel_refill') {
       navigationRef.navigate('AdminFuel' as never);
+    } else if (t === 'duty_update' || t === 'vendor_trip_update') {
+      const bookingNumber = String(data?.bookingNumber ?? '').trim();
+      navigationRef.navigate('AdminDriverOpsDashboard' as never, { bookingNumber } as never);
+    } else if (t === 'event_duty_update') {
+      const eventId = Number(data?.eventId);
+      if (eventId > 0) {
+        navigationRef.navigate('AdminEventDetail' as never, { eventId } as never);
+      } else {
+        navigationRef.navigate('AdminEvents' as never);
+      }
     } else if (t === 'new_booking') {
       navigationRef.navigate('AdminBookingsList' as never);
     }
@@ -80,7 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const stillToken = await authAPI.getStoredToken();
     if (!stillToken) {
-      setUser(null);
+      setUser((current) => {
+        if (current) {
+          Alert.alert('Signed out', 'This account is inactive.');
+        }
+        return null;
+      });
       return;
     }
     const stored = await authAPI.getStoredUser();
@@ -109,6 +126,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshUser();
+    });
+    const timer = setInterval(() => {
+      void refreshUser();
+    }, 10000);
+    return () => {
+      sub.remove();
+      clearInterval(timer);
+    };
+  }, [refreshUser]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || isLoading) return;
+    if (user?.role === 'super_admin') {
+      void loadSuperAdminPushMute();
+      return;
+    }
+    clearSuperAdminPushMuteMemory();
+  }, [isLoading, user?.id, user?.role]);
+
   // Register push: super_admin + admin (bookings + driver fuel uploads), driver (trip assignments)
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -127,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const registerWithRetries = async () => {
       if (user?.role === 'driver') {
         await ensureTripAssignmentNotificationChannel();
+        await promptTripLockScreenAccess();
       }
       if (user?.role === 'super_admin' || user?.role === 'admin') {
         await ensureDefaultPushChannel();

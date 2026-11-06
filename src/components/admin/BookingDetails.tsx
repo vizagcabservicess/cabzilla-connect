@@ -25,6 +25,7 @@ interface BookingDetailsProps {
   onClose: () => void;
   onEdit: (updatedData: Partial<Booking>) => Promise<void>;
   onAssignDriver: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
+  onRemoveAssignment?: () => Promise<void>;
   onCancel: () => Promise<void>;
   onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any) => Promise<any>;
   onStatusChange: (newStatus: BookingStatus) => Promise<void>;
@@ -37,6 +38,7 @@ export function BookingDetails({
   onClose,
   onEdit,
   onAssignDriver,
+  onRemoveAssignment,
   onCancel,
   onGenerateInvoice,
   onStatusChange,
@@ -350,7 +352,9 @@ export function BookingDetails({
                 <div className="flex justify-between items-center">
                   <p className="text-xs text-gray-500">Payment Status</p>
                   <div className="flex items-center space-x-2">
-                    {(booking as any).payment_status === 'partial_payment' || advancePaid > 0 ? (
+                    {(booking as any).payment_status === 'partial_payment' ||
+                    (booking as any).payment_status === 'partial' ||
+                    advancePaid > 0 ? (
                       <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">
                         PARTIAL PAYMENT
                       </span>
@@ -439,6 +443,7 @@ export function BookingDetails({
           <DriverAssignment 
             booking={booking}
             onAssign={onAssignDriver}
+            onRemoveAssignment={onRemoveAssignment}
             onCancel={() => handleTabChange('details')}
             onClose={() => handleTabChange('details')}
             isSubmitting={isSubmitting}

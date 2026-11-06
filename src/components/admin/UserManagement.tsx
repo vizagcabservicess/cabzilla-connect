@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, Eye, RefreshCw, Save, User, UserPlus, UserX } from "lucide-react";
+import { AlertCircle, Eye, RefreshCw, Save, Search, User, UserPlus, UserX } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { userAPI } from '@/services/api/userAPI';
 import { User as UserType } from '@/types/api';
@@ -18,6 +18,34 @@ import { reloadUsers } from '@/lib/userData';
 
 type AppAccess = 'full' | 'event_manager' | 'event_driver';
 type AccountChoice = 'guest' | 'admin' | 'super_admin' | 'driver' | 'event_manager' | 'event_driver';
+type UserListFilter =
+  | 'all'
+  | 'active'
+  | 'inactive'
+  | 'guest'
+  | 'admin'
+  | 'super_admin'
+  | 'driver'
+  | 'event_manager'
+  | 'event_driver'
+  | 'customer'
+  | 'provider'
+  | 'user';
+
+const USER_LIST_FILTERS: Array<{ value: UserListFilter; label: string }> = [
+  { value: 'all', label: 'All users' },
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+  { value: 'driver', label: 'Drivers' },
+  { value: 'guest', label: 'Guests' },
+  { value: 'admin', label: 'Admins' },
+  { value: 'super_admin', label: 'Super admins' },
+  { value: 'customer', label: 'Customers' },
+  { value: 'provider', label: 'Providers' },
+  { value: 'user', label: 'Users' },
+  { value: 'event_manager', label: 'Event managers' },
+  { value: 'event_driver', label: 'Event drivers' },
+];
 type StoredRole = 'guest' | 'admin' | 'super_admin' | 'driver';
 
 function storedRole(choice: AccountChoice): StoredRole {
@@ -29,6 +57,25 @@ function storedRole(choice: AccountChoice): StoredRole {
 function shownRole(role: string, access?: AppAccess): string {
   if (access === 'event_manager' || access === 'event_driver') return access;
   return role;
+}
+
+function matchesListFilter(user: UserType, access: AppAccess | undefined, filter: UserListFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'active') return user.is_active !== false;
+  if (filter === 'inactive') return user.is_active === false;
+  return shownRole(user.role, access) === filter;
+}
+
+function matchesUserSearch(user: UserType, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const phoneQuery = q.replace(/\D/g, '');
+  const phone = String(user.phone || '').replace(/\D/g, '');
+  return (
+    user.name.toLowerCase().includes(q) ||
+    String(user.email || '').toLowerCase().includes(q) ||
+    (phoneQuery.length > 0 && phone.includes(phoneQuery))
+  );
 }
 
 function RoleChoices() {
@@ -64,6 +111,8 @@ export function UserManagement() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [username, setUsername] = useState<string>('');
   const [appAccess, setAppAccess] = useState<Record<string, AppAccess>>({});
+  const [listFilter, setListFilter] = useState<UserListFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -167,6 +216,25 @@ export function UserManagement() {
     }
   };
 
+  const handleUserActiveUpdate = async (userId: string | number, isActive: boolean) => {
+    const previous = users.find((user) => user.id === userId)?.is_active !== false;
+    setUsers((prev) => prev.map((user) => (
+      user.id === userId ? { ...user, is_active: isActive } : user
+    )));
+    try {
+      const numericId = typeof userId === 'string' && !isNaN(Number(userId)) ? Number(userId) : userId;
+      await userAPI.setUserActive(numericId, isActive);
+      toast.success(isActive ? 'User can sign in again' : 'User is inactive and cannot sign in');
+    } catch (error) {
+      console.error('Error updating user status:', error);
+      setUsers((prev) => prev.map((user) => (
+        user.id === userId ? { ...user, is_active: previous } : user
+      )));
+      const message = error instanceof Error ? error.message : 'Failed to update user status';
+      toast.error(message);
+    }
+  };
+
   const handleUserRoleUpdate = async (userId: string | number, choice: AccountChoice) => {
     try {
       const numericId = typeof userId === 'string' && !isNaN(Number(userId)) ?
@@ -196,6 +264,10 @@ export function UserManagement() {
       setIsLoading(false);
     }
   };
+
+  const visibleUsers = users.filter((user) =>
+    matchesListFilter(user, appAccess[String(user.id)], listFilter) && matchesUserSearch(user, searchQuery)
+  );
   
   return (
     <div className="container mx-auto py-10">
@@ -328,20 +400,44 @@ export function UserManagement() {
       {/* Users Table Card */}
       <Card className="mt-8">
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" /> Existing Users
             </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-2"
-              title="View your own customer dashboard"
-            >
-              <Eye className="h-4 w-4" />
-              View Customer Dashboard
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <label className="sr-only" htmlFor="user-list-search">Search users</label>
+                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="user-list-search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search name, email, or phone"
+                  className="h-9 w-56 pl-8 sm:w-64"
+                />
+              </div>
+              <label className="sr-only" htmlFor="user-list-filter">Filter users</label>
+              <select
+                id="user-list-filter"
+                value={listFilter}
+                onChange={(event) => setListFilter(event.target.value as UserListFilter)}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {USER_LIST_FILTERS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/dashboard')}
+                className="flex items-center gap-2"
+                title="View your own customer dashboard"
+              >
+                <Eye className="h-4 w-4" />
+                View Customer Dashboard
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -351,20 +447,29 @@ export function UserManagement() {
             </div>
           ) : users.length > 0 ? (
             <Table>
-              <TableCaption>A list of all registered users.</TableCaption>
+              <TableCaption>
+                {visibleUsers.length} of {users.length} users
+              </TableCaption>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[200px]">Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Auth</TableHead>
                   <TableHead className="text-center w-24">Bookings</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
+                {visibleUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-8 text-center text-gray-500">
+                      No users match this search.
+                    </TableCell>
+                  </TableRow>
+                ) : visibleUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
@@ -381,6 +486,22 @@ export function UserManagement() {
                         </SelectTrigger>
                         <SelectContent>
                           <RoleChoices />
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={user.is_active === false ? 'inactive' : 'active'}
+                        onValueChange={(value) => {
+                          void handleUserActiveUpdate(user.id, value === 'active');
+                        }}
+                      >
+                        <SelectTrigger className="w-[120px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>

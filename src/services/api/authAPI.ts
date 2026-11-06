@@ -215,11 +215,14 @@ class AuthAPI {
       return null;
     } catch (error) {
       console.error('Get current user error:', error);
-      // DON'T logout on error in development mode - just return null
-      if (process.env.NODE_ENV !== 'development') {
-        this.logout();
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      if (status === 401 || status === 403) {
+        this.setToken(null);
+        localStorage.removeItem('user');
+        void this.logout();
+        return null;
       }
-      return null;
+      throw error;
     }
   }
 
@@ -248,6 +251,34 @@ class AuthAPI {
 
   getToken(): string | null {
     return this.token;
+  }
+
+  async getPushMuted(): Promise<boolean> {
+    if (!this.token) throw new Error('Not signed in');
+    const response = await axios.get<{ status?: string; muted?: boolean }>(`${API_BASE_URL}/push-mute.php`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (response.data?.status !== 'success') {
+      throw new Error('Could not read notification setting');
+    }
+    return response.data.muted === true;
+  }
+
+  async setPushMuted(muted: boolean): Promise<void> {
+    if (!this.token) throw new Error('Not signed in');
+    const response = await axios.post<{ status?: string }>(
+      `${API_BASE_URL}/push-mute.php`,
+      { muted },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.token}`,
+        },
+      }
+    );
+    if (response.data?.status !== 'success') {
+      throw new Error('Could not save notification setting');
+    }
   }
 }
 

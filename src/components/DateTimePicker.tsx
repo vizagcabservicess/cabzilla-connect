@@ -12,7 +12,7 @@ import { isValidTripDate } from '@/lib/dateUtils';
 
 export type DateTimePickerHandle = {
   focus: () => void;
-  open: () => void;
+  open: (options?: { scroll?: boolean }) => void;
 };
 
 export interface DateTimePickerProps {
@@ -93,6 +93,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
   const scrollLockY = useRef(0);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const onDateAppliedRef = useRef(onDateApplied);
+  const openedAtRef = useRef(0);
 
   useEffect(() => {
     onDateAppliedRef.current = onDateApplied;
@@ -170,11 +171,18 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
       (selectedTime && combineDateAndTime(date, selectedTime)) ||
       (isValidTripDate(date) ? atMinutePrecision(date) : atMinutePrecision(new Date()));
     const next = ensureSelectableInstant(combined);
+    setDisplayMonth(startOfMonth(next));
     setSelectedTime(format(next, 'HH:mm'));
+    openedAtRef.current = Date.now();
     if (!isValidTripDate(date) || next.getTime() !== atMinutePrecision(date).getTime()) {
       onDateChange(next);
     }
     setOpen(true);
+  };
+
+  const dismissSheet = () => {
+    if (Date.now() - openedAtRef.current < 500) return;
+    setOpen(false);
   };
 
   useImperativeHandle(ref, () => ({
@@ -183,9 +191,10 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
       triggerRef.current?.focus();
       triggerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     },
-    open: () => {
+    open: (options?: { scroll?: boolean }) => {
       if (disabled) return;
       openPicker();
+      if (options?.scroll === false) return;
       triggerRef.current?.focus();
       triggerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     },
@@ -392,7 +401,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     useMobileSheet && open && typeof document !== 'undefined'
       ? createPortal(
           <div
-            className="datetime-picker-sheet pointer-events-auto fixed inset-0 z-[10070] flex flex-col justify-end"
+            className="datetime-picker-sheet pointer-events-auto fixed inset-0 z-[10090] flex flex-col justify-end"
             style={{ pointerEvents: 'auto' }}
             role="dialog"
             aria-modal="true"
@@ -403,7 +412,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
               type="button"
               className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
               aria-label="Close date picker"
-              onClick={() => setOpen(false)}
+              onClick={dismissSheet}
             />
             <div className="relative mx-auto flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-t-[1.75rem] bg-white shadow-[0_-18px_50px_-20px_rgba(15,23,42,0.35)]">
               <div className="flex shrink-0 justify-center pt-2.5 pb-1" aria-hidden>

@@ -343,7 +343,7 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent data-fuel-record-dialog="" className="max-h-[90dvh] max-w-2xl overflow-y-auto overscroll-contain">
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <Fuel className="mr-2 h-5 w-5" />

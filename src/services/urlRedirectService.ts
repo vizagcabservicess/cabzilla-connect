@@ -43,7 +43,6 @@ export class URLRedirectService {
     
     // Old privacy pages
     { from: '/privacy', to: '/privacy-policy', type: 'permanent', statusCode: 301 },
-    { from: '/privacy-policy', to: '/privacy-policy', type: 'permanent', statusCode: 301 },
     
 
     

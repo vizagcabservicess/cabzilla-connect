@@ -104,6 +104,23 @@ export const userAPI = {
       console.error('Error updating user role:', error);
       throw error;
     }
+  },
+
+  setUserActive: async (userId: number | string, isActive: boolean) => {
+    try {
+      const response = await axios.put(
+        `${API_BASE_URL}/api/admin/users.php`,
+        { userId, isActive },
+        { headers: getAuthHeaders() }
+      );
+      if (response.data?.status === 'error') {
+        throw new Error(response.data?.message || 'Failed to update status');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error updating user status:', error);
+      throw error;
+    }
   }
 };
 

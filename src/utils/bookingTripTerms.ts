@@ -122,9 +122,29 @@ export function applyExplicitFare(data: ParsedBooking, text: string): void {
   if (data.cost > 0) data.driver_collects_payment = true;
 }
 
+/** WhatsApp lists insert word-joiners and a curly apostrophe, e.g. "1.⁠ ⁠Central Park". */
+function normalizePasteLine(line: string): string {
+  return line
+    .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[\u2018\u2019\u2032]/g, "'")
+    .replace(/\uFF0E/g, '.');
+}
+
 function isFeeNote(line: string): boolean {
-  return /please provide|food for the driver|driver'?s food|additional hour|do not include|prices do not|every additional|additional km|garage|standby|prices exclude|turned off|places will be shown|peak season|exceeding the time|toll|parking(?!\s+(?:lot|area|point))|entry fee|lockdown|driver allowance/i.test(line)
+  return /please provide|food for the driver|driver'?s food|additional hour|do not include|prices do not|prices quoted|subject to change|taxes or fees|every additional|additional km|kilometers are calculated|hotel to the hotel|garage|standby|prices exclude|prices include|above prices include|turned off|places will be shown|peak season|exceeding the time|toll|parking(?!\s+(?:lot|area|point))|entry fee|lockdown|driver'?s?\s+allowance|will be charged/i.test(line)
     || (/katiki/i.test(line) && /closed|not |will |cannot|extra/i.test(line));
+}
+
+function isPlacesHeading(line: string): boolean {
+  const plain = normalizePasteLine(line)
+    .replace(/[*_]/g, ' ')
+    .replace(/'/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!plain || plain.length > 90) return false;
+  if (/^(?:places\s+to\s+visit|day one|notes?)\s*:?$/i.test(plain)) return true;
+  return /sightseeing/i.test(plain) && /\bplaces?\b/i.test(plain);
 }
 
 function uniqueTexts(items: string[]): string[] {
@@ -155,9 +175,9 @@ function headingCase(raw: string): string {
 }
 
 function listItem(line: string): string | null {
-  let trimmed = line.replace(/\u2060/g, '').trim().replace(/^\*+/, '').replace(/\*+$/, '').trim();
+  const trimmed = normalizePasteLine(line).trim().replace(/^\*+/, '').replace(/\*+$/, '').trim();
   const bullet = trimmed.match(/^(?:[•●▪‣]|\-(?!\d))\s+(.+)$/);
-  const numbered = trimmed.match(/^\d+\.?\s*(.+)$/);
+  const numbered = trimmed.match(/^\d{1,2}\s*[.)]\s*(.+)$/);
   const raw = (bullet?.[1] ?? numbered?.[1] ?? '').replace(/\*+/g, '').trim();
   if (!raw) return null;
   const name = clean(raw).replace(/\s+/g, ' ').trim();
@@ -198,19 +218,49 @@ function programTitle(raw: string): string {
   return cleaned;
 }
 
+const DAY_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  first: 1,
+  second: 2,
+  third: 3,
+};
+
+function dayHeadingTitle(raw: string): string {
+  const hours = raw.match(/(\d+)\s*hrs?\s*(\d+)\s*km/i);
+  if (hours) return `${hours[1]} hrs / ${hours[2]} km`;
+  return programTitle(raw);
+}
+
 function programHeading(line: string): { day: number; title: string } | null {
-  const plain = line.replace(/[📅*_]/g, ' ').replace(/\s+/g, ' ').trim();
-  const match = plain.match(/^Day\s+(\d+)\s*[\u2012\u2013\u2014:\-]\s*(.+)$/i);
+  const plain = normalizePasteLine(line).replace(/[📅*_]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (/^tour begins\s*:?\s*$/i.test(plain)) return { day: 1, title: 'Tour begins' };
+  const word = plain.match(/^Day\s+(one|two|three|four|five|six|seven|eight|nine|ten|first|second|third)\b\s*[:\u2012\u2013\u2014\-]\s*(.*)$/i);
+  if (word) {
+    const title = dayHeadingTitle(word[2]);
+    if (/^by\b/i.test(title)) return null;
+    return { day: DAY_WORDS[word[1].toLowerCase()], title: title || 'Sightseeing' };
+  }
+  const match = plain.match(/^Day\s+(\d+)\s*[\u2012\u2013\u2014:\-]\s*(.*)$/i);
   if (!match) return null;
-  const title = programTitle(match[2]);
+  const title = dayHeadingTitle(match[2]);
   if (!title || /^by\b/i.test(title)) return null;
   return { day: Number(match[1]), title };
 }
 
 function keepDayProse(line: string): boolean {
   if (/^(?:greetings|dear |thank you|we are pleased|we look forward|regards)\b/i.test(line)) return false;
-  if (/scenic beauty|natural beauty|memorable/i.test(line) && !/pickup|jeep|parking|station|hotel/i.test(line)) return false;
-  return /pickup|drop|station|jeep|parking|hotel|railway|tempo|vehicle|waterfall|off-road|not suitable|additional local|proceed towards/i.test(line);
+  if (isFeeNote(line)) return false;
+  if (/scenic beauty|natural beauty|memorable/i.test(line) && !/pick-?up|jeep|parking|station|hotel/i.test(line)) return false;
+  return /pick-?up|drop-?off|drop off|\bdrop\b|station|jeep|parking|hotel|railway|tempo|vehicle|waterfall|off-road|not suitable|additional local|proceed to(?:wards)?/i.test(line);
 }
 
 function clipSentences(raw: string, max = 280): string {
@@ -268,7 +318,12 @@ export function parseProgramSchedule(text: string): { lines: string[]; places: s
       }
       const item = listItem(line);
       const bullet = /^[•●▪‣]/.test(line.trim()) || /^\-(?!\d)/.test(line.trim());
-      if (item && (inPlaces || bullet) && !isFeeNote(item)) {
+      const numbered = /^\d{1,2}\s*[.)]/.test(normalizePasteLine(line).trim());
+      if (item && !isFeeNote(item) && (inPlaces || bullet || (numbered && looksLikePlaceName(item)))) {
+        if (!numbered && keepDayProse(item)) {
+          prose.push(item.replace(/\.$/, ''));
+          continue;
+        }
         dayPlaces.push(item);
         continue;
       }
@@ -328,12 +383,22 @@ function parseTermsSection(text: string): string[] {
   return notes;
 }
 
+function looksLikePlaceName(item: string): boolean {
+  if (item.length > 48) return false;
+  if (/[.!?]/.test(item)) return false;
+  if (/\b(will|please|should|must|shall|include|charge|charged|provide|driver|toll|parking)\b/i.test(item)) return false;
+  return true;
+}
+
 export function parsePlaces(text: string): string[] {
   const places: string[] = [];
   let inPlaces = false;
+  let noteList = false;
   for (const line of text.split('\n')) {
-    const trimmed = line.trim();
-    if (/places to visit\s*:|day one\s*:/i.test(trimmed)) {
+    const trimmed = normalizePasteLine(line).trim();
+    if (isPlacesHeading(trimmed)) {
+      const plain = trimmed.replace(/[*_]/g, ' ').replace(/\s+/g, ' ').trim();
+      noteList = /^notes?\s*:?$/i.test(plain);
       inPlaces = true;
       continue;
     }
@@ -342,20 +407,71 @@ export function parsePlaces(text: string): string[] {
     const bare = trimmed.replace(/^\W+/, '');
     if (/^(?:pricing|note|notes|night halt|optional visit)\b/i.test(bare) || isSectionBoundary(trimmed) || /^day\s*\d+\b/i.test(bare)) {
       inPlaces = false;
+      noteList = false;
       continue;
     }
-    if (/^\*?(?:Ertiga|Innova|Sedan|Crysta|Tempo)\b/i.test(trimmed)) {
+    if (/^\*?(?:Ertiga|Innova|Sedan|Crysta|Tempo|Swift|Dzire|Urbania)\b/i.test(trimmed)) {
       inPlaces = false;
+      noteList = false;
       continue;
     }
-    const item = listItem(line);
-    if (item && !isFeeNote(item)) {
+    const item = listItem(trimmed);
+    if (item && !isFeeNote(item) && (!noteList || looksLikePlaceName(item))) {
       places.push(item);
       continue;
     }
+    if (item && isFeeNote(item)) {
+      inPlaces = false;
+      noteList = false;
+      continue;
+    }
     inPlaces = false;
+    noteList = false;
   }
   return uniqueTexts(places);
+}
+
+/** Places stay a numbered list. Term lines stay notes, including hotel-to-hotel and price clauses. */
+export function splitStoredRequirements(raw: string): { places: string[]; notes: string[] } {
+  const places: string[] = [];
+  const notes: string[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = normalizePasteLine(line).trim();
+    if (!trimmed || isPlacesHeading(trimmed)) continue;
+    const item = listItem(trimmed);
+    if (item && !isFeeNote(item) && /^\d{1,2}\s*[.)]/.test(trimmed)) {
+      places.push(item);
+      continue;
+    }
+    const note = (item && isFeeNote(item) ? item : trimmed.replace(/^[•●▪‣]\s+/, '')).replace(/\s+/g, ' ').trim();
+    if (note) notes.push(note);
+  }
+  return { places: uniqueTexts(places), notes: uniqueTexts(notes) };
+}
+
+export function composeAdditionalRequirements(notes: string[], places: string[]): string {
+  const cleanNotes = notes.map((note) => note.trim()).filter(Boolean);
+  const cleanPlaces = places.map((place) => place.trim()).filter(Boolean);
+  const notesText = cleanNotes.join('\n');
+  const placesAlreadyWritten = cleanPlaces.length > 0
+    && cleanPlaces.every((place) => notesText.toLowerCase().includes(place.toLowerCase()));
+  const placeBlock = !placesAlreadyWritten && cleanPlaces.length > 0
+    ? ['Places to visit:', ...cleanPlaces.map((place, index) => `${index + 1}. ${place}`)].join('\n')
+    : '';
+  return [placeBlock, notesText].filter(Boolean).join('\n\n');
+}
+
+/** Customer and driver WhatsApp: numbered places, then one bullet per term. */
+export function formatRequirementsMessage(raw: string): string {
+  const { places, notes } = splitStoredRequirements(raw);
+  const blocks: string[] = [];
+  if (places.length > 0) {
+    blocks.push(['📍 *Places to visit:*', ...places.map((place, index) => `${index + 1}. ${place}`)].join('\n'));
+  }
+  if (notes.length > 0) {
+    blocks.push(['✈️ *Additional Requirements:*', ...notes.map((note) => `• ${note}`)].join('\n'));
+  }
+  return blocks.join('\n\n');
 }
 
 export type PackageNarrative = {
@@ -422,9 +538,21 @@ export function readPackageNarrative(text: string): PackageNarrative {
 function mergeNarrative(data: ParsedBooking, text: string): void {
   const narrative = readPackageNarrative(text);
   const windowMatch = text.match(/(\d{1,2}:\d{2}\s*[AP]\.?M\.?\s+to\s+\d{1,2}:\d{2}\s*[AP]\.?M\.?)/i);
-  if (narrative.places.length === 0 && narrative.notes.length === 0 && narrative.exclusions == null && !windowMatch) return;
+  const hasNarrative = narrative.places.length > 0 || narrative.notes.length > 0 || narrative.exclusions != null || !!windowMatch;
   const current = data.trip_terms && typeof data.trip_terms === 'object' ? data.trip_terms : emptyTerms();
   const terms: TripTerms = { ...emptyTerms(), ...current };
+  if (!hasNarrative) {
+    const exclusionsBefore = [...(terms.exclusions ?? [])];
+    const notesBefore = [...(terms.notes ?? [])];
+    applyPriceCoverage(terms, text, null);
+    const coverageChanged = exclusionsBefore.join('|') !== (terms.exclusions ?? []).join('|')
+      || notesBefore.join('|') !== (terms.notes ?? []).join('|');
+    if (!coverageChanged) return;
+    data.trip_terms = terms;
+    const requirements = composeAdditionalRequirements(terms.notes ?? [], terms.places ?? []);
+    if (requirements) data.additional_requirements = requirements;
+    return;
+  }
   if (narrative.places.length > 0) terms.places = narrative.places;
   if (narrative.notes.length > 0) {
     const leftover = (terms.notes ?? []).filter((note) => {
@@ -438,11 +566,9 @@ function mergeNarrative(data: ParsedBooking, text: string): void {
   }
   if (narrative.exclusions != null) terms.exclusions = narrative.exclusions;
   if (windowMatch && !terms.day_window) terms.day_window = clean(windowMatch[1]);
+  applyPriceCoverage(terms, text, narrative.exclusions);
   data.trip_terms = terms;
-  const noteBlock = (terms.notes ?? []).join('\n');
-  const placeBlock = (terms.places ?? []).map((place, index) => `${index + 1}. ${place}`).join('\n');
-  const firstPlace = terms.places?.[0] ?? '';
-  const requirements = noteBlock && firstPlace && noteBlock.includes(firstPlace) ? noteBlock : [noteBlock, placeBlock].filter(Boolean).join('\n');
+  const requirements = composeAdditionalRequirements(terms.notes ?? [], terms.places ?? []);
   if (requirements) data.additional_requirements = requirements;
 }
 
@@ -454,15 +580,139 @@ export function applySightseeingFromText(data: ParsedBooking, text: string): voi
 export function parseNoteLines(text: string): string[] {
   const notes: string[] = [];
   for (const line of text.split('\n')) {
-    const match = line.match(/^\s*\**\s*\d+\.?\s*[.\u2060\s]*(.+)$/);
-    if (!match) continue;
-    const note = clean(match[1]).replace(/\*+/g, '').trim();
-    if (!note) continue;
-    if (/food for the driver|driver'?s food|additional hour|do not include|prices exclude|additional km|garage to the garage|turned off|places will be shown|peak season|exceeding the time|toll|parking(?!\s+(?:lot|area|point))|entry fee|lockdown|driver allowance/i.test(note) || (/katiki/i.test(note) && /closed|not |will |cannot|extra/i.test(note))) {
-      notes.push(note);
-    }
+    const normalized = normalizePasteLine(line);
+    if (isPlacesHeading(normalized)) continue;
+    const numbered = normalized.match(/^\s*\**\s*\d{1,2}\s*[.)]\s*(.+)$/);
+    const starred = normalized.match(/^\s*\*+\s*(.+)$/);
+    const raw = (numbered?.[1] ?? starred?.[1] ?? '').trim();
+    if (!raw) continue;
+    const note = clean(raw).replace(/\*+/g, '').trim();
+    if (note && isFeeNote(note)) notes.push(note);
   }
-  return notes;
+  return uniqueTexts(notes);
+}
+
+const KEPT_NOTE_STOP = /^(?:pick-?up date|pick-?up time|from|to|cost|amount received|advance received|vehicle|seating capacity|mode of payment|package inclusions|package exclusions|important terms|terms\s*(?:&|and)\s*conditions|pricing|regards|client name|pickup location)\b/i;
+
+function noteKey(line: string): string {
+  return normalizePasteLine(line).replace(/[*_]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/** Lines already written into the day program. Notes must not repeat them. */
+function programEchoKeys(text: string): Set<string> {
+  const source = text.split('\n');
+  const heads: number[] = [];
+  source.forEach((line, index) => {
+    if (programHeading(line)) heads.push(index);
+  });
+  const keys = new Set<string>();
+  heads.forEach((start, index) => {
+    const heading = noteKey(source[start]);
+    if (heading) keys.add(heading);
+    const end = heads[index + 1] ?? source.length;
+    for (let cursor = start + 1; cursor < end; cursor += 1) {
+      if (isSectionBoundary(source[cursor])) break;
+      const key = noteKey(source[cursor]);
+      if (!key || isFeeNote(key)) continue;
+      if (listItem(source[cursor]) || /night halt/i.test(key) || keepDayProse(key)) keys.add(key);
+    }
+  });
+  return keys;
+}
+
+/** Free-text under a Notes: line. These are office notes the driver must see. */
+export function readKeptNotes(text: string): string[] {
+  const notes: string[] = [];
+  let capturing = false;
+  for (const raw of text.split('\n')) {
+    const line = normalizePasteLine(raw).replace(/[*_]/g, '').trim();
+    if (!line) continue;
+    const labeled = line.match(/^notes?\s*:\s*(.*)$/i);
+    if (labeled) {
+      capturing = true;
+      const rest = labeled[1].replace(/\s+/g, ' ').trim();
+      if (rest) notes.push(rest);
+      continue;
+    }
+    if (!capturing) continue;
+    if (KEPT_NOTE_STOP.test(line)) {
+      capturing = false;
+      continue;
+    }
+    const phoneLine = line.match(/^(passenger number|phone number|mobile|contact number)\s*:\s*(.+)$/i);
+    if (phoneLine) {
+      const phone = normalizeBookingPhone(phoneLine[2]);
+      notes.push(phone ? `${phoneLine[1]}: ${phone}` : line.replace(/\s+/g, ' ').trim());
+      continue;
+    }
+    notes.push(line.replace(/\s+/g, ' ').trim());
+  }
+  const echo = programEchoKeys(text);
+  return uniqueTexts(notes).filter((note) => !echo.has(noteKey(note)) && !isPriceIncludeLine(note));
+}
+
+const PRICE_INCLUDE_LINE = /(?:above prices include|above prices are included|prices are included|prices include|included of|inclusive of)/i;
+const PRICE_EXCLUDE_LINE = /(?:do not include|does not include|not included|prices exclude)/i;
+const PRICE_INCLUDE_CLAUSE = /(?:above prices include|above prices are included|prices are included|prices include|included of|inclusive of)\s+([^\n.]+)/i;
+const PRICE_EXCLUDE_CLAUSE = /(?:prices do not include|do not include|does not include|not included|prices exclude)\s+([^\n.]+)/i;
+
+function isPriceIncludeLine(line: string): boolean {
+  return PRICE_INCLUDE_LINE.test(line) && !PRICE_EXCLUDE_LINE.test(line);
+}
+
+function clauseAfter(text: string, pattern: RegExp): string {
+  const match = text.match(pattern);
+  return match?.[1]?.replace(/\*+/g, '').replace(/\s+/g, ' ').trim() ?? '';
+}
+
+function feeList(clause: string): string {
+  return clause
+    .replace(/\band\b/gi, ',')
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 1)
+    .join(', ');
+}
+
+function collectFeeExclusions(scope: string): string[] {
+  const exclusions: string[] = [];
+  if (!scope) return exclusions;
+  if (/tolls?/i.test(scope)) exclusions.push('tolls');
+  if (/parking(?!\s+(?:lot|area|point))/i.test(scope)) exclusions.push('parking');
+  if (/entry fees?/i.test(scope)) exclusions.push('entry fees');
+  if (/driver'?s food|food for the driver|driver food/i.test(scope)) exclusions.push('driver food');
+  if (/lockdown fines?/i.test(scope)) exclusions.push('lockdown fines');
+  if (/driver'?s?\s+allowance/i.test(scope)) exclusions.push('driver allowance');
+  return exclusions;
+}
+
+/** "Above prices include …" is coverage, not an exclusion. The server parser still files those words under exclusions. */
+function applyPriceCoverage(terms: TripTerms, text: string, narrativeExclusions: string[] | null): void {
+  const excludedClause = clauseAfter(text, PRICE_EXCLUDE_CLAUSE);
+  const includedClause = clauseAfter(text, PRICE_INCLUDE_CLAUSE);
+  if (narrativeExclusions == null && excludedClause) {
+    terms.exclusions = collectFeeExclusions(excludedClause);
+  } else if (narrativeExclusions == null && includedClause) {
+    terms.exclusions = [];
+  }
+  if (includedClause && includedClause !== excludedClause) {
+    const includedLine = `Included: ${feeList(includedClause)}`;
+    const source = includedClause.toLowerCase();
+    terms.notes = uniqueTexts([
+      ...(terms.notes ?? []).filter((note) => !note.toLowerCase().includes(source) && !/^included\s*:/i.test(note)),
+      includedLine,
+    ]);
+  }
+}
+
+export function applyKeptNotes(data: ParsedBooking, text: string): void {
+  const kept = readKeptNotes(text);
+  if (kept.length === 0) return;
+  const current = data.trip_terms && typeof data.trip_terms === 'object' ? data.trip_terms : emptyTerms();
+  const terms: TripTerms = { ...emptyTerms(), ...current };
+  terms.notes = uniqueTexts([...(terms.notes ?? []), ...kept]);
+  data.trip_terms = terms;
+  data.additional_requirements = composeAdditionalRequirements(terms.notes ?? [], terms.places ?? []);
 }
 
 export function applyTripTerms(data: ParsedBooking, text: string): ParsedBooking {
@@ -491,16 +741,14 @@ export function applyTripTerms(data: ParsedBooking, text: string): ParsedBooking
   if (narrative.exclusions != null) {
     terms.exclusions = narrative.exclusions;
   } else {
-    const exclusions: string[] = [];
-    if (/tolls?/i.test(text)) exclusions.push('tolls');
-    if (/parking(?!\s+(?:lot|area|point))/i.test(text)) exclusions.push('parking');
-    if (/entry fees?/i.test(text)) exclusions.push('entry fees');
-    if (/driver'?s food|food for the driver/i.test(text)) exclusions.push('driver food');
-    if (/lockdown fines?/i.test(text)) exclusions.push('lockdown fines');
-    if (/driver allowance/i.test(text)) exclusions.push('driver allowance');
-    terms.exclusions = exclusions;
+    const excludedClause = clauseAfter(text, PRICE_EXCLUDE_CLAUSE);
+    const includedClause = clauseAfter(text, PRICE_INCLUDE_CLAUSE);
+    const scope = excludedClause || (includedClause ? '' : text);
+    terms.exclusions = collectFeeExclusions(scope);
   }
-  terms.notes = narrative.notes.length > 0 ? narrative.notes : parseNoteLines(text);
+  const pastedNotes = uniqueTexts([...parseNoteLines(text), ...readKeptNotes(text)]);
+  terms.notes = narrative.notes.length > 0 ? uniqueTexts([...narrative.notes, ...pastedNotes]) : pastedNotes;
+  applyPriceCoverage(terms, text, narrative.exclusions);
   if (narrative.places.length > 0) terms.places = narrative.places;
 
   const rupeePackage = /(?:₹|₨|Rs\.?|INR)\s*[\d,]+/i.test(text) && /(\d+)\s*hrs?/i.test(text);
@@ -510,16 +758,9 @@ export function applyTripTerms(data: ParsedBooking, text: string): ParsedBooking
   if (terms.package_hours && terms.package_km) {
     data.hourly_package = `${terms.package_hours}hrs-${terms.package_km}km`;
   }
-  data.additional_requirements = terms.notes.join('\n');
   data.trip_terms = terms;
+  data.additional_requirements = composeAdditionalRequirements(terms.notes, terms.places);
   applyRouteFromText(data, text);
-  if (terms.places.length > 0) {
-    const block = terms.places.map((place, index) => `${index + 1}. ${place}`).join('\n');
-    const existing = (data.additional_requirements || '').trim();
-    if (!existing.includes(terms.places[0])) {
-      data.additional_requirements = existing ? `${existing}\n${block}` : block;
-    }
-  }
   return data;
 }
 
@@ -553,11 +794,66 @@ function parseLooseDate(raw: string): string {
   return '';
 }
 
+/**
+ * Indian mobiles stay as 10 national digits.
+ * Any other country is kept in full, with +, so +254… is not thrown away.
+ */
+export function normalizeBookingPhone(raw: string): string {
+  const trimmed = raw.replace(/[*_]/g, '').trim();
+  if (!trimmed) return '';
+  const hasPlus = trimmed.includes('+');
+  let digits = trimmed.replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (!digits) return '';
+
+  const indian =
+    (digits.length === 12 && digits.startsWith('91')) ||
+    (digits.length === 11 && digits.startsWith('0')) ||
+    (digits.length === 10 && !hasPlus);
+
+  if (indian) {
+    if (digits.length === 12) digits = digits.slice(2);
+    if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+    return /^[6-9]\d{9}$/.test(digits) ? digits : '';
+  }
+
+  if ((hasPlus || digits.length > 10) && digits.length >= 8 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+  return '';
+}
+
+export function isAcceptableBookingPhone(phone: string): boolean {
+  const value = phone.trim();
+  if (!value) return false;
+  if (value.startsWith('+')) {
+    const digits = value.replace(/\D/g, '');
+    return digits.length >= 8 && digits.length <= 15;
+  }
+  return /^[6-9]\d{9}$/.test(value.replace(/\D/g, ''));
+}
+
 function parseLooseMobile(raw: string): string {
-  let digits = raw.replace(/\D/g, '');
-  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
-  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
-  return digits.length === 10 ? digits : '';
+  return normalizeBookingPhone(raw);
+}
+
+function fieldBeforeNotes(text: string, label: RegExp): string {
+  const notesAt = text.search(/^\s*[*_]*\s*notes?\s*:/im);
+  const head = notesAt >= 0 ? text.slice(0, notesAt) : text;
+  const match = head.match(new RegExp(`${label.source}\\s*:\\s*(.+)`, label.flags));
+  return (match?.[1] ?? '').replace(/[*_]/g, '').trim();
+}
+
+/** Fill passenger and manager phones from the paste when the server parser drops a non-Indian number. */
+export function applyBookingPhones(data: ParsedBooking, text: string): void {
+  const passenger = normalizeBookingPhone(fieldBeforeNotes(text, /passenger number/i));
+  if (passenger && !isAcceptableBookingPhone(data.customer_mobile ?? '')) {
+    data.customer_mobile = passenger;
+  }
+  const manager = normalizeBookingPhone(fieldBeforeNotes(text, /phone number/i));
+  if (manager && !isAcceptableBookingPhone(data.manager_mobile ?? '')) {
+    data.manager_mobile = manager;
+  }
 }
 
 function flightFrom(raw: string): { number: string | null; rest: string } {
@@ -625,9 +921,10 @@ function parseAgentEmail(text: string, seed: ParsedBooking): ParsedBooking[] | n
     const destination = field(block, 'Destination');
     terms.flight_route = [origin, destination].filter(Boolean).join(' → ') || null;
     terms.notes = parseNoteLines(text);
-    if (/toll|parking|driver allowance/i.test(text)) {
+    if (/toll|parking|driver'?s?\s+allowance/i.test(text)) {
       terms.exclusions = ['tolls', 'parking', 'driver allowance'].filter((item) => new RegExp(item.split(' ')[0], 'i').test(text));
     }
+    applyPriceCoverage(terms, text, null);
     data.trip_terms = terms;
     data.additional_requirements = terms.notes.join('\n');
     data.driver_collects_payment = false;

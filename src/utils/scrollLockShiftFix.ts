@@ -21,10 +21,25 @@ const LOCKED_STYLES: Array<[string, string]> = [
 function applyNoShiftStyles(locked: boolean): void {
   const { body } = document;
   if (!body) return;
+  const adminShell = document.querySelector('[data-admin-shell]');
   for (const [prop, value] of LOCKED_STYLES) {
-    if (locked) body.style.setProperty(prop, value, 'important');
-    else body.style.removeProperty(prop);
+    if (!locked) {
+      body.style.removeProperty(prop);
+      continue;
+    }
+    // The admin page already scrolls inside its content column. A body scrollbar
+    // here is a second bar on the right, and it stays after the dropdown closes.
+    const next = adminShell && prop === 'overflow-y' ? 'hidden' : value;
+    body.style.setProperty(prop, next, 'important');
   }
+}
+
+function overlayIsOpen(): boolean {
+  return Boolean(
+    document.querySelector(
+      '[data-radix-select-content][data-state="open"], [role="dialog"][data-state="open"], [role="menu"][data-state="open"]'
+    )
+  );
 }
 
 export function installScrollLockShiftFix(): () => void {
@@ -32,8 +47,17 @@ export function installScrollLockShiftFix(): () => void {
     return () => undefined;
   }
 
+  let clearTimer = 0;
   const sync = () => {
-    applyNoShiftStyles(document.body.hasAttribute(LOCK_ATTR));
+    const locked = document.body.hasAttribute(LOCK_ATTR);
+    applyNoShiftStyles(locked);
+    window.clearTimeout(clearTimer);
+    if (!locked) return;
+    clearTimer = window.setTimeout(() => {
+      if (!document.body.hasAttribute(LOCK_ATTR) || overlayIsOpen()) return;
+      document.body.removeAttribute(LOCK_ATTR);
+      applyNoShiftStyles(false);
+    }, 400);
   };
 
   sync();

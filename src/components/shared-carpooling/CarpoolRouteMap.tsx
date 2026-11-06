@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GoogleMap, DirectionsRenderer } from '@react-google-maps/api';
 import { Loader2 } from 'lucide-react';
-import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
+import { requestGoogleMaps, useGoogleMaps } from '@/providers/GoogleMapsProvider';
 
 const DEFAULT_CENTER = { lat: 17.6868, lng: 83.2185 };
 
@@ -22,6 +22,10 @@ function routeAddress(label: string): string {
 
 export function CarpoolRouteMap({ pickup, drop, className, height = 160, onRouteMeta }: CarpoolRouteMapProps) {
   const { isLoaded, google } = useGoogleMaps();
+
+  useEffect(() => {
+    requestGoogleMaps();
+  }, []);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService | null>(null);
   const requestId = useRef(0);

@@ -20,6 +20,85 @@ function isPresentableValue(v: unknown): boolean {
   return s !== '' && s !== 'n/a' && s !== 'na' && s !== 'null' && s !== 'undefined';
 }
 
+/** Extra hour / extra km from local_package_fares, matched on the vehicle name. */
+function localPackageExtraRates(vehicleLabel: string): { hour: string; km: string } | null {
+  const name = vehicleLabel.toLowerCase();
+  if (!name || name === 'to be assigned' || name === 'n/a') return null;
+  if (name.includes('urbania') || /\bbus\b/.test(name)) return { hour: '900', km: '40' };
+  if (name.includes('traveller')) return { hour: '750', km: '35' };
+  if (name.includes('tempo')) return { hour: '300', km: '22' };
+  if (name.includes('innova') || name.includes('crysta')) return { hour: '450', km: '20' };
+  if (name.includes('ertiga')) return { hour: '400', km: '18' };
+  if (name.includes('luxury')) return { hour: '300', km: '25' };
+  if (name.includes('mpv')) return { hour: '450', km: '22' };
+  if (name.includes('glanza') && !name.includes('toyota')) return { hour: '300', km: '13' };
+  if (
+    name.includes('sedan') ||
+    name.includes('swift') ||
+    name.includes('dzire') ||
+    name.includes('amaze') ||
+    name.includes('glanza') ||
+    name.includes('toyota') ||
+    name.includes('etios') ||
+    name.includes('cng')
+  ) {
+    return { hour: '300', km: '14' };
+  }
+  return null;
+}
+
+/** Airport extra km from airport_transfer_fares. There is no extra-hour charge on airport trips. */
+function airportExtraKmRate(vehicleLabel: string): string | null {
+  const name = vehicleLabel.toLowerCase();
+  if (!name || name === 'to be assigned' || name === 'n/a') return null;
+  if (name.includes('urbania') || /\bbus\b/.test(name)) return '40';
+  if (name.includes('traveller')) return '35';
+  if (name.includes('tempo')) return '19';
+  if (name.includes('hycross') || name.includes('mpv')) return '22';
+  if (name.includes('innova') || name.includes('crysta')) return '25';
+  if (name.includes('ertiga')) return '25';
+  if (name.includes('luxury')) return '22';
+  if (name.includes('glanza') || name.includes('toyota')) return '20';
+  if (
+    name.includes('sedan') ||
+    name.includes('swift') ||
+    name.includes('dzire') ||
+    name.includes('amaze') ||
+    name.includes('aura') ||
+    name.includes('etios')
+  ) {
+    return '14';
+  }
+  return null;
+}
+
+/** Outstation per-km fare: one-way pricePerKm, round-trip roundTripPricePerKm. */
+function outstationPerKmRate(vehicleLabel: string, roundTrip: boolean): string | null {
+  const name = vehicleLabel.toLowerCase();
+  if (!name || name === 'to be assigned' || name === 'n/a') return null;
+  const formatRate = (oneWay: number, round: number): string => String(roundTrip ? round : oneWay);
+  if (name.includes('urbania') || /\bbus\b/.test(name)) return formatRate(40, 40);
+  if (name.includes('traveller')) return formatRate(35, 35);
+  if (name.includes('tempo')) return formatRate(22, 19);
+  if (name.includes('hycross') || name.includes('mpv')) return formatRate(22, 20);
+  if (name.includes('innova') || name.includes('crysta')) return formatRate(20, 20);
+  if (name.includes('ertiga')) return formatRate(18, 18);
+  if (name.includes('luxury')) return formatRate(25, 22);
+  if (name.includes('etios') || name.includes('glanza')) return formatRate(15, 12.75);
+  if (
+    name.includes('toyota') ||
+    name.includes('sedan') ||
+    name.includes('swift') ||
+    name.includes('dzire') ||
+    name.includes('amaze') ||
+    name.includes('aura') ||
+    name.includes('cng')
+  ) {
+    return formatRate(14, 14);
+  }
+  return null;
+}
+
 /**
  * Upper km bound for flat airport tier before per-km surcharge — matches `calculateAirportFare` buckets
  * (≤10, ≤20, ≤30, ≤40 km tiers; linear extra above 40 km).
@@ -234,6 +313,35 @@ function itineraryFromPackageNarrativeMobile(text: string): TourDay[] {
   return [{ day: 1, title: title || 'Day plan', description: '', activities }];
 }
 
+function isRequirementTermLine(line: string): boolean {
+  return /please provide|food for the driver|driver'?s food|additional hour|do not include|prices do not|prices quoted|subject to change|taxes or fees|additional km|kilometers are calculated|hotel to the hotel|garage|standby|turned off|toll|parking|entry fee|lockdown|will be charged|per km/i.test(line);
+}
+
+/** Numbered sightseeing list, then one bullet per term. */
+function formatRequirementsMessageMobile(raw: string): string {
+  const places: string[] = [];
+  const notes: string[] = [];
+  for (const rawLine of raw.split('\n')) {
+    const line = rawLine.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/[\u2018\u2019]/g, "'").trim();
+    if (!line) continue;
+    const plain = line.replace(/'/g, '');
+    if (/^places to visit\s*:?$/i.test(plain) || (/sightseeing/i.test(plain) && /\bplaces?\b/i.test(plain))) continue;
+    const numbered = line.match(/^\d{1,2}\s*[.)]\s*(.+)$/);
+    const text = (numbered?.[1] ?? line.replace(/^[•●▪‣]\s+/, '')).trim();
+    if (!text) continue;
+    if (numbered && !isRequirementTermLine(text)) places.push(text);
+    else notes.push(text);
+  }
+  const blocks: string[] = [];
+  if (places.length > 0) {
+    blocks.push(['📍 *Places to visit:*', ...places.map((place, index) => `${index + 1}. ${place}`)].join('\n'));
+  }
+  if (notes.length > 0) {
+    blocks.push(['✈️ *Additional Requirements:*', ...notes.map((note) => `• ${note}`)].join('\n'));
+  }
+  return blocks.join('\n\n');
+}
+
 function isTourBookingMobile(tripType: string, tourId: string | undefined | null, booking: Booking): boolean {
   const t = (tripType || '').toLowerCase();
   if (t === 'tour') return true;
@@ -390,10 +498,9 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const passengerName = booking.passengerName || booking.guest_name || 'Customer';
   const passengerPhone = booking.passengerPhone || booking.guest_phone || 'N/A';
   
-  const passengerCountryCode = booking.passengerCountryCode || 
-                               (booking as any).passengerCountryCode || 
-                               (booking as any).passenger_country_code || 
-                               '+91';
+  const passengerCountryCode = assignmentDialCode(
+    booking.passengerCountryCode || booking.passenger_country_code
+  );
   const pickupLocation = typeof booking.pickup_location === 'string' 
     ? booking.pickup_location 
     : booking.pickup_location?.city || booking.pickupLocation || 'Unknown';
@@ -741,50 +848,32 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       if (fare > 4000 && fare <= 5500) {
         hoursIncluded = hoursIncluded || '10';
         kmIncluded = kmIncluded || '100';
-        extraPerHour = extraPerHour || '450';
-        extraPerKm = extraPerKm || '20';
       } else if (fare >= 2800 && fare <= 4000) {
         hoursIncluded = hoursIncluded || '8';
         kmIncluded = kmIncluded || '80';
-        extraPerHour = extraPerHour || '450';
-        extraPerKm = extraPerKm || '20';
       }
     } else if (vehicleType.includes('ertiga')) {
       if (fare > 3500 && fare <= 4800) {
         hoursIncluded = hoursIncluded || '10';
         kmIncluded = kmIncluded || '100';
-        extraPerHour = extraPerHour || '400';
-        extraPerKm = extraPerKm || '18';
       } else if (fare >= 2400 && fare <= 3500) {
         hoursIncluded = hoursIncluded || '8';
         kmIncluded = kmIncluded || '80';
-        extraPerHour = extraPerHour || '400';
-        extraPerKm = extraPerKm || '18';
       }
-    } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
+    } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller') || vehicleType.includes('urbania') || vehicleType.includes('bus')) {
       if (fare > 7500 && fare <= 9200) {
         hoursIncluded = hoursIncluded || '10';
         kmIncluded = kmIncluded || '100';
-        extraPerHour = extraPerHour || '850';
-        extraPerKm = extraPerKm || '35';
       } else if (fare >= 5800 && fare <= 7500) {
         hoursIncluded = hoursIncluded || '8';
         kmIncluded = kmIncluded || '80';
-        extraPerHour = extraPerHour || '850';
-        extraPerKm = extraPerKm || '35';
       }
-    } else {
-      if (fare > 3000 && fare <= 3600) {
-        hoursIncluded = hoursIncluded || '10';
-        kmIncluded = kmIncluded || '100';
-        extraPerHour = extraPerHour || '300';
-        extraPerKm = extraPerKm || '14';
-      } else if (fare >= 1800 && fare <= 3000) {
-        hoursIncluded = hoursIncluded || '8';
-        kmIncluded = kmIncluded || '80';
-        extraPerHour = extraPerHour || '300';
-        extraPerKm = extraPerKm || '14';
-      }
+    } else if (fare > 3000 && fare <= 3600) {
+      hoursIncluded = hoursIncluded || '10';
+      kmIncluded = kmIncluded || '100';
+    } else if (fare >= 1800 && fare <= 3000) {
+      hoursIncluded = hoursIncluded || '8';
+      kmIncluded = kmIncluded || '80';
     }
 
     if (!hoursIncluded) {
@@ -793,11 +882,17 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     if (!kmIncluded) {
       kmIncluded = '80';
     }
-    if (!extraPerHour || extraPerHour === 'N/A') {
-      extraPerHour = '100';
-    }
-    if (!extraPerKm || extraPerKm === 'N/A') {
-      extraPerKm = '12';
+  }
+
+  if (tripType === 'local') {
+    const catalog = localPackageExtraRates(String(vehicleModel));
+    if (catalog) {
+      if (!isPresentableValue(extraPerHour) || Number(extraPerHour) === 100) {
+        extraPerHour = catalog.hour;
+      }
+      if (!isPresentableValue(extraPerKm) || Number(extraPerKm) === 12) {
+        extraPerKm = catalog.km;
+      }
     }
   }
 
@@ -913,13 +1008,11 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
 
   // Get outstation and airport extra charges
   let outstationExtraKm = 'N/A';
-  let outstationExtraHour = 'N/A';
   let outstationKmIncluded = 'N/A';
   
   if (tripType === 'outstation') {
     // Get extra charges from booking data
     outstationExtraKm = booking.extra_per_km || (booking as any).extraPerKm || (booking as any).price_per_km || 'N/A';
-    outstationExtraHour = booking.extra_per_hour || (booking as any).extraPerHour || (booking as any).price_per_hour || 'N/A';
     
     // Get included km based on trip mode
     if (isRoundTrip) {
@@ -930,27 +1023,9 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       outstationKmIncluded = '0';
     }
     
-    // Fallback inference based on vehicle type if not found in booking data
     if (outstationExtraKm === 'N/A') {
-      const vehicleType = vehicleModel.toLowerCase();
-      if (vehicleType.includes('innova') || vehicleType.includes('crysta')) {
-        outstationExtraKm = '20';
-        outstationExtraHour = '450';
-      } else if (vehicleType.includes('ertiga')) {
-        outstationExtraKm = '18';
-        outstationExtraHour = '400';
-      } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
-        outstationExtraKm = '35';
-        outstationExtraHour = '850';
-      } else if (vehicleType.includes('swift') || vehicleType.includes('dzire') || vehicleType.includes('amaze') || vehicleType.includes('glanza')) {
-        // Sedan (Swift/Dzire/Amaze/Glanza)
-        outstationExtraKm = '14';
-        outstationExtraHour = '300';
-      } else {
-        // Default fallback
-        outstationExtraKm = '14';
-        outstationExtraHour = '300';
-      }
+      const perKm = outstationPerKmRate(String(vehicleModel), isRoundTrip);
+      if (perKm) outstationExtraKm = perKm;
     }
   }
   
@@ -986,8 +1061,8 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     }
 
     if (!isPresentableValue(airportExtraKmDisplay)) {
-      const vehicleType = vehicleModel.toLowerCase();
-      airportExtraKmDisplay = vehicleType.includes('ertiga') ? '18' : '14';
+      const airportKm = airportExtraKmRate(String(vehicleModel));
+      if (airportKm) airportExtraKmDisplay = airportKm;
     }
   }
 
@@ -1088,7 +1163,7 @@ ${tripType === 'airport' && tripKmRounded > 0 ? `📏 *Trip distance:* ${tripKmR
 ${capacityLine}
 👨‍💼 *Driver:* ${driverName}, ${driverPhone}
 📞 *Guest contact:* ${passengerName}, ${passengerCountryCode} ${passengerPhone}
-${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
+${hasAdditionalRequirements ? formatRequirementsMessageMobile(additionalRequirements) : ''}
 ${tourBooking ? `
 
 *Your tour package*
@@ -1124,7 +1199,7 @@ ${tripType === 'local' ? `*Package Limits*
 ${tripType === 'outstation' ? `*Outstation Charges*
 🛣️ *Kilometers included:* ${isRoundTrip ? `${outstationKmIncluded} km (round-trip distance)` : outstationKmIncluded === '0' ? '0 km (charges from km 1)' : `${outstationKmIncluded} km`}
 📈 *Extra distance:* ₹${outstationExtraKm}/km
-⏱️ *Extra charges:* ₹${outstationExtraHour}/hour${isRoundTrip ? ' (12 hours per day for round-trip)' : ''}
+⏱️ *Waiting:* ${isRoundTrip ? '12 hours per day included, then ₹100 per 30 minutes' : '45 minutes included, then ₹100 per 30 minutes'}
 🔧 *Special:* During ghat roads and standby AC will turned off` : ''}
 
 ${airportChargesBlock ? `${airportChargesBlock}
@@ -1169,30 +1244,128 @@ ${booking.bookingNumber ? `*Internal ID:* ${booking.id}` : ''}
 Thank you for choosing Vizag Taxi Hub. Have a safe and comfortable ride! 🙏`;
 }
 
+function assignmentText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function assignmentDialCode(raw: unknown): string {
+  const value = assignmentText(raw).replace(/\s+/g, '');
+  if (!value) return '+91';
+  if (value.startsWith('+')) return value;
+  const digits = value.replace(/\D/g, '');
+  return digits ? `+${digits}` : '+91';
+}
+
+function assignmentPickupWhen(booking: Booking): string {
+  const dated = [assignmentText(booking.pickupDate), assignmentText(booking.pickup_date)].filter(Boolean);
+  const timeOnly = assignmentText(booking.pickupTime || booking.pickup_time);
+  const withClock = dated.find((value) => /[T ]\d{2}:\d{2}/.test(value) && !/[T ]00:00(?::00)?$/.test(value));
+  const anyClock = dated.find((value) => /[T ]\d{2}:\d{2}/.test(value));
+  let raw = withClock || anyClock || dated[0] || '';
+  if (timeOnly && /^\d{1,2}:\d{2}/.test(timeOnly) && (!raw || !/[T ]\d{2}:\d{2}/.test(raw) || /[T ]00:00(?::00)?$/.test(raw))) {
+    const day = (raw || dated[0] || '').slice(0, 10);
+    raw = day ? `${day} ${timeOnly}` : timeOnly;
+  }
+  if (!raw) return '—';
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (!match) {
+    const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+    return day ? `${day[3]}/${day[2]}/${day[1]}` : raw;
+  }
+  const hour24 = Number(match[4]);
+  const suffix = hour24 >= 12 ? 'pm' : 'am';
+  const hour12 = hour24 % 12 || 12;
+  return `${match[3]}/${match[2]}/${match[1]}, ${String(hour12).padStart(2, '0')}:${match[5]} ${suffix}`;
+}
+
+function assignmentVehicleType(booking: Booking): string {
+  return assignmentText(booking.cabType || booking.vehicle_type || booking.cab_type || booking.vehicleType).replace(/[_-]+/g, ' ');
+}
+
+function assignmentLocationMobile(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') {
+    const row = value as { city?: string; name?: string };
+    return assignmentText(row.name || row.city);
+  }
+  return '';
+}
+
+function assignmentDestinationMobile(booking: Booking, hasPlaces: boolean): string {
+  const direct = [booking.dropLocation, booking.drop_location]
+    .map(assignmentLocationMobile)
+    .find((value: string) => isPresentableValue(value));
+  if (direct) return direct;
+  const tourName = assignmentText(booking.tourName || booking.tour_name);
+  if (tourName && !isGenericTourNameMobile(tourName)) return tourName;
+  return hasPlaces ? 'As per itinerary' : '';
+}
+
+function placesFromDayNotesMobile(notes: string[]): string[] {
+  const found: string[] = [];
+  for (const note of notes) {
+    const match = note.match(/^Day\s+\d+\b[^:]*:\s*(.+)$/i);
+    if (!match) continue;
+    const body = match[1]
+      .replace(/\bNight Halt\b.*$/i, '')
+      .replace(/\bPick-?up\b.*$/i, '')
+      .replace(/\bDrop-?off\b.*$/i, '')
+      .replace(/\bthe sightseeing places are\b\.?/gi, '');
+    for (const part of body.split(/[,.]/)) {
+      const place = part.replace(/\s+/g, ' ').trim();
+      if (place.length < 2 || /^(and|the|proceed|to|at)$/i.test(place)) continue;
+      found.push(place);
+    }
+  }
+  return found;
+}
+
+function assignmentPlaceListMobile(booking: Booking): string[] {
+  const raw = assignmentText(booking.additionalRequirements) || assignmentText(booking.additional_requirements);
+  if (!raw) return [];
+  const places: string[] = [];
+  const notes: string[] = [];
+  for (const rawLine of raw.split('\n')) {
+    const line = rawLine.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/[\u2018\u2019]/g, "'").trim();
+    if (!line) continue;
+    const numbered = line.match(/^\d{1,2}\s*[.)]\s*(.+)$/);
+    if (numbered && !isRequirementTermLine(numbered[1])) {
+      places.push(numbered[1].trim());
+      continue;
+    }
+    notes.push(line);
+  }
+  const rows = places.length > 0 ? places : placesFromDayNotesMobile(notes);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const place of rows) {
+    const key = place.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(place);
+  }
+  return unique;
+}
+
 export function generateDriverAssignmentMessage(booking: Booking): string {
   const passengerName = booking.passengerName || booking.guest_name || 'Customer';
   const passengerPhone = booking.passengerPhone || booking.guest_phone || 'N/A';
-  const passengerCountryCode = (booking as any).passengerCountryCode || (booking as any).passenger_country_code || '+91';
+  const passengerCountryCode = assignmentDialCode(booking.passengerCountryCode || booking.passenger_country_code);
   const pickupLocation = typeof booking.pickup_location === 'string' 
     ? booking.pickup_location 
     : booking.pickup_location?.city || booking.pickupLocation || 'Unknown';
-  const dropLocation = booking.drop_location 
-    ? typeof booking.drop_location === 'string' 
-      ? booking.drop_location 
-      : booking.drop_location?.city || booking.dropLocation
-    : 'N/A';
-  const additionalRequirements = (booking as any).additionalRequirements || (booking as any).additional_requirements || '';
+  const places = assignmentPlaceListMobile(booking);
+  const destination = assignmentDestinationMobile(booking, places.length > 0);
   const specialNotes = booking.special_notes || booking.adminNotes || 'N/A';
-  
-  // Ensure additional requirements are properly handled
-  const hasAdditionalRequirements = additionalRequirements && 
-                                   additionalRequirements.trim() !== '' && 
-                                   additionalRequirements !== 'N/A' && 
-                                   additionalRequirements !== 'null' &&
-                                   additionalRequirements !== 'undefined';
-  
-  // Combine only special notes (additional requirements are shown separately)
   const allNotes = specialNotes !== 'N/A' ? `Special Notes: ${specialNotes}` : '';
+  const vehicleType = assignmentVehicleType(booking);
+  const vehicleNumber = assignmentText(booking.vehicleNumber) || '—';
+  const routeLines = [
+    `📍 *Pickup:* ${pickupLocation}`,
+    destination ? `📍 *Destination:* ${destination}` : '',
+    places.length > 0 ? `📍 *Places:* ${places.join(', ')}` : '',
+    `📅 *Pickup time:* ${assignmentPickupWhen(booking)}`,
+  ].filter(Boolean).join('\n');
 
   return `🚗 *Driver Assignment - Vizag Taxi Hub*
 
@@ -1202,19 +1375,15 @@ Your driver has been assigned:
 
 👨‍💼 *Driver:* ${booking.driverName}
 📱 *Phone:* ${booking.driverPhone}
-🚗 *Vehicle:* ${booking.vehicleNumber}
+🚗 *Vehicle:* ${vehicleType || '—'}
+🔢 *Vehicle No.:* ${vehicleNumber}
 
 👤 *Passenger:* ${passengerName}
 📱 *Passenger Phone:* ${passengerCountryCode} ${passengerPhone}
 
-📍 *Pickup:* ${pickupLocation}
-📍 *Drop:* ${dropLocation}
-📅 *Date:* ${booking.pickup_date || booking.pickupDate}
-${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
+${routeLines}
 ${allNotes ? `📝 *Special Notes:*
 ${allNotes}` : ''}
-
-*Booking ID:* ${booking.id}
 
 Your driver will contact you shortly. Safe travels! 🙏`;
 }
@@ -1287,15 +1456,12 @@ Thank you for choosing Vizag Taxi Hub! 🙏`;
 export function generateDriverNotificationMessage(booking: Booking): string {
   const passengerName = booking.passengerName || booking.guest_name || 'Customer';
   const passengerPhone = booking.passengerPhone || booking.guest_phone || 'N/A';
-  const passengerCountryCode = (booking as any).passengerCountryCode || (booking as any).passenger_country_code || '+91';
+  const passengerCountryCode = assignmentDialCode(booking.passengerCountryCode || booking.passenger_country_code);
   const pickupLocation = typeof booking.pickup_location === 'string' 
     ? booking.pickup_location 
     : booking.pickup_location?.city || booking.pickupLocation || 'Unknown';
-  const dropLocation = booking.drop_location 
-    ? typeof booking.drop_location === 'string' 
-      ? booking.drop_location 
-      : booking.drop_location?.city || booking.dropLocation
-    : 'N/A';
+  const places = assignmentPlaceListMobile(booking);
+  const destination = assignmentDestinationMobile(booking, places.length > 0);
   const additionalRequirements = (booking as any).additionalRequirements || (booking as any).additional_requirements || '';
   const specialNotes = booking.special_notes || booking.adminNotes || 'N/A';
   
@@ -1317,9 +1483,9 @@ You have been assigned a new trip:
 📱 *Phone:* ${passengerCountryCode} ${passengerPhone}
 
 📍 *Pickup:* ${pickupLocation}
-📍 *Drop:* ${dropLocation}
-📅 *Date:* ${booking.pickup_date || booking.pickupDate}
-${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
+${destination ? `📍 *Destination:* ${destination}` : ''}
+📅 *Pickup time:* ${assignmentPickupWhen(booking)}
+${hasAdditionalRequirements ? formatRequirementsMessageMobile(additionalRequirements) : ''}
 ${allNotes ? `📝 *Special Notes:*
 ${allNotes}` : ''}
 

@@ -851,7 +851,7 @@ export function shareListStats(
   };
 }
 
-export async function downscaleImageFile(file: File, maxEdge = 1600, quality = 0.82): Promise<File> {
+export async function downscaleImageFile(file: File, maxEdge = 2400, quality = 0.92): Promise<File> {
   if (!file.type.startsWith('image/')) {
     return file;
   }

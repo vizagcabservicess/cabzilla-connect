@@ -9,16 +9,21 @@
  * Foreground: Notifications.setNotificationHandler (loaded from index via pushNotificationInit).
  * Background / killed: FCM delivers; tap opens app — use getLastNotificationResponseAsync (admin: AuthProvider; driver: DriverTripAssignmentOverlay).
  */
-import { Platform } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { whenBackgroundLocationDisclosureSettled } from '../lib/backgroundLocationDisclosure';
+import { isSuperAdminPushMuted } from '../lib/superAdminPushMute';
 
 /**
- * Android channel for assign-driver pushes — must match server Expo Push `channelId` (top-level).
- * Bumped from `trip_assignments` so existing installs pick up alarm / DND-bypass settings (channels are mostly immutable after creation).
+ * Android channel for assign-driver pushes — must match server Expo Push `channelId`.
+ * v4 is a new channel. Android keeps the sound of a channel forever after it is created,
+ * so a silent v3 channel cannot be fixed in place.
  */
-export const TRIP_ASSIGNMENT_CHANNEL_ID = 'trip_assignments_v2';
+export const TRIP_ASSIGNMENT_CHANNEL_ID = 'trip_assignments_v4';
+export const TRIP_ALARM_SOUND = 'trip_alarm.wav';
 
 /** Admin/fuel/booking pushes use Expo top-level `channelId: 'default'` when no Android block is sent. */
 export const DEFAULT_PUSH_CHANNEL_ID = 'default';
@@ -80,7 +85,40 @@ export async function ensureEventDutyAlertChannel(): Promise<void> {
   });
 }
 
+const TRIP_LOCK_SCREEN_ALLOWED_KEY = 'trip_lock_screen_allowed_v2';
+
+/** Android 14+ does not grant lock-screen popups until the driver allows full-screen alerts. */
+export async function promptTripLockScreenAccess(): Promise<void> {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 34) return;
+  const allowed = await AsyncStorage.getItem(TRIP_LOCK_SCREEN_ALLOWED_KEY);
+  if (allowed === '1') return;
+  Alert.alert(
+    'Show new trips on the lock screen',
+    'Turn on full-screen notifications for Vizag Taxi Hub. Without that, View trip stays in the shade when the phone is locked.',
+    [
+      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Allow',
+        onPress: () => {
+          void AsyncStorage.setItem(TRIP_LOCK_SCREEN_ALLOWED_KEY, '1');
+          void Linking.sendIntent('android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT', [
+            { key: 'android.provider.extra.APP_PACKAGE', value: 'com.vizagtaxihub.app' },
+          ]).catch(() => undefined);
+        },
+      },
+    ]
+  );
+}
+
 export async function ensureTripAssignmentNotificationChannel(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await Notifications.setNotificationCategoryAsync('trip_assigned', [
+    {
+      identifier: 'view_trip',
+      buttonTitle: 'View trip',
+      options: { opensAppToForeground: true },
+    },
+  ]);
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(TRIP_ASSIGNMENT_CHANNEL_ID, {
     name: 'Trip assignments (urgent)',
@@ -88,7 +126,7 @@ export async function ensureTripAssignmentNotificationChannel(): Promise<void> {
       'New trip alerts. For sound on lock screen / when Do Not Disturb is on: allow this channel and disable battery restrictions for the app in system settings.',
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 600, 200, 600, 200, 600],
-    sound: 'default',
+    sound: TRIP_ALARM_SOUND,
     enableVibrate: true,
     showBadge: true,
     enableLights: true,
@@ -107,16 +145,29 @@ export async function ensureTripAssignmentNotificationChannel(): Promise<void> {
 }
 
 // Foreground presentation (SDK 54+: do not use deprecated shouldShowAlert)
+function isOfficePush(notification: Notifications.Notification): boolean {
+  const data = notification.request.content.data as Record<string, unknown> | undefined;
+  const type = typeof data?.type === 'string' ? data.type : '';
+  return type === 'duty_update' || type === 'new_booking' || type === 'driver_fuel_refill' || type === 'event_duty_update' || type === 'vendor_trip_update';
+}
+
 Notifications.setNotificationHandler({
-  handleNotification: async (): Promise<Notifications.NotificationBehavior> => ({
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    ...(Platform.OS === 'android'
-      ? { priority: Notifications.AndroidNotificationPriority.MAX }
-      : {}),
-  }),
+  handleNotification: async (notification): Promise<Notifications.NotificationBehavior> => {
+    const quiet = isOfficePush(notification) && isSuperAdminPushMuted();
+    return {
+      shouldPlaySound: !quiet,
+      shouldSetBadge: !quiet,
+      shouldShowBanner: !quiet,
+      shouldShowList: !quiet,
+      ...(Platform.OS === 'android'
+        ? {
+            priority: quiet
+              ? Notifications.AndroidNotificationPriority.MIN
+              : Notifications.AndroidNotificationPriority.MAX,
+          }
+        : {}),
+    };
+  },
 });
 
 /**
@@ -159,6 +210,7 @@ export async function registerForPushNotificationsAsync(): Promise<Notifications
     return existing;
   }
 
+  await whenBackgroundLocationDisclosureSettled();
   const { status } = await Notifications.requestPermissionsAsync();
   if (status !== 'granted') {
     console.warn('[push] Notification permission denied — status:', status);

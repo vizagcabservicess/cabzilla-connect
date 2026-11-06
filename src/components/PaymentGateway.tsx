@@ -87,10 +87,7 @@ export function PaymentGateway({ totalAmount, onPaymentComplete, bookingDetails 
         theme: {
           color: "#3B82F6"
         },
-        handler: function (response: RazorpayResponse) {
-          // Handle success callback
-          handlePaymentSuccess(response);
-        },
+        handler: () => undefined,
         modal: {
           ondismiss: function() {
             setIsProcessing(false);

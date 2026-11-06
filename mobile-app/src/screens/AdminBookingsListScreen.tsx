@@ -12,6 +12,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/core';
@@ -23,7 +25,10 @@ import {
   formatBookingStatus,
   getEffectiveBookingStatus,
   tripStatusBadgeBackground,
+  bookingCanShareAssignedDriver,
 } from '../utils/bookingStatusDisplay';
+import { generateDriverAssignmentMessage } from '../services/adminWhatsAppMessages';
+import { passengerPhoneE164Digits } from '../utils/passengerPhoneDisplay';
 
 function formatDate(dateStr: string, timeStr?: string): string {
   if (!dateStr) return '';
@@ -75,6 +80,26 @@ export function AdminBookingsListScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     load();
+  };
+
+  const shareAssignedDriver = async (booking: UserBooking) => {
+    const status = getEffectiveBookingStatus(booking);
+    if (!bookingCanShareAssignedDriver(status)) return;
+    try {
+      const full = await adminAPI.getBookingById(booking.id);
+      const phone = passengerPhoneE164Digits(
+        String(full.passengerPhone ?? full.passenger_phone ?? ''),
+        String(full.passengerCountryCode ?? full.passenger_country_code ?? ''),
+      );
+      if (!phone) {
+        Alert.alert('WhatsApp', 'Add the guest phone number before sharing driver details.');
+        return;
+      }
+      const text = generateDriverAssignmentMessage(full as never);
+      await Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`);
+    } catch (error) {
+      Alert.alert('WhatsApp', error instanceof Error ? error.message : 'Could not open WhatsApp.');
+    }
   };
 
   const filtered = statusFilter
@@ -181,8 +206,22 @@ export function AdminBookingsListScreen() {
                 </View>
                 <View style={styles.bookingMeta}>
                   <Text style={styles.bookingDate}>{formatDate(b.pickup_date, b.pickup_time)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: tripStatusBadgeBackground(rowStatus) }]}>
-                    <Text style={styles.statusText}>{formatBookingStatus(rowStatus)}</Text>
+                  <View style={styles.bookingMetaRight}>
+                    <TouchableOpacity
+                      onPress={() => { void shareAssignedDriver(b); }}
+                      disabled={!bookingCanShareAssignedDriver(rowStatus)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Share driver and vehicle on WhatsApp"
+                    >
+                      <Ionicons
+                        name="logo-whatsapp"
+                        size={22}
+                        color={bookingCanShareAssignedDriver(rowStatus) ? '#25D366' : '#d1d5db'}
+                      />
+                    </TouchableOpacity>
+                    <View style={[styles.statusBadge, { backgroundColor: tripStatusBadgeBackground(rowStatus) }]}>
+                      <Text style={styles.statusText}>{formatBookingStatus(rowStatus)}</Text>
+                    </View>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -265,6 +304,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   bookingDate: { fontSize: 12, color: colors.gray600 },
+  bookingMetaRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   statusText: { fontSize: 11, fontWeight: '600', color: colors.foreground },
 });

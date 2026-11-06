@@ -12,10 +12,13 @@ import {
   ensureEventManagerAlertChannel,
   ensureTripAssignmentNotificationChannel,
 } from './services/pushNotificationService';
+import { registerTripAssignmentAlarmTask } from './lib/tripAssignmentAlarm';
 
-if (Platform.OS === 'android') {
+if (Platform.OS !== 'web') {
   void (async () => {
     await ensureTripAssignmentNotificationChannel();
+    await registerTripAssignmentAlarmTask();
+    if (Platform.OS !== 'android') return;
     await ensureEventDutyAlertChannel();
     await ensureEventManagerAlertChannel();
     await ensureDefaultPushChannel();

@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { getApiUrl } from '@/config/api';
+import { dedupeDriversByPhoneOrEmail } from '@/utils/driverListDedupe';
 import type { Booking } from '@/types/api';
 
 const REASONS = [
@@ -71,7 +72,19 @@ export function ChangeAssignment({ booking }: ChangeAssignmentProps) {
       const driverResponse = await fetch(getApiUrl('/api/admin/get-drivers.php'));
       const driverResult = await driverResponse.json();
       if (driverResult.status === 'success' && Array.isArray(driverResult.data)) {
-        setDrivers(driverResult.data);
+        const assignable = driverResult.data.filter((driver: { id: string | number; name: string; phone?: string; status?: string }) => {
+          const status = String(driver.status || '').toLowerCase();
+          return status !== 'offline' && status !== 'inactive' && status !== 'blocked';
+        });
+        setDrivers(
+          dedupeDriversByPhoneOrEmail(assignable)
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+            .map((driver) => ({
+              id: String(driver.id),
+              name: driver.name,
+              phone: driver.phone,
+            }))
+        );
       }
       const fleetResponse = await fetch(getApiUrl('/api/admin/fleet_vehicles.php/vehicles'), {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

@@ -27,7 +27,7 @@ import {
   tripSummaryForApiBody,
   type TripSummaryOverrides,
 } from '@/utils/invoiceTripSummaryDefaults';
-import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi, Calendar, Car, IndianRupee, Trash2, Download } from 'lucide-react';
+import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi, Calendar, Car, IndianRupee, Trash2, Download, MessageCircle, Send } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import { pdf } from '@react-pdf/renderer';
 import { bookingPickupInDateRange, bookingsToCsv, buildBookingExportRows } from '@/utils/adminBookingsExport';
@@ -45,13 +45,17 @@ import {
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { getForcedRequestConfig } from '@/config/requestConfig';
 import { BookingDetailsModal } from './BookingDetailsModal';
+import { VendorTripLinkDialog, type VendorTripLinkTarget } from './VendorTripLinkDialog';
 import {
   getStatusColorClass,
   formatBookingStatus,
   formatPassengerPhoneForDisplay,
   getEffectiveBookingStatus,
+  bookingCanShareAssignedDriver,
 } from '@/utils/bookingUtils';
 import { getApiUrl } from '@/config/api';
+import { generateDriverAssignmentMessage } from '@/services/whatsappService';
+import { passengerPhoneE164Digits } from '@/utils/passengerPhoneDisplay';
 import { formatPrice } from '@/lib/utils';
 import { bookingAmountWithExtra, extraCollectedAmount, extraCollectedCategoryLabel } from '@/lib/bookingExtra';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -78,6 +82,7 @@ export function AdminBookingsList() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailsTab, setDetailsTab] = useState('details');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [linkTrip, setLinkTrip] = useState<VendorTripLinkTarget | null>(null);
   
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const customScrollRef = useRef<HTMLDivElement>(null);
@@ -107,12 +112,14 @@ export function AdminBookingsList() {
     return updatedBookings;
   };
   
-  const fetchBookings = async () => {
+  const fetchBookings = async (quiet = false) => {
     try {
-      setIsLoading(true);
-      setError(null);
-      setIsRefreshing(true);
-      setResponseDebug(null);
+      if (!quiet) {
+        setIsLoading(true);
+        setError(null);
+        setIsRefreshing(true);
+        setResponseDebug(null);
+      }
       console.log('Admin: Fetching all bookings...');
       
       const timestamp = new Date().getTime();
@@ -180,20 +187,25 @@ export function AdminBookingsList() {
       if (Array.isArray(data) && data.length > 0) {
         setBookings(data);
         applyFilters(data);
-        toast.success(`${data.length} bookings loaded successfully (${responseSource})`, {
-          id: 'bookings-loaded',
-        });
+        if (!quiet) {
+          toast.success(`${data.length} bookings loaded successfully (${responseSource})`, {
+            id: 'bookings-loaded',
+          });
+        }
       } else {
         console.log('No bookings found in the response');
         setBookings([]);
         setFilteredBookings([]);
-        toast.info('No bookings found', {
-          id: 'no-bookings',
-        });
+        if (!quiet) {
+          toast.info('No bookings found', {
+            id: 'no-bookings',
+          });
+        }
       }
     } catch (error: any) {
       console.error('Admin: Error fetching bookings:', error);
-      
+      if (quiet) return;
+
       let errorMessage = 'Failed to load bookings';
       
       if (error.message && error.message.includes('Network connection error')) {
@@ -213,7 +225,44 @@ export function AdminBookingsList() {
       setIsRefreshing(false);
     }
   };
-  
+
+  const shareAssignedDriverOnWhatsApp = async (booking: Booking) => {
+    const status = getEffectiveBookingStatus(booking);
+    if (!bookingCanShareAssignedDriver(status)) return;
+    try {
+      const full = booking.driverName?.trim() && booking.vehicleNumber?.trim()
+        ? booking
+        : await bookingAPI.getBookingById(String(booking.id));
+      const phone = passengerPhoneE164Digits(
+        full.passengerPhone || booking.passengerPhone || '',
+        full.passengerCountryCode || booking.passengerCountryCode,
+      );
+      if (!phone) {
+        toast.error('Add the guest phone number before sharing on WhatsApp');
+        return;
+      }
+      const text = generateDriverAssignmentMessage(full);
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not open WhatsApp');
+    }
+  };
+
+  const openTripLink = (booking: Booking) => {
+    const trip: VendorTripLinkTarget = {
+      tripId: booking.id,
+      tripCode: booking.bookingNumber?.trim() || `BK${booking.id}`,
+      driverName: booking.driverName,
+      driverPhone: booking.driverPhone,
+      vehicleNumber: booking.vehicleNumber,
+      fare: Number(booking.totalAmount || booking.fare || 0) || undefined,
+      advance: Number(booking.advancePaidAmount || booking.advance_paid_amount || 0) || undefined,
+    };
+    window.setTimeout(() => {
+      setLinkTrip(trip);
+    }, 0);
+  };
+
   const handleViewDetails = async (booking: Booking, tab = 'details') => {
     // Open after the actions menu finishes closing, otherwise the same click dismisses the dialog.
     setDetailsTab(tab);
@@ -392,6 +441,30 @@ export function AdminBookingsList() {
     }
   };
 
+  const handleRemoveAssignment = async () => {
+    if (!selectedBooking) return;
+    setIsSubmitting(true);
+    try {
+      const response = await bookingAPI.unassignDriver(selectedBooking.id);
+      const data = (response?.data ?? {}) as { status?: string };
+      const nextStatus = (data.status || 'confirmed') as BookingStatus;
+      patchBookingInListAndModal(selectedBooking.id, {
+        driverName: '',
+        driverPhone: '',
+        vehicleNumber: '',
+        vehicleId: null,
+        status: nextStatus,
+      }, {
+        driverName: '',
+        driverPhone: '',
+        vehicleNumber: '',
+        status: nextStatus,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleCancelBooking = async (booking?: Booking) => {
     const targetBooking = booking || selectedBooking;
     if (!targetBooking) return;
@@ -467,7 +540,7 @@ export function AdminBookingsList() {
     // Show confirmation dialog
     const confirmed = window.confirm(
       `Are you sure you want to delete booking #${targetBooking.bookingNumber || targetBooking.id}?\n\n` +
-      `This action cannot be undone and will permanently remove the booking from the system.`
+      `This permanently removes the booking and deletes the same trip from the Google Sheet.`
     );
     
     if (!confirmed) return;
@@ -476,14 +549,18 @@ export function AdminBookingsList() {
     try {
       // Try bookingAPI first
       try {
-        await bookingAPI.deleteBooking(targetBooking.id);
+        const result = await bookingAPI.deleteBooking(targetBooking.id);
         
         // Remove from bookings list
         const updatedBookings = bookings.filter(b => b.id !== targetBooking.id);
         setBookings(updatedBookings);
         applyFilters(updatedBookings);
         
-        toast.success("Booking deleted successfully");
+        if (result?.data?.sheet_error) {
+          toast.warning(result?.message || "Booking deleted, but it could not be removed from the Google Sheet");
+        } else {
+          toast.success(result?.message || "Booking deleted successfully");
+        }
         return;
       } catch (apiError) {
         console.warn('bookingAPI.deleteBooking failed, trying direct fetch:', apiError);
@@ -504,9 +581,9 @@ export function AdminBookingsList() {
         })
       });
       
+      const directPayload = await directResponse.json().catch(() => null);
       if (!directResponse.ok) {
-        const errorText = await directResponse.text();
-        console.error('Delete booking error response:', errorText);
+        console.error('Delete booking error response:', directPayload);
         throw new Error(`Failed to delete booking: ${directResponse.status} ${directResponse.statusText}`);
       }
       
@@ -515,7 +592,11 @@ export function AdminBookingsList() {
       setBookings(updatedBookings);
       applyFilters(updatedBookings);
       
-      toast.success("Booking deleted successfully");
+      if (directPayload?.data?.sheet_error) {
+        toast.warning(directPayload?.message || "Booking deleted, but it could not be removed from the Google Sheet");
+      } else {
+        toast.success(directPayload?.message || "Booking deleted successfully");
+      }
     } catch (error) {
       console.error('Error deleting booking:', error);
       toast.error("Failed to delete booking: " + (error instanceof Error ? error.message : 'Unknown error'));
@@ -1083,6 +1164,17 @@ export function AdminBookingsList() {
         </Alert>
       )}
 
+      <VendorTripLinkDialog
+        trip={linkTrip}
+        open={linkTrip != null}
+        onOpenChange={(open) => {
+          if (!open) setLinkTrip(null);
+        }}
+        onSent={() => {
+          void fetchBookings(true);
+        }}
+      />
+
       {selectedBooking && (
         <BookingDetailsModal
           booking={selectedBooking}
@@ -1090,6 +1182,7 @@ export function AdminBookingsList() {
           onClose={handleCloseDetails}
           onEdit={handleEditBooking}
           onAssignDriver={handleAssignDriver}
+          onRemoveAssignment={handleRemoveAssignment}
           onCancel={handleCancelBooking}
           onGenerateInvoice={handleGenerateInvoice}
           onStatusChange={(newStatus) => handleStatusChange(newStatus, selectedBooking)}
@@ -1112,7 +1205,7 @@ export function AdminBookingsList() {
                   <TableHead className="font-semibold text-sm w-28">Amount</TableHead>
                   <TableHead className="font-semibold text-sm w-24">Status</TableHead>
                   <TableHead className="font-semibold text-sm w-28">Payment Status</TableHead>
-                  <TableHead className="font-semibold text-sm w-20">Actions</TableHead>
+                  <TableHead className="font-semibold text-sm w-28">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1227,6 +1320,21 @@ export function AdminBookingsList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          disabled={!bookingCanShareAssignedDriver(rowStatus)}
+                          title={bookingCanShareAssignedDriver(rowStatus)
+                            ? 'Share driver and vehicle with the guest on WhatsApp'
+                            : 'Available after the trip is assigned'}
+                          onClick={() => { void shareAssignedDriverOnWhatsApp(booking); }}
+                        >
+                          <MessageCircle className={`h-4 w-4 ${bookingCanShareAssignedDriver(rowStatus) ? 'text-[#25D366]' : 'text-gray-300'}`} />
+                          <span className="sr-only">Share driver details on WhatsApp</span>
+                        </Button>
                       <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -1242,6 +1350,12 @@ export function AdminBookingsList() {
                           {rowStatus !== 'cancelled' && rowStatus !== 'completed' && (
                             <DropdownMenuItem onSelect={() => handleViewDetails(booking, 'driver')}>
                               Assign driver
+                            </DropdownMenuItem>
+                          )}
+                          {rowStatus !== 'cancelled' && rowStatus !== 'completed' && (
+                            <DropdownMenuItem onSelect={() => openTripLink(booking)}>
+                              <Send className="h-4 w-4 mr-2" />
+                              Send trip link
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />
@@ -1278,6 +1392,7 @@ export function AdminBookingsList() {
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

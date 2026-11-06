@@ -243,6 +243,36 @@ if (strpos($category, 'sb-vendor') === 0) {
     exit;
 }
 
+/**
+ * Trip odometer photos. The duty slip reads this file from disk.
+ * A private GCS link cannot be fetched while the PDF is built, so the slip showed "—".
+ */
+if ($folderPrefix === 'odometer-readings/') {
+    $localDir = public_html_uploads_root($uploadsRoot) . '/odometer-readings';
+    if (!is_dir($localDir) && !mkdir($localDir, 0755, true) && !is_dir($localDir)) {
+        echo json_encode(['error' => 'Failed to save odometer photo']);
+        exit;
+    }
+    $localPath = $localDir . '/' . $fileBase;
+    if (!move_uploaded_file($tmpPath, $localPath)) {
+        echo json_encode(['error' => 'Failed to save odometer photo']);
+        exit;
+    }
+    if (function_exists('uploadToGcs') && gcloudEnv('GCS_BUCKET')) {
+        $gcsCopy = $localPath . '.gcs';
+        if (@copy($localPath, $gcsCopy)) {
+            uploadToGcs($gcsCopy, $objectName, $contentType);
+            @unlink($gcsCopy);
+        }
+    }
+    $publicBase = defined('APP_URL') ? rtrim((string) APP_URL, '/') : 'https://vizagtaxihub.com';
+    echo json_encode([
+        'url' => $publicBase . '/uploads/odometer-readings/' . $fileBase,
+        'object' => $objectName,
+    ]);
+    exit;
+}
+
 if (function_exists('uploadToGcs') && gcloudEnv('GCS_BUCKET')) {
     $res = uploadToGcs($tmpPath, $objectName, $contentType);
     if ($res && !empty($res['publicUrl'])) {

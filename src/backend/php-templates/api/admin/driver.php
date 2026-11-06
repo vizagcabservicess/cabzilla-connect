@@ -310,7 +310,8 @@ switch ($_SERVER['REQUEST_METHOD']) {
             }
 
             // Use NULLIF to store NULL for empty vehicle_id (avoids UNIQUE constraint on '')
-            if ($userColExists) {
+            // Leave user_id unchanged when this edit did not supply one. Binding null as an int stores 0 and unlinks the app.
+            if ($userColExists && $userIdToSet !== null && (int) $userIdToSet > 0) {
                 $stmt = $conn->prepare("
                     UPDATE drivers SET 
                         name = ?, 

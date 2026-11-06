@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +31,7 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
   const [fuelType, setFuelType] = useState<'Petrol' | 'Diesel' | 'CNG'>('Petrol');
   const [price, setPrice] = useState<string>('');
   const [location, setLocation] = useState<string>('Visakhapatnam');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchFuelPrices();
@@ -40,31 +40,17 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
   const fetchFuelPrices = async () => {
     setIsLoading(true);
     try {
-      // In a real app, this would be an API call to fetch fuel prices
-      // For now, we'll use mock data
-      const response = await fetch('/api/admin/fuel_prices.php')
-        .then(res => {
-          if (!res.ok) throw new Error('Failed to fetch fuel prices');
-          return res.json();
-        })
-        .catch(err => {
-          console.error("Error fetching fuel prices:", err);
-          // If API fails, use sample data
-          return {
-            status: 'success',
-            data: {
-              fuelPrices: [
-                { id: '1', fuelType: 'Petrol', price: 102.50, effectiveDate: '2025-05-01', location: 'Visakhapatnam', createdAt: '2025-05-01', updatedAt: '2025-05-01' },
-                { id: '2', fuelType: 'Diesel', price: 88.75, effectiveDate: '2025-05-01', location: 'Visakhapatnam', createdAt: '2025-05-01', updatedAt: '2025-05-01' },
-                { id: '3', fuelType: 'CNG', price: 65.30, effectiveDate: '2025-05-01', location: 'Visakhapatnam', createdAt: '2025-05-01', updatedAt: '2025-05-01' }
-              ]
-            }
-          };
-        });
-      
-      if (response.status === 'success' && response.data?.fuelPrices) {
-        setFuelPrices(response.data.fuelPrices);
+      const response = await fetch('/api/admin/fuel_prices.php');
+      if (!response.ok) throw new Error('Failed to fetch fuel prices');
+      const data = await response.json();
+      if (data.status === 'success' && Array.isArray(data.data?.fuelPrices)) {
+        setFuelPrices(data.data.fuelPrices);
+      } else {
+        throw new Error(data.message || 'Failed to fetch fuel prices');
       }
+    } catch (error) {
+      console.error("Error fetching fuel prices:", error);
+      toast.error('Could not load fuel prices');
     } finally {
       setIsLoading(false);
     }
@@ -76,43 +62,34 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
       return;
     }
 
+    setIsSaving(true);
     try {
-      // In a real app, this would be an API call to update the fuel price
-      const payload = {
-        fuelType,
-        price: parseFloat(price),
-        location,
-        effectiveDate: new Date().toISOString()
-      };
-
-      const updatedPrice = editingPrice
-        ? { ...editingPrice, ...payload, updatedAt: new Date().toISOString() }
-        : {
-            id: `temp-${Date.now()}`,
-            ...payload,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-
-      // Update local state first for immediate feedback
-      if (editingPrice) {
-        setFuelPrices(prev => 
-          prev.map(p => p.id === editingPrice.id ? updatedPrice : p)
-        );
-      } else {
-        setFuelPrices(prev => [...prev.filter(p => p.fuelType !== fuelType), updatedPrice]);
+      const response = await fetch('/api/admin/fuel_prices.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingPrice?.id,
+          fuelType,
+          price: parseFloat(price),
+          location: location.trim() || 'Visakhapatnam',
+          effectiveDate: format(new Date(), 'yyyy-MM-dd'),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || data.status !== 'success') {
+        throw new Error(data.message || 'Failed to update fuel price');
       }
 
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-
       toast.success(`${fuelType} price updated successfully`);
-      if (onPriceUpdate) onPriceUpdate();
       setIsDialogOpen(false);
       resetForm();
+      await fetchFuelPrices();
+      onPriceUpdate?.();
     } catch (error) {
       console.error("Error updating fuel price:", error);
-      toast.error('Failed to update fuel price');
+      toast.error(error instanceof Error ? error.message : 'Failed to update fuel price');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -146,51 +123,46 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Current Fuel Prices</CardTitle>
-          <Button onClick={() => {
-            resetForm();
-            setIsDialogOpen(true);
-          }}>
-            Update Prices
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Current prices</h2>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8"
+            onClick={() => {
+              resetForm();
+              setIsDialogOpen(true);
+            }}
+          >
+            Update prices
           </Button>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center p-6">
-              <div className="animate-spin h-8 w-8 border-4 border-blue-600 rounded-full border-t-transparent"></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {fuelPrices.map((price) => (
-                <div 
-                  key={price.id} 
-                  className="bg-white p-6 rounded-lg shadow border border-gray-100 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleEditPrice(price)}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-1">{price.fuelType}</h3>
-                      <p className="text-gray-500 text-sm">Last updated: {formatDate(price.updatedAt)}</p>
-                    </div>
-                    <div className="text-2xl font-bold">₹{price.price.toFixed(2)}</div>
-                  </div>
-                  {price.location && (
-                    <p className="text-sm text-gray-500 mt-2">Location: {price.location}</p>
-                  )}
+        </div>
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground">Loading prices…</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border bg-border">
+            {fuelPrices.map((price) => (
+              <button
+                key={price.id}
+                type="button"
+                className="bg-card px-2 py-1.5 text-left hover:bg-muted"
+                onClick={() => handleEditPrice(price)}
+              >
+                <div className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">{price.fuelType}</div>
+                <div className="text-sm font-semibold tabular-nums">₹{price.price.toFixed(2)}</div>
+                <div className="truncate text-[10px] text-muted-foreground">
+                  {formatDate(price.updatedAt)}{price.location ? ` · ${price.location}` : ''}
                 </div>
-              ))}
-
-              {fuelPrices.length === 0 && (
-                <div className="col-span-3 text-center p-6">
-                  <p className="text-gray-500">No fuel prices found. Click "Update Prices" to add prices.</p>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </button>
+            ))}
+            {fuelPrices.length === 0 ? (
+              <p className="col-span-3 bg-card px-2 py-3 text-xs text-muted-foreground">No fuel prices yet. Use Update prices to add them.</p>
+            ) : null}
+          </div>
+        )}
+      </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
@@ -248,8 +220,8 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
             <Button variant="outline" onClick={handleCloseDialog}>
               Cancel
             </Button>
-            <Button onClick={handleUpdatePrice}>
-              {editingPrice ? 'Update' : 'Save'}
+            <Button onClick={handleUpdatePrice} disabled={isSaving}>
+              {isSaving ? 'Saving…' : editingPrice ? 'Update' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,6 @@
 import './src/pushNotificationInit';
 import './src/lib/eventDutyLocationTask';
+import './src/lib/tripAssignmentAlarm';
 import { registerRootComponent } from 'expo';
 
 import App from './App';

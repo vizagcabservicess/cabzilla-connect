@@ -12,8 +12,6 @@ import {
 import { LocationInput, type LocationInputHandle } from './LocationInput';
 import { OutstationAddStopLink, OutstationStopRows } from './OutstationStopsEditor';
 import { DateTimePicker, type DateTimePickerHandle } from './DateTimePicker';
-import { CabOptions } from './CabOptions';
-import { BookingSummary } from './BookingSummary';
 import { Location, getVizagAirportLocations, resolveCanonicalVizagAirport } from '@/lib/locationData';
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, isSelectedMapLocation, isWithinTourPickupRadius } from '@/lib/locationUtils';
 import {
@@ -59,10 +57,17 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 /** Desktop-only route map: `@react-google-maps/api` is large — keep out of initial mobile bundle. */
 const GoogleMapComponent = lazy(() => import('./GoogleMapComponent'));
+/** Cab results, fare summary, and guest form are not on the first screen. */
+const CabOptions = lazy(() => import('./CabOptions').then((m) => ({ default: m.CabOptions })));
+const BookingSummary = lazy(() =>
+  import('./BookingSummary').then((m) => ({ default: m.BookingSummary }))
+);
+const GuestDetailsForm = lazy(() =>
+  import('./GuestDetailsForm').then((m) => ({ default: m.GuestDetailsForm }))
+);
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { GuestDetailsForm } from './GuestDetailsForm';
 import { BookingPaymentFooter } from './BookingPaymentFooter';
 import { StepIndicator } from './StepIndicator';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -85,7 +90,7 @@ import {
 } from '@/lib/outstationStops';
 
 import { cn } from '@/lib/utils';
-import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
+import { requestGoogleMaps, useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { useAuth } from '@/providers/AuthProvider';
 import { formatDateForAPI, coerceTripDate, isValidTripDate } from '@/lib/dateUtils';
 import { countOutstationBillingDays } from '@/utils/outstationRoundTripLimits';
@@ -3419,11 +3424,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   useEffect(() => {
     if (
       isMobile &&
-      isLoaded && // Only run when Google Maps API is loaded
       (tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') &&
       pickupLocation &&
       dropLocation
     ) {
+      if (!isLoaded) {
+        requestGoogleMaps();
+        return;
+      }
       setIsCalculatingDistance(true);
       measureBookedRoute(pickupLocation, dropLocation)
         .then(result => {
@@ -4912,6 +4920,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 <div className="text-gray-500">Loading vehicles...</div>
                               </div>
                             ) : (
+                              <Suspense fallback={<div className="flex items-center justify-center p-4 text-gray-500">Loading cabs...</div>}>
                               <CabOptions 
                                 cabTypes={heroBookingCabList} 
                                 selectedCab={selectedCab} 
@@ -4925,6 +4934,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 isCalculatingFares={isCalculatingDistance}
                                 oneWayViaStops={filledStops.length > 0}
                               />
+                              </Suspense>
                             )}
                           </div>
                         </div>
@@ -4941,6 +4951,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             id="booking-summary"
                             className={`text-xs lg:text-[12px] ${embedStretchToShell ? 'w-full max-w-none' : ''}`}
                           >
+                            <Suspense fallback={null}>
                             <BookingSummary 
                               pickupLocation={pickupLocation!} 
                               dropLocation={dropLocation} 
@@ -4976,6 +4987,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 />
                               }
                             />
+                            </Suspense>
                           </div>
                           {selectedCab && payReadyTotal > 0 && (
                             <div className="mt-3 hidden lg:block">
@@ -5107,6 +5119,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         onApply={applyOfferCampaign}
                         onRemove={removeOfferCampaign}
                       />
+                      <Suspense fallback={null}>
                       <GuestDetailsForm 
                         onSubmit={handleGuestDetailsSubmit}
                         totalPrice={payReadyTotal}
@@ -5114,11 +5127,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         isLoading={isLoading}
                         paymentEnabled={true}
                       />
+                      </Suspense>
                     </div>
                   </div>
                   
                   {/* Mobile Booking Summary - Hidden by default, shown in modal */}
                   <div className="w-full hidden md:block">
+                    <Suspense fallback={null}>
                     <BookingSummary
                       pickupLocation={pickupLocation!}
                       dropLocation={dropLocation}
@@ -5154,6 +5169,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         />
                       }
                     />
+                    </Suspense>
                     </div>
                   </div>
                 </div>
@@ -5203,6 +5219,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             {/* Content */}
             <div className="overflow-y-auto flex-1 min-h-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
               <div className="pb-20">
+                <Suspense fallback={null}>
                 <BookingSummary
                   pickupLocation={pickupLocation!}
                   dropLocation={dropLocation}
@@ -5238,6 +5255,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                     />
                   }
                 />
+                </Suspense>
               </div>
             </div>
           </div>

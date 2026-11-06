@@ -47,6 +47,7 @@ import { CITY_LOOKUP } from '@/lib/cityLookup';
 import { tourAPI } from '@/services/api/tourAPI';
 import { cn } from '@/lib/utils';
 import { dispatchBookingHomeReset } from '@/lib/bookingSessionReset';
+import { GetTheAppBanner } from '@/components/header/GetTheAppBanner';
 
 const MEGA_MENU_CATEGORIES = ['Services', 'Tour Packages', 'Fleet', 'Company', 'Support'] as const;
 type MegaMenuCategory = (typeof MEGA_MENU_CATEGORIES)[number];
@@ -556,6 +557,7 @@ export function Navbar() {
         isScrolled && 'site-navbar--shrunk shadow-[0_2px_20px_rgba(15,23,42,0.06)]'
       )}
     >
+      <GetTheAppBanner />
       {/* Top Navigation — desktop only (mobile uses search above the logo row) */}
       <div className="hidden overflow-x-clip bg-blue-800 text-white lg:block">
         <div className="container mx-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 overflow-hidden px-6 py-2 text-[11px] lg:px-8">

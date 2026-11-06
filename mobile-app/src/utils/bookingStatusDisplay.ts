@@ -31,6 +31,12 @@ export function getEffectiveBookingStatus(booking: EffectiveInput): string {
   return 'pending';
 }
 
+/** Guest can be sent driver and vehicle details only after the trip is assigned. */
+export function bookingCanShareAssignedDriver(status: string | null | undefined): boolean {
+  const normalized = normalizeStatusToken(String(status ?? ''));
+  return normalized === 'assigned' || normalized === 'in_progress' || normalized === 'started' || normalized === 'completed';
+}
+
 export function formatBookingStatus(status: string): string {
   if (normalizeStatusToken(status) === 'pending_offline_booking') {
     return 'Pending - Offline Booking';

@@ -17,8 +17,10 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { extractTextFromImage } from '../services/ocrService';
 import { colors } from '../theme/colors';
+import { authAPI } from '../services/authAPI';
 import { driverTripsAPI, uploadImage } from '../services/driverTripsAPI';
-import { parseOdometerFromText } from '../utils/parseOdometerFromOcr';
+import { analyzeFuelCaptureUnified } from '../services/fuelGeminiVisionUnified';
+import { chooseOdometerReading, kmLabeledOdometer, parseOdometerFromText } from '../utils/parseOdometerFromOcr';
 import { FuelCaptureCameraModal } from './FuelCaptureCameraModal';
 
 export type OdometerCaptureModalProps =
@@ -63,7 +65,7 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
   const uploadTripOdometerAfterConfirm = async (uri: string, odometer: number) => {
     setStep('uploading');
     const imageUrl = await uploadImage(uri, 'odometer.jpg', 'odometer');
-    const capturedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const capturedAt = new Date().toISOString();
     await driverTripsAPI.submitOdometer({
       bookingId,
       readingType,
@@ -78,12 +80,19 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
   const processCapturedUri = async (uri: string) => {
     setStep('processing');
     try {
-      const texts = await extractTextFromImage(uri);
+      const token = await authAPI.getStoredToken();
+      const [texts, vision] = await Promise.all([
+        extractTextFromImage(uri).catch(() => [] as string[]),
+        token ? analyzeFuelCaptureUnified(uri, token, 'odometer') : Promise.resolve(null),
+      ]);
       const fullText = (texts || []).join(' ');
-      const odometer = parseOdometerFromText(fullText);
+      const fromText = parseOdometerFromText(fullText);
+      const kmLabeled = kmLabeledOdometer(fullText);
+      const fromVision = vision?.odometer_reading ?? null;
+      const odometer = chooseOdometerReading(fromText, fromVision, kmLabeled);
 
       if (odometer === null) {
-        setError('Could not detect odometer reading. Retake the photo or enter manually below.');
+        setError('Could not read the odometer. Retake the photo so the km digits are inside the box, or type the reading below.');
         setFailedImageUri(uri);
         setStep('idle');
         return;
@@ -200,7 +209,7 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
       if (failedImageUri && (failedImageUri.startsWith('file') || failedImageUri.startsWith('content'))) {
         imageUrl = await uploadImage(failedImageUri, 'odometer.jpg', 'odometer');
       }
-      const capturedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const capturedAt = new Date().toISOString();
       await driverTripsAPI.submitOdometer({
         bookingId,
         readingType,

@@ -263,7 +263,7 @@ export const adminAPI = {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        timeout: 15000,
+        timeout: 30000,
       }
     );
     if (response.data?.status === 'error') {

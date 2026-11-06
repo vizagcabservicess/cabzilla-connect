@@ -1933,8 +1933,8 @@ function vth_event_shrink_ocr_tmp(string $tmp): string
     }
     $w = imagesx($src);
     $h = imagesy($src);
-    $max = 1600;
-    $scale = min(1, $max / max($w, $h));
+    $max = 2560;
+    $scale = min(1, $max / max($w, $h, 1));
     if ($scale >= 1) {
         imagedestroy($src);
         return $tmp;
@@ -1943,8 +1943,15 @@ function vth_event_shrink_ocr_tmp(string $tmp): string
     $nh = (int) round($h * $scale);
     $dst = imagecreatetruecolor($nw, $nh);
     imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+    if (function_exists('imageconvolution')) {
+        @imageconvolution($dst, [
+            [0, -1, 0],
+            [-1, 5, -1],
+            [0, -1, 0],
+        ], 1, 0);
+    }
     $out = $tmp . '.ocr.jpg';
-    imagejpeg($dst, $out, 82);
+    imagejpeg($dst, $out, 92);
     imagedestroy($src);
     imagedestroy($dst);
     return is_file($out) ? $out : $tmp;
@@ -3294,6 +3301,152 @@ function vth_event_send_resume_whatsapp(mysqli $conn, array $duty): array
 {
     $url = vth_event_driver_duty_url($conn, $duty);
     return vth_event_send_duty_text($conn, $duty, vth_event_resume_whatsapp_text($duty, $url));
+}
+
+function vth_event_send_admin_whatsapp(string $text): array
+{
+    $client = __DIR__ . '/../utils/whatsapp_cloud_client.php';
+    $recipientsFile = __DIR__ . '/../utils/admin_tomorrow_reminder_core.php';
+    if (!is_file($client) || !is_file($recipientsFile)) {
+        return ['whatsapp' => 'not_configured'];
+    }
+    require_once $client;
+    require_once $recipientsFile;
+    if (!function_exists('whatsapp_send_text_message_auto_chunk') || !function_exists('admin_whatsapp_recipients') || !function_exists('whatsapp_normalize_phone')) {
+        return ['whatsapp' => 'not_configured'];
+    }
+    $targets = [];
+    foreach (admin_whatsapp_recipients() as $adminPhone) {
+        $targets[] = whatsapp_normalize_phone((string) $adminPhone);
+    }
+    $targets = array_values(array_unique(array_filter($targets, static function (string $to): bool {
+        return strlen($to) >= 10;
+    })));
+    if (!$targets) {
+        return ['whatsapp' => 'no_phone'];
+    }
+    $sent = 0;
+    foreach ($targets as $to) {
+        try {
+            $result = whatsapp_send_text_message_auto_chunk('trip', $to, $text);
+        } catch (Throwable $e) {
+            $result = ['ok' => false];
+        }
+        if (!empty($result['ok'])) {
+            $sent++;
+        }
+    }
+    return ['whatsapp' => $sent > 0 ? 'sent' : 'failed', 'whatsappSent' => $sent];
+}
+
+function vth_event_km_label($value): string
+{
+    if ($value === null || $value === '') {
+        return '—';
+    }
+    return (string) (int) $value . ' KM';
+}
+
+function vth_event_trip_alert_text(array $duty, string $kind): string
+{
+    $event = trim((string) ($duty['event_name'] ?? 'Event'));
+    $vehicle = trim((string) ($duty['vehicle_reg_snapshot'] ?? ''));
+    if ($vehicle === '') {
+        $vehicle = '—';
+    }
+    $driver = trim((string) ($duty['driver_name_snapshot'] ?? 'Driver'));
+    $phone = preg_replace('/\D+/', '', (string) ($duty['driver_mobile_snapshot'] ?? '')) ?? '';
+    $shown = strlen($phone) >= 10 ? ('+91 ' . substr($phone, -10)) : '—';
+    $whenKey = $kind === 'end' ? 'closing_at' : 'opening_at';
+    $moment = vth_event_whatsapp_moment(isset($duty[$whenKey]) ? (string) $duty[$whenKey] : null)
+        ?? new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'));
+    $when = $moment->format('d-M-Y, g:i A');
+    $openKm = vth_event_km_label($duty['opening_km'] ?? null);
+    if ($kind === 'end') {
+        $place = trim((string) ($duty['closing_address'] ?? ''));
+        if ($place === '') {
+            $place = '—';
+        }
+        return "✅ *TRIP ENDED – VIZAG TAXI HUB*\n\n"
+            . "👤 *Driver:* {$driver}\n"
+            . "📞 *Mobile:* {$shown}\n"
+            . "🚗 *Vehicle No.:* {$vehicle}\n"
+            . "📅 *Event:* {$event}\n"
+            . "🕒 *Ended:* {$when}\n"
+            . "🔢 *Starting KM:* {$openKm}\n"
+            . "🔢 *Ending KM:* " . vth_event_km_label($duty['closing_km'] ?? null) . "\n"
+            . "📏 *Total KM:* " . vth_event_km_label($duty['total_km'] ?? null) . "\n"
+            . "📍 *Location:* {$place}\n\n"
+            . "*Vizag Taxi Hub – Operations Team*";
+    }
+    $place = trim((string) ($duty['opening_address'] ?? ''));
+    if ($place === '') {
+        $place = '—';
+    }
+    return "🚗 *TRIP STARTED – VIZAG TAXI HUB*\n\n"
+        . "👤 *Driver:* {$driver}\n"
+        . "📞 *Mobile:* {$shown}\n"
+        . "🚗 *Vehicle No.:* {$vehicle}\n"
+        . "📅 *Event:* {$event}\n"
+        . "🕒 *Started:* {$when}\n"
+        . "🔢 *Starting KM:* {$openKm}\n"
+        . "📍 *Location:* {$place}\n\n"
+        . "*Vizag Taxi Hub – Operations Team*";
+}
+
+function vth_event_push_admin_trip(array $duty, string $kind): void
+{
+    $dutyId = (int) ($duty['id'] ?? 0);
+    if ($dutyId <= 0) {
+        return;
+    }
+    $eventId = (int) ($duty['event_id'] ?? 0);
+    $driver = trim((string) ($duty['driver_name_snapshot'] ?? 'Driver'));
+    if ($driver === '') {
+        $driver = 'Driver';
+    }
+    $event = trim((string) ($duty['event_name'] ?? 'Event'));
+    if ($event === '') {
+        $event = 'Event';
+    }
+    $vehicle = trim((string) ($duty['vehicle_reg_snapshot'] ?? ''));
+    $started = $kind !== 'end';
+    $title = $started ? 'Trip started' : 'Trip ended';
+    $body = $driver . ' · ' . $event;
+    if ($vehicle !== '') {
+        $body .= ' · ' . $vehicle;
+    }
+    $km = $started ? ($duty['opening_km'] ?? null) : ($duty['closing_km'] ?? null);
+    if ($km !== null && $km !== '') {
+        $body .= ' · ' . (int) $km . ' km';
+    }
+    $pushFile = __DIR__ . '/../utils/push.php';
+    if (is_file($pushFile)) {
+        require_once $pushFile;
+    }
+    if (!function_exists('sendPushToOfficeAdmins')) {
+        return;
+    }
+    sendPushToOfficeAdmins($title, $body, [
+        'type' => 'event_duty_update',
+        'event' => $started ? 'trip_started' : 'trip_ended',
+        'eventId' => (string) $eventId,
+        'dutyId' => (string) $dutyId,
+    ], 'event_duty_' . ($started ? 'start' : 'end') . '_' . $dutyId);
+}
+
+function vth_event_notify_admin_trip(array $duty, string $kind): void
+{
+    try {
+        vth_event_send_admin_whatsapp(vth_event_trip_alert_text($duty, $kind));
+    } catch (Throwable $e) {
+        // The duty is already saved. A missed WhatsApp must not undo start or end.
+    }
+    try {
+        vth_event_push_admin_trip($duty, $kind);
+    } catch (Throwable $e) {
+        // The duty is already saved. A missed app alert must not undo start or end.
+    }
 }
 
 function vth_event_ensure_expo_table(mysqli $conn): void

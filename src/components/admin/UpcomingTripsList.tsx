@@ -282,6 +282,27 @@ export function UpcomingTripsList() {
     }
   };
 
+  const handleRemoveAssignment = async () => {
+    if (!selectedBooking) return;
+    setIsSubmitting(true);
+    try {
+      const response = await bookingAPI.unassignDriver(selectedBooking.id);
+      const nextStatus = (response?.data?.status || 'confirmed') as Booking['status'];
+      const cleared = {
+        driverName: '',
+        driverPhone: '',
+        vehicleNumber: '',
+        vehicleId: undefined,
+        status: nextStatus,
+      };
+      setBookings((prev) => prev.map((b) => (b.id === selectedBooking.id ? { ...b, ...cleared } : b)));
+      setSelectedBooking((prev) => (prev ? { ...prev, ...cleared } : null));
+      await fetchUpcoming();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleCancelBooking = async () => {
     if (!selectedBooking) return;
     setIsSubmitting(true);
@@ -575,6 +596,7 @@ export function UpcomingTripsList() {
           onClose={handleCloseDetails}
           onEdit={handleEditBooking}
           onAssignDriver={handleAssignDriver}
+          onRemoveAssignment={handleRemoveAssignment}
           onCancel={handleCancelBooking}
           onGenerateInvoice={handleGenerateInvoice}
           onStatusChange={handleStatusChange}

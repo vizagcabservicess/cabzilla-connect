@@ -142,6 +142,22 @@ export function AdminUsersScreen() {
     await updateRole(u.id, storedRole(role), access);
   };
 
+  const setActive = async (user: AdminUser) => {
+    const next = user.is_active === false;
+    try {
+      setActionLoadingId(user.id);
+      await adminExtendedAPI.usersSetActive(user.id, next);
+      setUsers((prev) => prev.map((row) => (row.id === user.id ? { ...row, is_active: next } : row)));
+      Alert.alert(next ? 'User activated' : 'User inactive', next
+        ? `${user.name} can sign in again.`
+        : `${user.name} cannot sign in or use the web or mobile app.`);
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to update status');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const updateRole = async (userId: number, role: string, access: 'full' | 'event_manager' | 'event_driver' = 'full') => {
     try {
       setActionLoadingId(userId);
@@ -270,6 +286,14 @@ export function AdminUsersScreen() {
                           {shownChoice(u).replace(/_/g, ' ')}
                         </Text>
                       </View>
+                      <TouchableOpacity
+                        onPress={() => void setActive(u)}
+                        disabled={!!actionLoadingId}
+                      >
+                        <Text style={[styles.authText, u.is_active === false && styles.inactiveText]}>
+                          {u.is_active === false ? 'Inactive' : 'Active'}
+                        </Text>
+                      </TouchableOpacity>
                       <Text style={styles.authText}>
                         {u.authProvider === 'google' ? 'Google' : 'Email'}
                       </Text>
@@ -566,6 +590,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray200,
   },
   roleText: { fontSize: 11, fontWeight: '600', color: colors.foreground },
+  inactiveText: { color: '#dc2626', fontWeight: '700' },
   authText: { fontSize: 11, color: colors.gray600 },
   bookingsText: { fontSize: 11, color: colors.gray600 },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },

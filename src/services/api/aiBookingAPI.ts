@@ -2,41 +2,45 @@ import axios from 'axios';
 import { format } from 'date-fns';
 import { getApiUrl } from '@/config/api';
 import { parseBookingText, normalizeVehicleName } from '@/utils/bookingParser';
+import { isAcceptableBookingPhone, normalizeBookingPhone } from '@/utils/bookingTripTerms';
 
 export const AI_SHEET_TAB_STORAGE_KEY = 'ai_assistant_sheet_tab';
 
-const SHORT_MONTH_TO_FULL: Record<string, string> = {
-  Jan: 'January',
-  Feb: 'February',
-  Mar: 'March',
-  Apr: 'April',
-  May: 'May',
-  Jun: 'June',
-  Jul: 'July',
-  Aug: 'August',
-  Sep: 'September',
-  Oct: 'October',
-  Nov: 'November',
-  Dec: 'December',
-};
+const MONTH_NAMES: Array<[string, string]> = [
+  ['jan', 'January'],
+  ['feb', 'February'],
+  ['mar', 'March'],
+  ['apr', 'April'],
+  ['may', 'May'],
+  ['jun', 'June'],
+  ['jul', 'July'],
+  ['aug', 'August'],
+  ['sep', 'September'],
+  ['oct', 'October'],
+  ['nov', 'November'],
+  ['dec', 'December'],
+];
 
-/** Spreadsheet tabs use the full month, e.g. "October 2026". */
+/** Spreadsheet tabs use the full month, e.g. "November 2026". */
 export function defaultAiSheetTabName(date = new Date()): string {
   return format(date, 'MMMM yyyy');
 }
 
-/** "Oct 2026" was the old default and does not match the sheet tab "October 2026". */
+/** "Nov 2026" does not match the sheet tab "November 2026". */
 export function normalizeAiSheetTabName(name: string): string {
-  const trimmed = name.trim();
-  const match = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/.exec(trimmed);
+  const trimmed = name.trim().replace(/\./g, '').replace(/\s+/g, ' ');
+  const match = /^([A-Za-z]+)\s+(\d{4})$/.exec(trimmed);
   if (!match) return trimmed;
-  return `${SHORT_MONTH_TO_FULL[match[1]]} ${match[2]}`;
+  const month = match[1].toLowerCase();
+  const full = MONTH_NAMES.find(([short, long]) => month === short || month === long.toLowerCase() || month.startsWith(short));
+  if (!full) return trimmed;
+  return `${full[1]} ${match[2]}`;
 }
 
 export function readStoredAiSheetTab(): string {
   try {
     const stored = localStorage.getItem(AI_SHEET_TAB_STORAGE_KEY)?.trim();
-    return stored ? normalizeAiSheetTabName(stored) : defaultAiSheetTabName();
+    return stored || defaultAiSheetTabName();
   } catch {
     return defaultAiSheetTabName();
   }
@@ -347,8 +351,9 @@ export const REQUIRED_BOOKING_FIELDS = [
 
 export function validateBookingClient(data: Partial<ParsedBooking>): string[] {
   const errors: string[] = [];
-  const mobile = (data.customer_mobile ?? '').replace(/\D/g, '');
-  if (mobile.length !== 10) errors.push('Customer mobile must be 10 digits');
+  if (!isAcceptableBookingPhone(data.customer_mobile ?? '')) {
+    errors.push('Customer mobile must be a valid phone number');
+  }
   if (!data.pickup_location?.trim()) errors.push('Pickup location is required');
   if (!data.drop_location?.trim()) errors.push('Drop location is required');
   if (!data.customer_name?.trim()) errors.push('Customer name is required');
@@ -396,10 +401,7 @@ export function mapSearchAlertTripType(tripType: string): string {
   return 'One Way';
 }
 
-/** Strip +91 from guest phone */
+/** Indian numbers stay 10 digits. Other countries keep the country code. */
 export function normalizeGuestPhone(phone: string): string {
-  let digits = phone.replace(/\D/g, '');
-  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
-  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
-  return digits.length === 10 ? digits : phone.replace(/\s/g, '');
+  return normalizeBookingPhone(phone) || phone.replace(/[*_]/g, '').trim();
 }

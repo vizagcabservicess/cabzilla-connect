@@ -14,6 +14,7 @@ require_once __DIR__ . '/common/db_helper.php';
 require_once __DIR__ . '/utils/response.php';
 require_once __DIR__ . '/utils/invoice_trip_type_display.inc.php';
 require_once __DIR__ . '/utils/invoice_trip_summary_overrides.inc.php';
+require_once __DIR__ . '/utils/invoice_brand_assets.inc.php';
 
 // Import DomPDF classes at the top level
 use Dompdf\Dompdf;
@@ -583,6 +584,7 @@ try {
                     <tr>
                         <td width="38%" valign="top" style="word-wrap:break-word;overflow-wrap:break-word;">
                             <p class="compact-p"><strong>Seller/Service Provider:</strong></p>
+                            ' . invoice_brand_logo_html() . '
                             <p class="compact-p"><strong>VIZAG TAXI HUB</strong></p>
                             <p class="compact-p">44-66-22/4, Singalamma Puram, Kailasapuram, Visakhapatnam, Andhra Pradesh - 530024</p>' .
                             ($gstEnabled ? '<p class="compact-p"><strong>GSTIN: '.htmlspecialchars($gstinDisplay).'</strong></p><p class="compact-p"><strong>HSN Code: '.$hsnCode.'</strong></p>' : '') . '
@@ -773,11 +775,11 @@ try {
 
     $content .= '
             </div>
-            <div class="footer" style="margin-top:10px;font-size:9px;">
+            ' . invoice_brand_footer_html($gstEnabled, '
                 <p>Thank you for choosing Vizag Taxi Hub</p>
                 <p>For inquiries: info@vizagtaxihub.com | +91 9966363662</p>
                 <p>Generated on: '.date('d M Y H:i:s').'</p>
-            </div>
+            ') . '
         </div>
     </body>
     </html>';

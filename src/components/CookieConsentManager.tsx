@@ -8,11 +8,12 @@ const BANNER_DELAY_MS = 10000;
 
 const CookieConsentManager: React.FC = () => {
   const { hasConsent, updatePreferences, acceptAll, rejectAll } = useCookieConsent();
+  const onVendorTrip = typeof window !== 'undefined' && window.location.pathname.startsWith('/ride/');
   const [showBanner, setShowBanner] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (hasConsent) return;
+    if (hasConsent || onVendorTrip) return;
     const startTimer = () => {
       timeoutRef.current = window.setTimeout(() => setShowBanner(true), BANNER_DELAY_MS);
     };
@@ -27,11 +28,11 @@ const CookieConsentManager: React.FC = () => {
     return () => {
       if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
     };
-  }, [hasConsent]);
+  }, [hasConsent, onVendorTrip]);
 
   return (
     <>
-      {!hasConsent && showBanner && (
+      {!hasConsent && !onVendorTrip && showBanner && (
         <Suspense fallback={null}>
           <CookieConsentBanner
             onConsentChange={updatePreferences}

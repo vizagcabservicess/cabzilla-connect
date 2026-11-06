@@ -116,7 +116,9 @@ try {
         $vehicleNumber = trim($data['vehicle_number']);
     }
 
-    if (!$bookingId || !$driverId) {
+    $unassign = !empty($data['unassign']) || (isset($data['action']) && $data['action'] === 'unassign');
+
+    if (!$bookingId || (!$unassign && !$driverId)) {
         error_log('Missing required data: bookingId=' . var_export($bookingId, true) . ', driverId=' . var_export($driverId, true));
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required data (bookingId, driverId)'], 400);
         exit;
@@ -138,6 +140,164 @@ try {
     $conn->begin_transaction();
 
     try {
+        if ($unassign) {
+            $bookingIdInt = (int) $bookingId;
+            $bookingStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            if (!$bookingStmt) {
+                throw new Exception("Failed to prepare booking statement: " . $conn->error);
+            }
+            $bookingStmt->bind_param("i", $bookingIdInt);
+            if (!$bookingStmt->execute()) {
+                throw new Exception("Failed to fetch booking: " . $bookingStmt->error);
+            }
+            $bookingResult = $bookingStmt->get_result();
+            if ($bookingResult->num_rows === 0) {
+                throw new Exception("Booking not found");
+            }
+            $booking = $bookingResult->fetch_assoc();
+            $bookingStmt->close();
+
+            $bs = strtolower((string) ($booking['status'] ?? ''));
+            if (in_array($bs, ['completed', 'cancelled'], true)) {
+                throw new Exception("A completed or cancelled booking cannot be unassigned");
+            }
+
+            $nextStatus = (string) ($booking['status'] ?? 'confirmed');
+            if (in_array($bs, ['assigned', 'in_progress', 'started'], true)) {
+                $nextStatus = 'confirmed';
+            }
+
+            $clearBooking = $conn->prepare("
+                UPDATE bookings
+                SET driver_id = NULL,
+                    driver_name = NULL,
+                    driver_phone = NULL,
+                    vehicle_number = NULL,
+                    status = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            ");
+            if (!$clearBooking) {
+                throw new Exception("Failed to prepare booking clear: " . $conn->error);
+            }
+            $clearBooking->bind_param("si", $nextStatus, $bookingIdInt);
+            if (!$clearBooking->execute()) {
+                throw new Exception("Failed to remove assignment: " . $clearBooking->error);
+            }
+            $clearBooking->close();
+
+            $fleetCol = @$conn->query("SHOW COLUMNS FROM bookings LIKE 'fleet_vehicle_id'");
+            if ($fleetCol && $fleetCol->num_rows > 0) {
+                $clearFleet = $conn->prepare("UPDATE bookings SET fleet_vehicle_id = NULL WHERE id = ?");
+                if ($clearFleet) {
+                    $clearFleet->bind_param("i", $bookingIdInt);
+                    $clearFleet->execute();
+                    $clearFleet->close();
+                }
+            }
+
+            $segmentTable = @$conn->query("SHOW TABLES LIKE 'booking_duty_segments'");
+            if ($segmentTable && $segmentTable->num_rows > 0) {
+                $clearSegments = $conn->prepare("
+                    UPDATE booking_duty_segments
+                    SET driver_id = NULL,
+                        driver_name = NULL,
+                        driver_phone = NULL,
+                        fleet_vehicle_id = NULL,
+                        vehicle_number = NULL,
+                        vehicle_model = NULL,
+                        status = 'not_started',
+                        opening_km = NULL,
+                        closing_km = NULL,
+                        opening_at = NULL,
+                        closing_at = NULL
+                    WHERE booking_id = ? AND status <> 'completed'
+                ");
+                if ($clearSegments) {
+                    $clearSegments->bind_param("i", $bookingIdInt);
+                    $clearSegments->execute();
+                    $clearSegments->close();
+                }
+            }
+            $dayTable = @$conn->query("SHOW TABLES LIKE 'booking_duty_days'");
+            if ($dayTable && $dayTable->num_rows > 0) {
+                $dayStmt = $conn->prepare("SELECT id FROM booking_duty_days WHERE booking_id = ? AND status <> 'completed'");
+                if ($dayStmt) {
+                    $dayStmt->bind_param("i", $bookingIdInt);
+                    $dayStmt->execute();
+                    $dayRows = $dayStmt->get_result();
+                    while ($dayRows && ($day = $dayRows->fetch_assoc())) {
+                        $dayId = (int) $day['id'];
+                        $doneStmt = $conn->prepare("SELECT COUNT(*) AS c FROM booking_duty_segments WHERE duty_day_id = ? AND status = 'completed'");
+                        if (!$doneStmt) {
+                            continue;
+                        }
+                        $doneStmt->bind_param("i", $dayId);
+                        $doneStmt->execute();
+                        $doneRow = $doneStmt->get_result()->fetch_assoc();
+                        $doneStmt->close();
+                        if ((int) ($doneRow['c'] ?? 0) === 0) {
+                            $resetDay = $conn->prepare("UPDATE booking_duty_days SET status = 'not_started' WHERE id = ?");
+                            if ($resetDay) {
+                                $resetDay->bind_param("i", $dayId);
+                                $resetDay->execute();
+                                $resetDay->close();
+                            }
+                        }
+                    }
+                    $dayStmt->close();
+                }
+            }
+
+            $commissionTable = @$conn->query("SHOW TABLES LIKE 'fleet_commission_payments'");
+            if ($commissionTable && $commissionTable->num_rows > 0) {
+                $cancelCommission = $conn->prepare("UPDATE fleet_commission_payments SET status = 'cancelled' WHERE booking_id = ? AND status = 'pending'");
+                if ($cancelCommission) {
+                    $cancelCommission->bind_param("i", $bookingIdInt);
+                    $cancelCommission->execute();
+                    $cancelCommission->close();
+                }
+            }
+
+            $prevDriverId = isset($booking['driver_id']) ? (int) $booking['driver_id'] : 0;
+            if ($prevDriverId > 0) {
+                $otherStmt = $conn->prepare("
+                    SELECT COUNT(*) AS c FROM bookings
+                    WHERE driver_id = ? AND id <> ? AND status IN ('assigned', 'in_progress', 'started')
+                ");
+                if ($otherStmt) {
+                    $otherStmt->bind_param("ii", $prevDriverId, $bookingIdInt);
+                    $otherStmt->execute();
+                    $otherRow = $otherStmt->get_result()->fetch_assoc();
+                    $otherStmt->close();
+                    if ((int) ($otherRow['c'] ?? 0) === 0) {
+                        $release = $conn->prepare("UPDATE drivers SET status = 'available', updated_at = NOW() WHERE id = ? AND status = 'busy'");
+                        if ($release) {
+                            $release->bind_param("i", $prevDriverId);
+                            $release->execute();
+                            $release->close();
+                        }
+                    }
+                }
+            }
+
+            $conn->commit();
+            sendJsonResponse([
+                'status' => 'success',
+                'message' => 'Driver and vehicle removed',
+                'data' => [
+                    'bookingId' => $bookingIdInt,
+                    'driverId' => null,
+                    'driverName' => null,
+                    'driverPhone' => null,
+                    'vehicleNumber' => null,
+                    'vehicleId' => null,
+                    'status' => $nextStatus,
+                    'updatedAt' => date('Y-m-d H:i:s'),
+                ],
+            ]);
+        }
+
         // Get driver details first
         $driverStmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
         if (!$driverStmt) {
@@ -156,10 +316,27 @@ try {
         
         $driver = $driverResult->fetch_assoc();
         
-        // Admin assign: allow available and busy (reassign / multi-trip). Block only offline.
+        // Admin assign: allow available and busy (reassign / multi-trip). Block inactive accounts.
         $ds = strtolower((string)($driver['status'] ?? ''));
-        if ($ds === 'offline') {
-            throw new Exception("Driver is offline and cannot be assigned");
+        if (in_array($ds, ['offline', 'inactive', 'blocked'], true)) {
+            throw new Exception("Driver is inactive and cannot be assigned");
+        }
+        $linkedUserId = isset($driver['user_id']) ? (int)$driver['user_id'] : 0;
+        $phoneKey = preg_replace('/\D/', '', (string)($driver['phone'] ?? ''));
+        $phoneKey = strlen($phoneKey) >= 10 ? substr($phoneKey, -10) : '';
+        $activeColumn = @$conn->query("SHOW COLUMNS FROM users LIKE 'is_active'");
+        if ($activeColumn && $activeColumn->num_rows > 0 && ($linkedUserId > 0 || $phoneKey !== '')) {
+            $inactiveUserSql = "SELECT id FROM users WHERE is_active = 0 AND (id = ? OR (? <> '' AND RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(phone,''),' ',''),'-',''),'+',''), 10) = ?)) LIMIT 1";
+            $inactiveUserStmt = @$conn->prepare($inactiveUserSql);
+            if ($inactiveUserStmt) {
+                $inactiveUserStmt->bind_param("iss", $linkedUserId, $phoneKey, $phoneKey);
+                if ($inactiveUserStmt->execute()) {
+                    $inactiveUserResult = $inactiveUserStmt->get_result();
+                    if ($inactiveUserResult && $inactiveUserResult->num_rows > 0) {
+                        throw new Exception("Driver is inactive and cannot be assigned");
+                    }
+                }
+            }
         }
         
         // Get booking details
@@ -242,62 +419,39 @@ try {
         // Commit transaction
         $conn->commit();
 
-        // Push alert to driver app (Expo) — requires drivers.user_id → users.id + push_tokens
-        $driverUserId = (int) ($driver['user_id'] ?? 0);
+        // Push alert to every driver login that shares this phone or email.
+        // A second auto-created profile (license PENDING) was receiving neither the trip nor the alert.
+        require_once __DIR__ . '/../utils/driver_user_link.php';
+        $alertUserIds = cabzillaCollectDriverAlertUserIds($conn, $driver);
+        $driverUserId = cabzillaPreferredDriverUserId($conn, $driver, $alertUserIds);
         if ($driverUserId <= 0) {
-            $phoneDigits = preg_replace('/\D/', '', (string) ($driver['phone'] ?? ''));
-            if (strlen($phoneDigits) >= 10) {
-                $tail = substr($phoneDigits, -10);
-                $phoneLike = '%' . $tail . '%';
-                $driverEmailNorm = strtolower(trim((string) ($driver['email'] ?? '')));
-
-                if ($driverEmailNorm !== '') {
-                    $uStmt = $conn->prepare(
-                        "SELECT id FROM users WHERE role = 'driver' AND is_active = 1 AND phone LIKE ? AND LOWER(TRIM(COALESCE(email,''))) = ? LIMIT 1"
-                    );
-                    if ($uStmt) {
-                        $uStmt->bind_param('ss', $phoneLike, $driverEmailNorm);
-                        $uStmt->execute();
-                        $uRes = $uStmt->get_result();
-                        if ($uRes && $uRow = $uRes->fetch_assoc()) {
-                            $driverUserId = (int) $uRow['id'];
-                        }
-                        $uStmt->close();
-                    }
-                }
-                if ($driverUserId <= 0) {
-                    $uStmt = $conn->prepare(
-                        "SELECT id FROM users WHERE role = 'driver' AND is_active = 1 AND phone LIKE ? ORDER BY id ASC LIMIT 1"
-                    );
-                    if ($uStmt) {
-                        $uStmt->bind_param('s', $phoneLike);
-                        $uStmt->execute();
-                        $uRes = $uStmt->get_result();
-                        if ($uRes && $uRow = $uRes->fetch_assoc()) {
-                            $driverUserId = (int) $uRow['id'];
-                        }
-                        $uStmt->close();
-                    }
-                }
-            }
+            $driverUserId = (int) ($driver['user_id'] ?? 0);
         }
         if ($driverUserId > 0) {
-            require_once __DIR__ . '/../utils/driver_user_link.php';
             cabzillaForceLinkDriverRowToUser($conn, (int) $driver['id'], $driverUserId);
-        }
-        if ($driverUserId > 0 && file_exists(__DIR__ . '/../utils/push.php')) {
-            require_once __DIR__ . '/../utils/push.php';
-            if (function_exists('sendPushToDriverForTripAssignment')) {
-                $pickupSummary = (string) ($booking['pickup_location'] ?? '');
-                $passengerName = (string) ($booking['passenger_name'] ?? '');
-                sendPushToDriverForTripAssignment(
-                    $driverUserId,
-                    (int) $bookingId,
-                    (string) ($booking['booking_number'] ?? ''),
-                    $pickupSummary,
-                    $passengerName
-                );
+            $shadows = cabzillaDriverRowsMatchingContact(
+                $conn,
+                [cabzillaNormalizePhoneDigits((string) ($driver['phone'] ?? ''))],
+                [strtolower(trim((string) ($driver['email'] ?? '')))]
+            );
+            foreach ($shadows as $shadow) {
+                if ($shadow['id'] === (int) $driver['id']) {
+                    continue;
+                }
+                if ($shadow['license_no'] === 'PENDING') {
+                    cabzillaUnlinkShadowDriver($conn, $shadow['id'], $driverUserId);
+                }
             }
+        }
+        if ($alertUserIds !== []) {
+            cabzillaSendTripAssignmentPushes(
+                $conn,
+                $alertUserIds,
+                (int) $bookingId,
+                (string) ($booking['booking_number'] ?? ''),
+                (string) ($booking['pickup_location'] ?? ''),
+                (string) ($booking['passenger_name'] ?? '')
+            );
         }
         
         // Send success response ($vehicleToUse set before UPDATE)

@@ -94,6 +94,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth();
   }, []);
 
+  useEffect(() => {
+    let stopped = false;
+    const recheck = () => {
+      if (stopped || !authAPI.isAuthenticated()) return;
+      void authAPI.getCurrentUser().then((userData) => {
+        if (stopped) return;
+        if (userData) {
+          setUser(userData);
+          return;
+        }
+        if (authAPI.isAuthenticated()) return;
+        setUser(null);
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.assign('/login');
+        }
+      }).catch(() => {
+        // Keep the current session when the status check cannot reach the server.
+      });
+    };
+    const timer = window.setInterval(recheck, 10000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') recheck();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
   // Check token expiration and handle expired tokens
   const isTokenExpired = (token: string): boolean => {
     try {

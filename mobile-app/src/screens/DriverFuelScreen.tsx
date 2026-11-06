@@ -64,6 +64,8 @@ export function DriverFuelScreen() {
                 Vehicle: {(item.vehicleNumber || '').trim() || '—'}
               </Text>
               <Text style={styles.meta}>Linked Trip: {item.linkedTripId ?? 'None'}</Text>
+              {item.loggedAfterTripEnd === true ? <Text style={styles.meta}>After trip end</Text> : null}
+              {item.loggedAfterTripEnd === false ? <Text style={styles.meta}>Before trip end</Text> : null}
               {item.amountVariance != null && Math.abs(item.amountVariance) >= 0.01 ? (
                 <Text style={styles.varianceLine}>
                   Receipt vs pump: Δ ₹{item.amountVariance.toFixed(2)}

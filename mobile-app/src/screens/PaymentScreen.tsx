@@ -120,7 +120,8 @@ export function PaymentScreen({ route, navigation }: Props) {
         data.razorpay_payment_id,
         data.razorpay_order_id,
         data.razorpay_signature,
-        String(bookingId)
+        String(bookingId),
+        amountToPay
       );
       if (ok) {
         setSuccess({ bookingNumber, bookingId });

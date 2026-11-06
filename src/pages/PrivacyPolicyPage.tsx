@@ -27,7 +27,7 @@ export function PrivacyPolicyPage() {
     },
     {
       title: "5. Location Information",
-      content: "We collect location data to provide pickup services, optimize routes, ensure driver and passenger safety, and improve service quality. Location tracking is only active during active bookings and can be controlled through your device settings."
+      content: "Vizag Taxi Hub asks for location access in the app before it is used. Guests can allow location for pickup. Drivers share location during an active trip or event duty, including when the app is closed or not in use, with the Vizag Taxi Hub office so dispatch can see the vehicle. You can decline, and you can turn location off in your device settings. We do not sell location data."
     },
     {
       title: "6. Data Retention",
@@ -110,7 +110,7 @@ export function PrivacyPolicyPage() {
         
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://vizagtaxihub.com/privacy" />
+        <meta property="og:url" content="https://vizagtaxihub.com/privacy-policy" />
         <meta property="og:title" content="Privacy Policy - Vizag Taxi Hub | Data Protection & Privacy" />
         <meta property="og:description" content="Learn how Vizag Taxi Hub protects your personal information and privacy." />
         <meta property="og:image" content="/og-image.png" />
@@ -119,14 +119,14 @@ export function PrivacyPolicyPage() {
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://vizagtaxihub.com/privacy" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/privacy-policy" />
         <meta property="twitter:title" content="Privacy Policy - Vizag Taxi Hub | Data Protection & Privacy" />
         <meta property="twitter:description" content="Learn how Vizag Taxi Hub protects your personal information and privacy." />
         <meta property="twitter:image" content="/og-image.png" />
         
         {/* Additional SEO */}
         <meta name="robots" content="index, follow" />
-        <link rel="canonical" href="https://vizagtaxihub.com/privacy" />
+        <link rel="canonical" href="https://vizagtaxihub.com/privacy-policy" />
       </Helmet>
 
       {/* Hero Section */}

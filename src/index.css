@@ -13,8 +13,8 @@ html {
 }
 
 @media (min-width: 1024px) {
-  html {
-    /* Reserve vertical scrollbar space so dropdown open/close does not shift the page */
+  html:not(:has([data-admin-shell])) {
+    /* Reserve vertical scrollbar space so dropdown open/close does not shift the public site */
     overflow-y: scroll;
     scrollbar-gutter: stable;
   }
@@ -31,13 +31,15 @@ html {
 
 /*
   Radix injects `body[data-scroll-locked] { overflow: hidden !important; margin-right: Npx !important }`
-  when a Select opens. Beat that with higher specificity so the scrollbar never disappears.
+  when a Select opens. html already keeps the page scrollbar. Forcing overflow-y: scroll
+  on body as well paints a second bar down the right edge. Leave body unscrollable
+  and cancel the gap so the layout does not shift.
 */
 html body[data-scroll-locked],
 html body[data-scroll-locked][data-scroll-locked],
 html body.with-scroll-bars-hidden {
-  overflow-x: clip !important;
-  overflow-y: scroll !important;
+  overflow: hidden !important;
+  overscroll-behavior: auto !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
   margin-top: 0 !important;
@@ -45,7 +47,54 @@ html body.with-scroll-bars-hidden {
   padding-right: 0 !important;
   padding-top: 0 !important;
   position: static !important;
+  width: auto !important;
   --removed-body-scroll-bar-size: 0px !important;
+}
+
+/* The dashboard keeps one scrollbar on the content column. The document
+   itself does not scroll, so a dropdown cannot add a second bar or shift the page. */
+html:has([data-admin-shell]) {
+  overflow: hidden !important;
+  height: 100%;
+}
+
+html:has([data-admin-shell]) body,
+html:has([data-admin-shell]) body[data-scroll-locked] {
+  overflow: hidden !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+  width: auto !important;
+}
+
+/* Trip link: keep the page width steady when a popup hides the scrollbar.
+   A second scrollbar on the body shrinks the page and slides it sideways. */
+html:has([data-vendor-trip]) {
+  overflow-x: clip !important;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+html:has([data-vendor-trip]) body[data-scroll-locked] {
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
+html:has([data-admin-shell]) .admin-content-scroll {
+  overflow-x: hidden !important;
+  overflow-y: scroll !important;
+  scrollbar-gutter: auto !important;
+}
+
+/*
+  A modal sets pointer-events:none on body. iOS Safari then opens the keyboard
+  on inputs inside the dialog but will not place a caret — it shows the
+  selection menu instead. The dialog overlay still blocks the page behind.
+*/
+@media (max-width: 1023px) {
+  html body[data-scroll-locked],
+  html body[data-scroll-locked][data-scroll-locked] {
+    pointer-events: auto !important;
+  }
 }
 
 /* Neutralize react-remove-scroll-bar gap helpers on fixed UI */
@@ -515,8 +564,8 @@ min-height: 100vh;
 
 /* Mobile-specific fixes for PopularRoutes and Footer */
 @media (max-width: 767px) {
-  /* Main site footer only — carpool pages use SharedCarpoolPublicLayout for bottom nav spacing */
-  footer:not(.carpooling-footer) {
+  /* Main site footer only. Admin pages scroll inside their own column and have no footer. */
+  body:not(:has([data-admin-shell])) footer:not(.carpooling-footer) {
     margin-bottom: 4rem !important;
     padding-bottom: 2rem !important;
   }
@@ -758,6 +807,8 @@ html.location-search-sheet-open .pac-logo::after {
 @media (max-width: 767px) {
   [data-tour-quote-dialog] {
     align-content: start;
+    /* A transformed sheet makes iOS selection handles stick instead of a caret. */
+    transform: none !important;
   }
 
   [data-tour-quote-dialog] input,
@@ -766,6 +817,9 @@ html.location-search-sheet-open .pac-logo::after {
   [data-tour-quote-dialog] [role='combobox'] {
     font-size: 16px !important;
     line-height: 1.25 !important;
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    touch-action: manipulation;
   }
 
   #commute-form input,
@@ -2096,4 +2150,66 @@ html.location-search-sheet-open .pac-logo::after {
 
 .axis-trip-toggle-btn[data-active='false']:hover {
   color: rgb(17 24 39);
+}
+
+/* Admin: only the content column may show a vertical bar. html, body, and #root
+   stay clipped so a dropdown cannot paint a second bar on the window edge. */
+html:has([data-admin-shell]),
+html:has([data-admin-shell]) body,
+html:has([data-admin-shell]) #root {
+  overflow: hidden !important;
+  scrollbar-gutter: auto !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
+html:has([data-admin-shell])::-webkit-scrollbar,
+html:has([data-admin-shell]) body::-webkit-scrollbar,
+html:has([data-admin-shell]) #root::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+html:has([data-admin-shell]) .admin-content-scroll {
+  overflow-x: hidden !important;
+  overflow-y: scroll !important;
+  scrollbar-gutter: auto !important;
+  scrollbar-width: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+@media (max-width: 767px) {
+  html:has([data-admin-shell]) [data-driver-office-trip] {
+    position: fixed !important;
+    inset: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+
+  html:has([data-admin-shell]) [data-fuel-record-dialog] {
+    position: fixed !important;
+    inset: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    border-radius: 0 !important;
+    pointer-events: auto !important;
+  }
 }

@@ -1,5 +1,48 @@
 # Vizag Taxi Hub — Release Notes
 
+## Version 1.0.1
+
+**Release date:** 4 November 2026
+
+### What’s new
+
+Drivers get a clearer camera for fuel pumps and odometer readings, and a trip alert that keeps sounding until the trip is opened. The office can follow live trips, close a duty, and share the assigned driver with the guest.
+
+### For drivers
+
+- Fuel pump and odometer photos wait until the frame is sharp, then read the display. If litres or kg are missing but the amount and rate are clear, the quantity is filled in.
+- A new trip plays an alarm, including on the lock screen, and keeps chiming until you open the trip.
+- Live location is shared with the office only during an active trip or event duty, and only after you accept the disclosure.
+- The GPS prompt no longer repeats when location is already on.
+
+### For the office
+
+- Live map of drivers who are on a trip.
+- Start and close a duty with opening and closing kilometres, extras, and fuel (company paid, UPI, card, or customer advance).
+- Download trip lists and fuel records as PDF.
+- WhatsApp the guest the driver and vehicle details. The action is available only after the trip is assigned, on the website and in the app.
+- Assignment lists leave out inactive, offline, and blocked drivers.
+- People list can be filtered by active, inactive, drivers, guests, and admins.
+- Super admins can mute push alerts.
+- Outstation round-trip quotations use the trip’s real duration instead of a default two-day tour.
+
+### For guests
+
+- Mobile website shows a banner to install the Android app.
+- Privacy policy covers location shared during an active trip or duty.
+
+### Play Store (What’s new)
+
+```
+Sharper fuel and odometer photos. Missed quantity is filled in from the amount and rate.
+
+Trip alerts sound until the driver opens the trip, including on the lock screen. Location is shared with the office only during an active trip or duty, after you agree.
+
+Office: live driver map, close a duty with km, extras, and fuel, and download trip and fuel PDFs. WhatsApp the guest the assigned driver and vehicle. Inactive drivers stay off assignment lists. Outstation quotes use the real duration.
+```
+
+---
+
 ## Version 1.0.0
 
 **Release date:** March 2025

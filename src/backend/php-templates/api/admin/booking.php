@@ -57,7 +57,7 @@ function admin_booking_attach_trip_odometer(mysqli $conn, int $bookingId, array 
     $latest = [];
     while ($r = $res->fetch_assoc()) {
         $type = (string)($r['reading_type'] ?? '');
-        if ($type !== 'start' && $type !== 'end') {
+        if (($type !== 'start' && $type !== 'end') || (int)($r['odometer_value'] ?? 0) <= 0) {
             continue;
         }
         $cap = (string)($r['captured_at'] ?? '');

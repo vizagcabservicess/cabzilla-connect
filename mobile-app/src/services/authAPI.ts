@@ -227,6 +227,32 @@ class AuthAPI {
     return !!token;
   }
 
+  /** Super-admin office alerts: new bookings, duty updates, and fuel refills. */
+  async getPushMuted(): Promise<boolean> {
+    const token = await this.getStoredToken();
+    if (!token) throw new Error('Not signed in');
+    const res = await axios.get<{ status?: string; muted?: boolean }>(`${getAuthBase()}/push-mute.php`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.data?.status !== 'success') {
+      throw new Error('Could not read notification setting');
+    }
+    return res.data.muted === true;
+  }
+
+  async setPushMuted(muted: boolean): Promise<void> {
+    const token = await this.getStoredToken();
+    if (!token) throw new Error('Not signed in');
+    const res = await axios.post<{ status?: string }>(
+      `${getAuthBase()}/push-mute.php`,
+      { muted },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    if (res.data?.status !== 'success') {
+      throw new Error('Could not save notification setting');
+    }
+  }
+
   /** Register Expo push token for super_admin (new bookings) or driver (trip assignments). */
   async registerPushToken(pushToken: string, platform: string): Promise<boolean> {
     const token = await this.getStoredToken();

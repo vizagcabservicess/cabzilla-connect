@@ -29,6 +29,7 @@ const PaymentPage = () => {
   const [paymentResponse, setPaymentResponse] = useState<RazorpayResponse | null>(null);
   const [isFetchingBooking, setIsFetchingBooking] = useState(false);
   const hasNotifiedAbandoned = useRef(false);
+  const paymentSavedRef = useRef(false);
   // Refs ensure event handlers always have current values (avoids stale closures)
   const bookingIdRef = useRef<number | string | null>(null);
   const paymentStatusRef = useRef<string>(paymentStatus);
@@ -192,9 +193,7 @@ const PaymentPage = () => {
         name: 'Cab Booking',
           description: `Booking for ${bookingDetails.tripType} trip (${paymentMode === 'partial' ? '30% advance' : 'full payment'})`,
         order_id: order.id,
-        handler: (response: RazorpayResponse) => {
-          handlePaymentSuccess(response);
-        },
+        handler: () => undefined,
         prefill: {
           name: bookingDetails.guestDetails?.name || '',
           email: bookingDetails.guestDetails?.email || '',
@@ -233,6 +232,8 @@ const PaymentPage = () => {
   };
 
   const handlePaymentSuccess = async (response: any) => {
+    if (paymentSavedRef.current) return;
+    paymentSavedRef.current = true;
     try {
       setPaymentStatus('processing');
       
@@ -307,6 +308,7 @@ const PaymentPage = () => {
       navigate('/booking-confirmation');
       
     } catch (error) {
+      paymentSavedRef.current = false;
       console.error('Error processing payment success:', error);
       setPaymentStatus('failed');
       toast.error('Failed to process payment. Please contact support.');

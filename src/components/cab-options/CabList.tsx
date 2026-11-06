@@ -77,6 +77,17 @@ const CabFareCard = ({
   const normalizeVehicleId = (id: string): string => {
     return id.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   };
+  const normalizedId = normalizeVehicleId(cab.id);
+  const correctPackageType = tripType === 'outstation' ? tripMode : packageType;
+  const fareHook = useFare(
+    normalizedId,
+    tripType,
+    distance,
+    correctPackageType,
+    pickupDate,
+    undefined,
+    Boolean(oneWayViaStops)
+  );
   let fare = 0;
   let fareText = 'Price unavailable';
   let fareSource = 'unknown';
@@ -139,22 +150,9 @@ const CabFareCard = ({
     fareSource = 'api';
     isLoading = false;
   } else {
-    const normalizedId = normalizeVehicleId(cab.id);
-    // For outstation trips, pass the correct packageType based on tripMode
-    const correctPackageType = tripType === 'outstation' ? tripMode : packageType;
-    
-    const fareResult = useFare(
-      normalizedId,
-      tripType,
-      distance,
-      correctPackageType,
-      pickupDate,
-      undefined,
-      Boolean(oneWayViaStops)
-    );
-    fareData = fareResult.fareData;
-    isLoading = fareResult.isLoading;
-    const error = fareResult.error;
+    fareData = fareHook.fareData;
+    isLoading = fareHook.isLoading;
+    const error = fareHook.error;
 
     if (error) {
       console.error(`Fare error for ${cab.name}:`, error);

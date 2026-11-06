@@ -1,4 +1,11 @@
 export type TripStatus = 'assigned' | 'in_progress' | 'completed';
+export type OpsTripStatus =
+  | 'assigned'
+  | 'receipt_accepted'
+  | 'in_progress'
+  | 'day_closed'
+  | 'completed'
+  | 'cancelled';
 export type PaymentType =
   | 'company_paid'
   | 'company_phonepe'
@@ -18,6 +25,7 @@ export interface DriverDashboardTrip {
   tripMode?: string;
   cabType?: string;
   fuelSpend?: number;
+  fuelTiming?: 'before' | 'after' | 'mixed' | null;
   /** Litres or kg filled on this booking. */
   fuelLitres?: number;
   startTime: string | null;
@@ -26,6 +34,8 @@ export interface DriverDashboardTrip {
   pickupLocation: string;
   dropLocation: string;
   status: TripStatus;
+  /** Duty progress shown on the driver-ops status tabs. */
+  opsStatus: OpsTripStatus;
   /** Raw `bookings.status` for admin trip edits (maps to wider status set on server). */
   bookingStatusRaw?: string;
   completedAt?: string | null;
@@ -42,6 +52,10 @@ export interface DriverDashboardTrip {
   tripAmount: number;
   /** Amount already received before the trip. The driver collects the balance. */
   advancePaidAmount?: number;
+  /** Latest driver GPS fix while live tracking is on. */
+  liveLat?: number | null;
+  liveLng?: number | null;
+  liveTrackedAt?: string | null;
   /** False on agent jobs: the driver must not see or collect a fare. */
   driverCollectsPayment?: boolean;
   additionalRequirements?: string | null;
@@ -66,6 +80,7 @@ export interface DriverFuelRecord {
   fuelQuantityLitres: number;
   vehicleNumber?: string | null;
   linkedTripId: number | null;
+  loggedAfterTripEnd?: boolean | null;
   /** Pump LCD total vs receipt paid (when API provides). */
   pumpDisplayTotal?: number | null;
   amountVariance?: number | null;
@@ -109,12 +124,15 @@ export interface DriverDashboardData {
 export interface DriverDashboardFilters {
   fromDate?: string;
   toDate?: string;
-  status?: TripStatus;
+  status?: OpsTripStatus;
   paymentType?: PaymentType;
   search?: string;
   driverId?: number;
+  vehicleNumber?: string;
   tripLimit?: number;
   tripOffset?: number;
   fuelLimit?: number;
   fuelOffset?: number;
+  /** Do not replace the dashboard cache. Used by the live GPS poll. */
+  skipCache?: boolean;
 }

@@ -3,6 +3,7 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/admin_booking_format.inc.php';
+require_once __DIR__ . '/../utils/duty_days.php';
 
 // Prevent any output before headers are sent
 ob_start();
@@ -404,6 +405,17 @@ try {
         error_log("[update-booking] SQL execution failed: " . $updateStmt->error);
         throw new Exception("Failed to update booking: " . $updateStmt->error);
     }
+
+    $hasDutySegments = isset($data['dutySegments']) && is_array($data['dutySegments']);
+    if (array_key_exists('startOdometer', $data) || array_key_exists('endOdometer', $data)) {
+        admin_sync_edited_odometer($conn, (int) $bookingId, $data, !$hasDutySegments);
+    }
+    if ($hasDutySegments) {
+        duty_admin_set_segment_readings($conn, (int) $bookingId, $data['dutySegments']);
+        if (duty_sum_segment_km($conn, (int) $bookingId) > 0) {
+            duty_store_distance($conn, (int) $bookingId);
+        }
+    }
     
     // Fetch the updated booking
     $getStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
@@ -468,6 +480,98 @@ try {
         'message' => 'Failed to update booking: ' . $e->getMessage(),
         'error_details' => $debugMode ? $e->getMessage() : null
     ], 500);
+}
+
+/**
+ * The trip list and duty slip prefer trip_odometer_readings over bookings.start_odometer.
+ * An admin edit has to replace that reading, or the form snaps back to the old number.
+ */
+function admin_sync_edited_odometer(mysqli $conn, int $bookingId, array $data, bool $syncDutySegments = true): void
+{
+    if ($bookingId <= 0) {
+        return;
+    }
+    $sides = [
+        'startOdometer' => 'start',
+        'endOdometer' => 'end',
+    ];
+    foreach ($sides as $key => $readingType) {
+        if (!array_key_exists($key, $data)) {
+            continue;
+        }
+        $raw = $data[$key];
+        $km = ($raw === null || $raw === '') ? 0.0 : (float) $raw;
+        if ($km < 0) {
+            $km = 0.0;
+        }
+        if ($km > 9999999) {
+            $km = 9999999.0;
+        }
+        $kmInt = (int) round($km);
+
+        $select = @$conn->prepare(
+            'SELECT id FROM trip_odometer_readings WHERE booking_id = ? AND reading_type = ? ORDER BY captured_at DESC, id DESC LIMIT 1'
+        );
+        if ($select) {
+            $select->bind_param('is', $bookingId, $readingType);
+            $select->execute();
+            $existing = $select->get_result()->fetch_assoc();
+            $select->close();
+            if ($existing) {
+                $readingId = (int) $existing['id'];
+                $update = $conn->prepare('UPDATE trip_odometer_readings SET odometer_value = ? WHERE id = ?');
+                if ($update) {
+                    $update->bind_param('ii', $kmInt, $readingId);
+                    $update->execute();
+                    $update->close();
+                }
+            } elseif ($kmInt > 0) {
+                $insert = $conn->prepare(
+                    "INSERT INTO trip_odometer_readings (booking_id, reading_type, odometer_value, image_url, captured_at) VALUES (?, ?, ?, '', NOW())"
+                );
+                if ($insert) {
+                    $insert->bind_param('isi', $bookingId, $readingType, $kmInt);
+                    $insert->execute();
+                    $insert->close();
+                }
+            }
+        }
+
+        if (!$syncDutySegments) {
+            continue;
+        }
+        $column = $readingType === 'start' ? 'opening_km' : 'closing_km';
+        $order = $readingType === 'start' ? 'ASC' : 'DESC';
+        $segmentSelect = @$conn->prepare(
+            "SELECT id FROM booking_duty_segments WHERE booking_id = ? ORDER BY id $order LIMIT 1"
+        );
+        if (!$segmentSelect) {
+            continue;
+        }
+        $segmentSelect->bind_param('i', $bookingId);
+        $segmentSelect->execute();
+        $segment = $segmentSelect->get_result()->fetch_assoc();
+        $segmentSelect->close();
+        if (!$segment) {
+            continue;
+        }
+        $segmentId = (int) $segment['id'];
+        if ($km <= 0) {
+            $segmentUpdate = $conn->prepare("UPDATE booking_duty_segments SET $column = NULL WHERE id = ?");
+            if ($segmentUpdate) {
+                $segmentUpdate->bind_param('i', $segmentId);
+                $segmentUpdate->execute();
+                $segmentUpdate->close();
+            }
+            continue;
+        }
+        $segmentUpdate = $conn->prepare("UPDATE booking_duty_segments SET $column = ? WHERE id = ?");
+        if ($segmentUpdate) {
+            $segmentUpdate->bind_param('di', $km, $segmentId);
+            $segmentUpdate->execute();
+            $segmentUpdate->close();
+        }
+    }
 }
 
 // Helper function to determine parameter type

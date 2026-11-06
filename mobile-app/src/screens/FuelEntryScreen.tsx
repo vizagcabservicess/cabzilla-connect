@@ -22,10 +22,12 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
+import { useAuth } from '../providers/AuthProvider';
 import { authAPI } from '../services/authAPI';
 import { driverTripsAPI } from '../services/driverTripsAPI';
 import type { DriverTrip } from '../services/driverTripsAPI';
 import { formatPlaceFromGeocode } from '../utils/formatReverseGeocode';
+import { extractTextFromImage } from '../services/ocrService';
 import { parseOdometerFromText } from '../utils/parseOdometerFromOcr';
 import { compressImageForUpload } from '../utils/compressImageForUpload';
 import { FuelCaptureCameraModal } from '../components/FuelCaptureCameraModal';
@@ -94,6 +96,83 @@ function receiptPumpOcrTotalsMeaningfullyDiffer(receiptOcr: number | null, pumpO
   const lo = Math.min(receiptOcr, pumpOcr);
   const tol = Math.max(15, lo * 0.02);
   return Math.abs(pumpOcr - receiptOcr) > tol;
+}
+
+const GPS_FIX_WAIT_MS = 12000;
+const GPS_FRESH_MS = 3 * 60 * 1000;
+
+function positionAgeMs(pos: Location.LocationObject): number {
+  return Date.now() - pos.timestamp;
+}
+
+function startFuelGpsWatch(): {
+  boot: Promise<void>;
+  current: () => Location.LocationObject | null;
+  stop: () => void;
+} {
+  let latest: Location.LocationObject | null = null;
+  let subscription: Location.LocationSubscription | null = null;
+  const stop = () => {
+    subscription?.remove();
+    subscription = null;
+  };
+  const boot = (async () => {
+    const servicesOn = await Location.hasServicesEnabledAsync();
+    if (!servicesOn) {
+      throw new Error('Location is turned off. Turn on GPS and try again.');
+    }
+    const lastKnown = await Location.getLastKnownPositionAsync().catch(() => null);
+    if (lastKnown) latest = lastKnown;
+    try {
+      subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 1000,
+          distanceInterval: 0,
+        },
+        (pos) => {
+          latest = pos;
+        },
+      );
+    } catch {
+      /* A one-shot read can still succeed after the camera closes. */
+    }
+    void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      .then((pos) => {
+        latest = pos;
+      })
+      .catch(() => undefined);
+  })();
+  boot.catch(() => undefined);
+  return { boot, current: () => latest, stop };
+}
+
+async function waitForFuelGps(watch: ReturnType<typeof startFuelGpsWatch>): Promise<Location.LocationObject> {
+  await watch.boot;
+  const deadline = Date.now() + GPS_FIX_WAIT_MS;
+  let pos = watch.current();
+  while ((!pos || positionAgeMs(pos) > GPS_FRESH_MS) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    pos = watch.current();
+  }
+  if (!pos || positionAgeMs(pos) > GPS_FRESH_MS) {
+    const fresh = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    }).catch(() => null);
+    if (fresh) pos = fresh;
+  }
+  if (!pos) {
+    pos = await Location.getLastKnownPositionAsync().catch(() => null);
+  }
+  watch.stop();
+  if (!pos) {
+    const servicesOn = await Location.hasServicesEnabledAsync().catch(() => true);
+    if (!servicesOn) {
+      throw new Error('Location is turned off. Turn on GPS and try again.');
+    }
+    throw new Error('Could not get a GPS fix yet. Wait a moment and take the photo again.');
+  }
+  return pos;
 }
 
 type CrossMismatchLine = { key: string; text: string };
@@ -208,6 +287,87 @@ function formatFuelAmount(amount: number): string {
   return (Math.round(amount * 100) / 100).toFixed(2);
 }
 
+/**
+ * Pump showed the sale price and ₹/kg (or ₹/L) but not the kilograms.
+ * Quantity = price ÷ rate. 354.49 ÷ 99.80 = 3.552 kg.
+ */
+function inferQuantityFromPriceAndRate(
+  amount: number | null,
+  rate: number | null,
+): { quantity: number; sale: number } | null {
+  if (amount == null || rate == null) return null;
+  if (!(amount > 0) || !(rate > 0)) return null;
+  let sale = amount;
+  let unit = rate;
+  if (sale >= 62 && sale <= 155 && unit > 155) {
+    sale = rate;
+    unit = amount;
+  }
+  if (unit < 62 || unit > 155) return null;
+  if (sale >= 80 && sale <= 130) return null;
+  if (sale < 20 || sale > 50000) return null;
+  const quantity = Math.round((sale / unit) * 1000) / 1000;
+  if (!(quantity >= 0.15) || quantity > 250) return null;
+  return { quantity, sale };
+}
+
+/** Two-window CNG display: 354.49 (price, "Fin") and 99.80 (₹/kg), with no kg line. */
+function saleAndRateFromPumpText(text: string): { sale: number; rate: number } | null {
+  const cleaned = text
+    .replace(/\d{1,2}:\d{2}(?::\d{2})?/g, ' ')
+    .replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/gi, ' ');
+  const nums: number[] = [];
+  const re = /\b(\d{2,5}\.\d{2})\b/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(cleaned)) != null) {
+    const n = Math.round(parseFloat(match[1]) * 100) / 100;
+    if (Number.isFinite(n) && n >= 20 && n <= 50000) nums.push(n);
+  }
+  const unique = [...new Set(nums)];
+  const rates = unique.filter((n) => n >= 62 && n <= 155);
+  const sales = unique.filter((n) => n > 155);
+  if (rates.length === 0 || sales.length === 0) return null;
+  let best: { sale: number; rate: number } | null = null;
+  for (const sale of sales) {
+    for (const rate of rates) {
+      const qty = sale / rate;
+      if (qty < 0.15 || qty > 250) continue;
+      if (best == null || sale > best.sale) best = { sale, rate };
+    }
+  }
+  return best;
+}
+
+async function readPumpSaleAndRate(
+  imageUri: string,
+  rawText: string | null,
+): Promise<{ sale: number; rate: number } | null> {
+  const fromUpload = saleAndRateFromPumpText(rawText ?? '');
+  if (fromUpload != null) return fromUpload;
+  try {
+    const lines = await extractTextFromImage(imageUri);
+    return saleAndRateFromPumpText(lines.join('\n'));
+  } catch {
+    return null;
+  }
+}
+
+function pumpReadingRate(
+  extracted: Record<string, unknown>,
+  unifiedVision: FuelVisionUnifiedResult | null,
+): number | null {
+  const fromUnified = parsePositiveAmount(unifiedVision?.rate);
+  if (fromUnified != null) return fromUnified;
+  return (
+    parsePositiveAmount(extracted.rate) ??
+    parsePositiveAmount(extracted.price_per_unit) ??
+    parsePositiveAmount(extracted.price_per_kg) ??
+    parsePositiveAmount(extracted.pricePerUnit) ??
+    parsePositiveAmount(extracted.unit_price) ??
+    parsePositiveAmount(extracted.sale_rate)
+  );
+}
+
 function pumpSaleTotalMatchesVolumeTimesRate(amount: number, qty: number, rate: number): boolean {
   const calc = qty * rate;
   if (!(calc > 0) || !Number.isFinite(calc) || !Number.isFinite(amount)) return false;
@@ -248,6 +408,18 @@ function isUnifiedPumpReadingTrustworthy(u: FuelVisionUnifiedResult | null): boo
 }
 
 /** Server included pump LLM (Gemini) JSON in debug and it passed hard validation. */
+function serverPumpReading(fuelOcrDebug: unknown): { amount: number; volume: number; rate: number | null } | null {
+  if (fuelOcrDebug == null || typeof fuelOcrDebug !== 'object') return null;
+  const gv = (fuelOcrDebug as Record<string, unknown>).gemini_pump_vision;
+  if (gv == null || typeof gv !== 'object') return null;
+  const reading = gv as Record<string, unknown>;
+  if (reading.ok !== true) return null;
+  const amount = parsePositiveAmount(reading.amount);
+  const volume = parsePositiveAmount(reading.volume);
+  if (amount == null || volume == null) return null;
+  return { amount, volume, rate: parsePositiveAmount(reading.rate) };
+}
+
 function isServerPumpVisionValidated(fuelOcrDebug: unknown): boolean {
   if (fuelOcrDebug == null || typeof fuelOcrDebug !== 'object') return false;
   const o = fuelOcrDebug as Record<string, unknown>;
@@ -321,7 +493,7 @@ function buildOcrRetakeAlert(extracted: Record<string, unknown>, phase: 'receipt
   const lighting =
     phase === 'receipt'
       ? 'Hold the receipt flat, avoid flash on glossy paper, and use even lighting.'
-      : 'Face the display straight-on, block reflections, wait for digits to steady, and tap to focus.';
+      : 'Move back until the digits look sharp, keep the phone straight, and hold still until the frame turns green.';
   return {
       title: 'Retake this photo',
       message: `${detail}\n\n${lighting}\n\nWe did not fill in amounts automatically. You can type them after a clearer shot.`,
@@ -331,8 +503,12 @@ function buildOcrRetakeAlert(extracted: Record<string, unknown>, phase: 'receipt
 export function FuelEntryScreen() {
   const navigation = useNavigation<any>();
   const { params } = useRoute<any>();
+  const { user } = useAuth();
+  const officeView = user?.role === 'super_admin';
   const insets = useSafeAreaInsets();
-  const initialBookingId = params?.bookingId ?? null;
+  const initialBookingId = params?.bookingId ?? params?.trip?.id ?? null;
+  const openedTripRef = useRef<DriverTrip | null>(params?.trip ?? null);
+  openedTripRef.current = params?.trip ?? null;
   const scrollBottomPadding = insets.bottom + TAB_BAR_HEIGHT + 32;
 
   const [vehicles, setVehicles] = useState<{ id: number; vehicleNumber: string; name: string }[]>([]);
@@ -365,6 +541,7 @@ export function FuelEntryScreen() {
   // OCR extracted values (used to show warnings + enable strict Save validation)
   const [ocrReceiptAmount, setOcrReceiptAmount] = useState<number | null>(null);
   const [ocrReceiptQuantity, setOcrReceiptQuantity] = useState<number | null>(null);
+  const [quantityInferredNote, setQuantityInferredNote] = useState('');
   const [ocrPumpAmount, setOcrPumpAmount] = useState<number | null>(null);
   const [ocrPumpQuantity, setOcrPumpQuantity] = useState<number | null>(null);
   const [ocrOdometerValue, setOcrOdometerValue] = useState<number | null>(null);
@@ -402,15 +579,36 @@ export function FuelEntryScreen() {
 
   const load = useCallback(async () => {
     try {
+      if (officeView) {
+        const vList = await driverTripsAPI.getVehicles();
+        setVehicles(vList);
+        const openedTrip = openedTripRef.current;
+        if (openedTrip && openedTrip.id > 0) {
+          setTrips([openedTrip]);
+          setBookingId(openedTrip.id);
+          return;
+        }
+        if (initialBookingId != null) {
+          const trip = await driverTripsAPI.getTripById(initialBookingId);
+          setTrips([trip]);
+          setBookingId(trip.id);
+        }
+        return;
+      }
       const [vList, tList] = await Promise.all([driverTripsAPI.getVehicles(), driverTripsAPI.getTrips()]);
       setVehicles(vList);
-      setTrips(tList.filter((t) => t.status === 'in_progress' || t.status === 'assigned'));
+      const openTrips = tList.filter((t) => t.status === 'in_progress' || t.status === 'assigned');
+      const opened = openedTripRef.current;
+      if (opened && opened.id > 0 && !openTrips.some((t) => t.id === opened.id)) {
+        openTrips.unshift(opened);
+      }
+      setTrips(openTrips);
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [officeView, initialBookingId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -537,24 +735,29 @@ export function FuelEntryScreen() {
     const seq = captureGenerationRef.current[phase] + 1;
     captureGenerationRef.current[phase] = seq;
     setCapturingPhase(phase);
+    let gpsWatch: ReturnType<typeof startFuelGpsWatch> | null = null;
     try {
       const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
       if (locStatus !== 'granted') {
         Alert.alert('Validation', 'Location permission is required for GPS validation');
         return;
       }
-      const locationPromise = Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-        new Promise<Location.LocationObject>((_, reject) => {
-          setTimeout(() => reject(new Error('Could not read GPS. Turn on location and try again.')), 15000);
-        }),
-      ]);
-      locationPromise.catch(() => undefined);
+      const gpsWatchStarted = startFuelGpsWatch();
+      gpsWatch = gpsWatchStarted;
+      try {
+        await gpsWatchStarted.boot;
+      } catch (error) {
+        gpsWatchStarted.stop();
+        gpsWatch = null;
+        Alert.alert('Location', error instanceof Error ? error.message : 'Turn on GPS and try again.');
+        return;
+      }
 
       let localUri: string;
       if (Platform.OS === 'web') {
         const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
         if (camStatus !== 'granted') {
+          gpsWatchStarted.stop();
           Alert.alert('Validation', 'Camera permission is required');
           return;
         }
@@ -563,7 +766,10 @@ export function FuelEntryScreen() {
           quality: 0.85,
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
         });
-        if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) return;
+        if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) {
+          gpsWatchStarted.stop();
+          return;
+        }
         localUri = pickerResult.assets[0].uri;
       } else {
         cameraOpenRef.current = true;
@@ -586,7 +792,7 @@ export function FuelEntryScreen() {
 
       void (async () => {
         try {
-      const pos = await locationPromise;
+      const pos = await waitForFuelGps(gpsWatchStarted);
       if (captureGenerationRef.current[phase] !== seq) return;
 
       const uploadType: 'fuel_receipt' | 'fuel_pump' | 'odometer' =
@@ -698,6 +904,7 @@ export function FuelEntryScreen() {
 
       const extracted = (uploaded.extracted ?? {}) as Record<string, unknown>;
       let odometerAccepted = false;
+      let pumpDisplayRecovered = false;
       if (phase === 'odometer') {
         const rawOdo = extracted.odometer;
         let odoVal: number | null = null;
@@ -794,12 +1001,44 @@ export function FuelEntryScreen() {
           const dbgEarly = (uploaded as { fuelOcrDebug?: unknown }).fuelOcrDebug;
           const serverVisionOk = isServerPumpVisionValidated(dbgEarly);
           const unifiedTrust = isUnifiedPumpReadingTrustworthy(unifiedVision);
-          if (!serverVisionOk && !unifiedTrust) {
+          const fromServer = serverPumpReading(dbgEarly);
+          if (fromServer != null) {
+            amountVal = fromServer.amount;
+            qtyVal = fromServer.volume;
+          } else if (!serverVisionOk && !unifiedTrust) {
             amountVal = null;
             qtyVal = null;
           } else if (amountVal != null && qtyVal != null) {
             amountVal = snapPumpAmountPaise(amountVal, qtyVal, parsePositiveAmount(unifiedVision?.rate));
           }
+        }
+
+        let quantityInferredFromRate = false;
+        if ((phase === 'pump' || phase === 'receipt') && qtyVal == null) {
+          const amountForInfer =
+            amountVal ??
+            parsePositiveAmount(unifiedVision?.fuel_amount) ??
+            parsePositiveAmount(extracted.total_amount ?? extracted.amount);
+          const inferred = inferQuantityFromPriceAndRate(amountForInfer, pumpReadingRate(extracted, unifiedVision));
+          if (inferred != null) {
+            qtyVal = inferred.quantity;
+            amountVal = inferred.sale;
+            quantityInferredFromRate = true;
+          } else if (phase === 'pump') {
+            const paired = await readPumpSaleAndRate(
+              uploadUri,
+              typeof uploaded.rawText === 'string' ? uploaded.rawText : null,
+            );
+            const fromDigits = inferQuantityFromPriceAndRate(paired?.sale ?? null, paired?.rate ?? null);
+            if (fromDigits != null) {
+              qtyVal = fromDigits.quantity;
+              amountVal = fromDigits.sale;
+              quantityInferredFromRate = true;
+            }
+          }
+        }
+        if (quantityInferredFromRate || (phase === 'pump' && amountVal != null && qtyVal != null)) {
+          pumpDisplayRecovered = true;
         }
 
         const serverOcrStatus =
@@ -835,6 +1074,7 @@ export function FuelEntryScreen() {
             ocrPumpQuantityRef.current = null;
             const receiptQty = ocrReceiptQuantityRef.current;
             if (receiptQty != null) setQuantity(String(receiptQty));
+            else if (qtyVal != null) setQuantity(String(qtyVal));
           } else if (qtyVal != null) {
             setOcrPumpQuantity(qtyVal);
             ocrPumpQuantityRef.current = qtyVal;
@@ -848,6 +1088,12 @@ export function FuelEntryScreen() {
           const hasReceipt = ocrReceiptAmountRef.current != null && ocrReceiptAmountRef.current > 0;
           if (!hasReceipt && amountVal != null) setTotalCost(formatFuelAmount(amountVal));
           else if (!hasReceipt && amountVal == null) setTotalCost('');
+        }
+        if (quantityInferredFromRate && qtyVal != null) {
+          setQuantity(String(qtyVal));
+          setQuantityInferredNote('Quantity calculated from price ÷ cost per kg.');
+        } else if (qtyVal != null) {
+          setQuantityInferredNote('');
         }
 
         if (phase === 'receipt' || phase === 'pump') {
@@ -873,10 +1119,12 @@ export function FuelEntryScreen() {
 
         if (phase === 'pump') {
           const st = typeof extracted.fuel_ocr_status === 'string' ? extracted.fuel_ocr_status : '';
+          const pumpFilled = amountVal != null && qtyVal != null;
           const blocked =
-            extracted.pump_reading_rejected === true || st === 'hold' || st === 'rejected';
+            !pumpFilled &&
+            (extracted.pump_reading_rejected === true || st === 'hold' || st === 'rejected');
           setPumpOcrGateBlocked(blocked);
-          if (extracted.pump_reading_rejected === true) {
+          if (!pumpFilled && extracted.pump_reading_rejected === true) {
             const m =
               typeof extracted.pump_reading_message === 'string'
                 ? extracted.pump_reading_message
@@ -892,7 +1140,7 @@ export function FuelEntryScreen() {
           }
         }
 
-        if (ocrRetake && retakeAlert) {
+        if (ocrRetake && retakeAlert && !pumpDisplayRecovered) {
           Alert.alert(retakeAlert.title, retakeAlert.message);
         } else if (!cameraOpenRef.current && phase === 'receipt' && amountVal == null) {
           Alert.alert(
@@ -930,6 +1178,7 @@ export function FuelEntryScreen() {
       if (
         !cameraOpenRef.current &&
         !odometerAccepted &&
+        !pumpDisplayRecovered &&
         unifiedVision?.should_retake === true &&
         unifiedVision.confidence === 'low'
       ) {
@@ -949,11 +1198,13 @@ export function FuelEntryScreen() {
         /* optional geocode */
       }
         } catch (e) {
+          gpsWatchStarted.stop();
           if (captureGenerationRef.current[phase] !== seq) return;
           Alert.alert('Error', e instanceof Error ? e.message : 'Failed to process photos');
         }
       })();
     } catch (e) {
+      gpsWatch?.stop();
       if (e instanceof Error && e.message === 'cancelled') {
         return;
       }
@@ -1365,6 +1616,7 @@ export function FuelEntryScreen() {
             keyboardType="decimal-pad"
             placeholderTextColor={colors.gray500}
           />
+          {quantityInferredNote !== '' ? <Text style={styles.hintTextMuted}>{quantityInferredNote}</Text> : null}
           {ocrReceiptQuantity == null && ocrPumpQuantity == null && (quantity.trim() === '' || qNum <= 0) ? (
             <Text style={styles.warningText}>OCR couldn't read quantity. Enter manually to save.</Text>
           ) : null}

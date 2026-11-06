@@ -22,9 +22,9 @@ function getRuntimeApiBaseUrl(): string {
     window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1';
 
-  // Use local backend only when app itself runs on localhost.
+  // Stay on this dev server so the Vite proxy can reach the API.
   if (import.meta.env.DEV && isLocalHost) {
-    return 'http://localhost:8080';
+    return window.location.origin;
   }
 
   return getRuntimeProductionOrigin();

@@ -2,11 +2,10 @@
  * DriverTripDetailScreen - Trip detail for driver with Start/End Trip actions
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Linking, Switch, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Linking, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { driverTripsAPI } from '../services/driverTripsAPI';
 import type { DriverDutyPayload, DriverTrip } from '../services/driverTripsAPI';
@@ -18,11 +17,12 @@ import {
 } from '../utils/passengerPhoneDisplay';
 import { EndTripPaymentModal } from '../components/EndTripPaymentModal';
 import { shareBookingDutySlip } from '../lib/bookingDutySlip';
+import { useAuth } from '../providers/AuthProvider';
 import {
-  readActiveDriverTripTracking,
   startDriverTripTracking,
   stopDriverTripTracking,
 } from '../lib/driverTripLocationTask';
+import { officeNotes, packageLines, splitRequirementText } from '../lib/tripPackageLines';
 
 const TAB_BAR_HEIGHT = 56;
 
@@ -193,7 +193,7 @@ function statusLabel(status: string): string {
 }
 
 function dutyStatusLabel(status: string): string {
-  if (status === 'not_started') return 'Not Started';
+  if (status === 'not_started') return 'Assigned';
   if (status === 'in_progress') return 'In Progress';
   if (status === 'completed') return 'Completed';
   return status.replaceAll('_', ' ');
@@ -303,52 +303,14 @@ function exactMapPin(lat: number, lng: number): string {
 function placesForTrip(trip: DriverTrip): string[] {
   const fromTerms = trip.tripTerms?.places?.map((place) => place.trim()).filter((place) => place !== '') ?? [];
   if (fromTerms.length > 0) return fromTerms;
-  const extra = trip.additionalRequirements ?? '';
-  const numbered = extra
-    .split('\n')
-    .map((line) => line.match(/^\s*\d+\.\s+(.+)$/)?.[1]?.trim() ?? '')
-    .filter((place) => place !== '');
-  return numbered;
-}
-
-function packageLines(trip: DriverTrip): string[] {
-  const terms = trip.tripTerms;
-  const notes = terms?.notes?.filter((note) => note.trim() !== '') ?? [];
-  const schedule = notes.filter((note) => /^Day \d+\b/i.test(note));
-  const otherNotes = notes.filter((note) => !/^Day \d+\b/i.test(note));
-  const lines: string[] = [...schedule];
-  if (terms?.package_hours && terms.package_km) {
-    lines.push(`${terms.package_hours} hrs / ${terms.package_km} km`);
-  } else if (trip.hourlyPackage) {
-    lines.push(trip.hourlyPackage);
-  }
-  if (terms?.day_window) lines.push(terms.day_window);
-  if (terms?.extra_hour_rate) {
-    lines.push(
-      `Extra hour ${formatAmount(terms.extra_hour_rate)}${terms.extra_hour_free_km ? ` · ${terms.extra_hour_free_km} km free` : ''}`
-    );
-  }
-  if (terms?.extra_km_rate) lines.push(`Extra km ${formatAmount(terms.extra_km_rate)}`);
-  if (terms?.driver_food) lines.push('Driver food');
-  if (terms?.garage_to_garage) lines.push('Garage to garage');
-  if (terms?.ac_off_standby_ghat) lines.push('AC off on standby and ghat roads');
-  if (terms?.exclusions && terms.exclusions.length > 0) {
-    lines.push(`Not included: ${terms.exclusions.join(', ')}`);
-  }
-  if (notes.length > 0) {
-    lines.push(...otherNotes);
-  }
-  const extra = (trip.additionalRequirements || '').trim();
-  if (extra && !lines.some((line) => line.includes(extra.slice(0, 48)))) {
-    lines.push(extra);
-  }
-  if (terms?.vehicle_note) lines.push(terms.vehicle_note);
-  return lines;
+  return splitRequirementText(trip.additionalRequirements ?? '').places;
 }
 
 export function DriverTripDetailScreen() {
   const { params } = useRoute<any>();
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
+  const officeView = user?.role === 'super_admin';
   const insets = useSafeAreaInsets();
   const paramTrip = params?.trip as DriverTrip | undefined;
   const scrollBottomPadding = insets.bottom + TAB_BAR_HEIGHT + 32;
@@ -359,13 +321,11 @@ export function DriverTripDetailScreen() {
   const [loading, setLoading] = useState(false);
   const [odometerModal, setOdometerModal] = useState<'start' | 'end' | null>(null);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [liveTracking, setLiveTracking] = useState(false);
   const [trackingNote, setTrackingNote] = useState('');
   const [slipBusy, setSlipBusy] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(true);
-  const [termsOpen, setTermsOpen] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(true);
   const trackingWantedRef = useRef(false);
-  const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
   const paymentDirtyRef = useRef(false);
   const [extraAmountText, setExtraAmountText] = useState('');
   const [extraCategory, setExtraCategory] = useState<ExtraCategory | null>(null);
@@ -403,14 +363,6 @@ export function DriverTripDetailScreen() {
           /* keep cached trip */
         }
         try {
-          const active = await readActiveDriverTripTracking();
-          if (!cancelled && active?.bookingId === trip.id) {
-            setLiveTracking(true);
-          }
-        } catch {
-          /* leave the switch as the driver set it */
-        }
-        try {
           const dutyDays = await driverTripsAPI.getDutyDays(trip.id);
           if (!cancelled) {
             setDuty(dutyDays);
@@ -439,10 +391,8 @@ export function DriverTripDetailScreen() {
 
   const trackingBookingId = trip?.id ?? 0;
   useEffect(() => {
-    const shouldShare = liveTracking && status === 'in_progress' && trackingBookingId > 0;
+    const shouldShare = status === 'in_progress' && trackingBookingId > 0 && !officeView;
     if (!shouldShare) {
-      locationWatchRef.current?.remove();
-      locationWatchRef.current = null;
       if (trackingWantedRef.current) {
         trackingWantedRef.current = false;
         setTrackingNote('');
@@ -456,50 +406,18 @@ export function DriverTripDetailScreen() {
     setTrackingNote('Starting live tracking…');
     const bookingId = trackingBookingId;
 
-    const shareFix = (latitude: number, longitude: number, accuracy?: number | null) =>
-      driverTripsAPI.submitLocation(bookingId, latitude, longitude, accuracy);
-
     void (async () => {
       try {
         const mode = await startDriverTripTracking(bookingId);
-        if (cancelled) {
-          await stopDriverTripTracking();
-          return;
-        }
+        if (cancelled) return;
         setTrackingNote(
           mode === 'background'
-            ? 'Sharing location with the office, including when the phone is locked.'
-            : 'Sharing location while this screen stays open. Allow location all the time to keep sharing after the screen locks.',
+            ? 'Sharing location with the office until this trip ends, including when the phone is locked.'
+            : 'Sharing location until this trip ends. Allow location all the time so it continues when the phone is locked.',
         );
-        try {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          if (!cancelled) {
-            await shareFix(loc.coords.latitude, loc.coords.longitude, loc.coords.accuracy);
-          }
-        } catch (fixError) {
-          if (cancelled) return;
-          const message = fixError instanceof Error ? fixError.message : '';
-          if (/office cannot receive|not in progress|not assigned|Sign in|Invalid or expired/i.test(message)) {
-            throw fixError;
-          }
-        }
-        if (cancelled) return;
-        if (mode !== 'foreground') return;
-        locationWatchRef.current?.remove();
-        locationWatchRef.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Balanced, timeInterval: 20000, distanceInterval: 25 },
-          (pos) => {
-            void shareFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy).catch(() => undefined);
-          },
-        );
-        if (cancelled) {
-          locationWatchRef.current?.remove();
-          locationWatchRef.current = null;
-        }
       } catch (e) {
         if (cancelled) return;
         trackingWantedRef.current = false;
-        setLiveTracking(false);
         setTrackingNote('');
         await stopDriverTripTracking();
         Alert.alert('Live tracking', e instanceof Error ? e.message : 'Could not start live tracking');
@@ -508,10 +426,8 @@ export function DriverTripDetailScreen() {
 
     return () => {
       cancelled = true;
-      locationWatchRef.current?.remove();
-      locationWatchRef.current = null;
     };
-  }, [liveTracking, status, trackingBookingId]);
+  }, [status, trackingBookingId, officeView]);
 
   if (!paramTrip && !tripDetail) {
     return (
@@ -537,6 +453,7 @@ export function DriverTripDetailScreen() {
 
   const currentStatus = status || trip.status;
   const awaitingReceipt = duty ? duty.needsReceipt : currentStatus === 'assigned';
+  const startingNextDay = awaitingReceipt || (duty ? duty.canStart && !duty.canEnd : currentStatus === 'assigned');
 
   const handleStartTrip = () => {
     if (dutyRef.current?.needsReceipt || (!dutyRef.current && currentStatus === 'assigned')) {
@@ -605,6 +522,7 @@ export function DriverTripDetailScreen() {
         try {
           const closed = await driverTripsAPI.endDutyDay(trip.id);
           setStatus(closed.tripCompleted ? 'completed' : 'assigned');
+          void stopDriverTripTracking();
           Alert.alert(
             closed.tripCompleted ? 'Trip completed' : 'Day closed',
             closed.tripCompleted
@@ -627,6 +545,7 @@ export function DriverTripDetailScreen() {
             paymentType: 'agent_booking',
           });
           setStatus(result.tripCompleted ? 'completed' : 'assigned');
+          void stopDriverTripTracking();
           Alert.alert(result.tripCompleted ? 'Trip Completed' : 'Day closed', result.tripCompleted ? 'Nothing was collected.' : 'This day is saved. The trip stays open for the next duty day.', [
             { text: 'OK', onPress: () => navigation.goBack() },
           ]);
@@ -663,6 +582,7 @@ export function DriverTripDetailScreen() {
         extraCollectedCategory: extraCollectedAmount > 0 ? extraCategory : null,
       });
       setStatus(result.tripCompleted ? 'completed' : 'assigned');
+      void stopDriverTripTracking();
       Alert.alert(result.tripCompleted ? 'Trip Completed' : 'Day closed', result.tripCompleted
         ? 'The trip has been marked as completed.'
         : 'This day is saved. The trip stays open for the next duty day.', [
@@ -700,7 +620,9 @@ export function DriverTripDetailScreen() {
     .filter((part) => part && String(part).trim() !== '')
     .join(' · ');
   const places = placesForTrip(trip);
-  const packageItems = packageLines(trip);
+  const keptNotes = officeNotes(trip);
+  const keptNoteKeys = new Set(keptNotes.map((line) => line.trim().toLowerCase()));
+  const packageItems = packageLines(trip).filter((line) => !keptNoteKeys.has(line.trim().toLowerCase()));
   const collects = trip.driverCollectsPayment !== false;
   const dayWindow = splitDayWindow(terms?.day_window);
   const pickupTimeLabel = dayWindow?.start || formatClock(trip.pickupTime || '');
@@ -748,6 +670,9 @@ export function DriverTripDetailScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding + 72 }]}
         showsVerticalScrollIndicator={false}
       >
+        {officeView ? (
+          <Text style={styles.officeNote}>Driver view. Start, end, and fuel are saved on this trip.</Text>
+        ) : null}
         <View style={styles.routeCard}>
           <View style={styles.routeBody}>
             <View style={styles.routeStops}>
@@ -812,6 +737,35 @@ export function DriverTripDetailScreen() {
           </View>
         </View>
 
+        {keptNotes.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+              <Text style={styles.sectionTitle}>Notes</Text>
+            </View>
+            {keptNotes.map((line) => {
+              const phone = line.match(/\+\d{8,15}/)?.[0] ?? null;
+              return (
+              <View key={line} style={styles.termRow}>
+                <View style={styles.termMark}>
+                  <Text style={styles.termBullet}>•</Text>
+                </View>
+                <Text style={styles.termText}>{line}</Text>
+                {phone ? (
+                  <TouchableOpacity
+                    onPress={() => Linking.openURL(`tel:${phone}`).catch(() => {})}
+                    style={styles.contactBtn}
+                    accessibilityLabel={`Call ${phone}`}
+                  >
+                    <Ionicons name="call" size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              );
+            })}
+          </View>
+        ) : null}
+
         <View style={styles.pair}>
           <View style={styles.infoCard}>
             <View style={[styles.inlineIcon, styles.inlineIconBlue]}>
@@ -854,7 +808,7 @@ export function DriverTripDetailScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.listRow} onPress={() => navigation.navigate('FuelEntry', { bookingId: trip.id })}>
+            <TouchableOpacity style={styles.listRow} onPress={() => navigation.navigate('FuelEntry', { bookingId: trip.id, trip })}>
               <View style={[styles.inlineIcon, styles.inlineIconAmber]}>
                 <Ionicons name="flame-outline" size={16} color="#ea580c" />
               </View>
@@ -865,7 +819,18 @@ export function DriverTripDetailScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
             </TouchableOpacity>
           </View>
-        ) : null}
+        ) : (
+          <TouchableOpacity style={styles.listRow} onPress={() => navigation.navigate('FuelEntry', { bookingId: trip.id, trip })}>
+            <View style={[styles.inlineIcon, styles.inlineIconAmber]}>
+              <Ionicons name="flame-outline" size={16} color="#ea580c" />
+            </View>
+            <View style={styles.listCopy}>
+              <Text style={styles.listTitle}>Add Fuel</Text>
+              <Text style={styles.listSub}>Your name stays on this trip</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
+          </TouchableOpacity>
+        )}
 
         {places.length > 0 ? (
           <View style={styles.section}>
@@ -899,10 +864,10 @@ export function DriverTripDetailScreen() {
               </View>
               <Ionicons name={termsOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.gray500} />
             </TouchableOpacity>
-            {termsOpen ? packageItems.map((line) => {
+            {termsOpen ? packageItems.map((line, index) => {
               const isTime = /\d{1,2}:\d{2}\s*(am|pm)/i.test(line);
               return (
-                <View key={line} style={styles.termRow}>
+                <View key={`${index}-${line}`} style={styles.termRow}>
                   <View style={styles.termMark}>
                     {isTime ? (
                       <Ionicons name="time" size={15} color={colors.primary} />
@@ -1072,30 +1037,10 @@ export function DriverTripDetailScreen() {
 
         {currentStatus === 'in_progress' ? (
           <View style={styles.trackingCard}>
-            <View style={styles.trackingCopy}>
-              <Ionicons name="navigate" size={18} color={colors.primary} />
-              <View>
-                <Text style={styles.trackingLabel}>Live Tracking</Text>
-                <Text style={styles.trackingHint}>
-                  {trackingNote || 'Allow the office to follow this trip on the map'}
-                </Text>
-              </View>
-            </View>
-            <Switch
-              value={liveTracking}
-              onValueChange={(next) => {
-                if (!next) {
-                  trackingWantedRef.current = false;
-                  setTrackingNote('');
-                  setLiveTracking(false);
-                  void stopDriverTripTracking();
-                  return;
-                }
-                setLiveTracking(true);
-              }}
-              trackColor={{ false: colors.gray300, true: colors.primary }}
-              thumbColor="#fff"
-            />
+            <Ionicons name="navigate" size={18} color={colors.primary} />
+            <Text style={styles.trackingHint}>
+              {trackingNote || 'Location is shared with the office until this trip ends.'}
+            </Text>
           </View>
         ) : null}
         {duty && duty.days.length > 0 ? (
@@ -1144,22 +1089,22 @@ export function DriverTripDetailScreen() {
           </View>
         ) : null}
       </ScrollView>
-      {currentStatus === 'assigned' || currentStatus === 'in_progress' ? (
+      {currentStatus === 'assigned' || currentStatus === 'in_progress' || startingNextDay ? (
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <TouchableOpacity
-            style={[styles.actionBtn, awaitingReceipt || currentStatus === 'assigned' ? styles.startBtn : styles.endBtn, loading && styles.btnDisabled]}
-            onPress={awaitingReceipt ? confirmReceipt : currentStatus === 'assigned' ? handleStartTrip : handleEndTrip}
+            style={[styles.actionBtn, startingNextDay ? styles.startBtn : styles.endBtn, loading && styles.btnDisabled]}
+            onPress={awaitingReceipt ? confirmReceipt : startingNextDay ? handleStartTrip : handleEndTrip}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
-                <Ionicons name={awaitingReceipt ? 'checkmark-circle' : currentStatus === 'assigned' ? 'play' : 'stop'} size={18} color="#fff" />
+                <Ionicons name={awaitingReceipt ? 'checkmark-circle' : startingNextDay ? 'play' : 'stop'} size={18} color="#fff" />
                 <Text style={styles.actionBtnText}>
                   {awaitingReceipt
                     ? 'Confirm Receipt'
-                    : currentStatus === 'assigned'
+                    : startingNextDay
                       ? (duty && duty.days.length > 1 ? 'Start Day' : 'Start Trip')
                       : (duty && duty.isLastOpenDay === false ? 'End Day' : 'End Trip')}
                 </Text>
@@ -1228,6 +1173,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fff', gap: 8 },
   backBtn: { padding: 4 },
   title: { flex: 1, fontSize: 18, fontWeight: '800', color: colors.foreground },
+  officeNote: { fontSize: 12, color: '#1d4ed8', fontWeight: '600', marginBottom: 8 },
   statusPill: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   statusLive: { backgroundColor: '#dcfce7' },
   statusAssigned: { backgroundColor: '#dbeafe' },
@@ -1297,8 +1243,8 @@ const styles = StyleSheet.create({
   dutyLine: { fontSize: 12, color: colors.gray600, marginTop: 4 },
   dutySlipLink: { fontSize: 12, color: colors.primary, fontWeight: '700', marginTop: 6 },
   placeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
-  placeCell: { width: '50%', flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8, paddingVertical: 8 },
-  placeIndex: { width: 18, fontSize: 13, fontWeight: '700', color: colors.gray500 },
+  placeCell: { width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 6 },
+  placeIndex: { width: 22, fontSize: 13, fontWeight: '700', color: colors.gray500, textAlign: 'right', lineHeight: 18 },
   placeName: { flex: 1, fontSize: 13, color: colors.foreground, fontWeight: '600', lineHeight: 18 },
   termRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 10 },
   termMark: { width: 22, height: 20, alignItems: 'center', justifyContent: 'center', marginRight: 6 },
@@ -1361,10 +1307,8 @@ const styles = StyleSheet.create({
   radioOnGreen: { borderColor: '#16a34a', backgroundColor: '#16a34a' },
   agentBanner: { backgroundColor: '#FEF3C7', borderRadius: 16, padding: 12 },
   agentBannerText: { fontSize: 16, fontWeight: '700', color: '#92400E' },
-  trackingCard: { backgroundColor: '#fff', borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  trackingCopy: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  trackingLabel: { fontSize: 15, fontWeight: '800', color: colors.foreground },
-  trackingHint: { fontSize: 12, color: colors.gray500, marginTop: 2 },
+  trackingCard: { backgroundColor: '#fff', borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  trackingHint: { flex: 1, fontSize: 12, color: colors.gray500 },
   footer: { paddingHorizontal: 12, paddingTop: 8, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.gray200 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14 },
   startBtn: { backgroundColor: '#16a34a' },

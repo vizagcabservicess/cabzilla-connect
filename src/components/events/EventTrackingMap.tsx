@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GoogleMap, Marker } from '@react-google-maps/api';
 import { MapPin, Phone, RefreshCw, Search } from 'lucide-react';
-import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
+import { requestGoogleMaps, useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { formatLastSeen, formatServerDateTime, trackSignal } from '@/lib/eventDuty';
 import type { EventTrackSignal, EventTrackVehicle } from '@/types/eventDuty';
 
@@ -29,6 +29,10 @@ export function EventTrackingMap({
   refreshing?: boolean;
 }) {
   const { isLoaded, error } = useGoogleMaps();
+
+  useEffect(() => {
+    requestGoogleMaps();
+  }, []);
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);

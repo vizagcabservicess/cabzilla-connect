@@ -19,6 +19,14 @@ interface GoogleMapsProviderProps {
 let globalLoader: Loader | null = null;
 let isLoading = false;
 let isLoadedGlobal = false;
+let startGoogleMapsLoad: (() => void) | null = null;
+let mapsStartRequested = false;
+
+/** Start the Maps script. Safe to call more than once. Queues until the provider is mounted. */
+export function requestGoogleMaps(): void {
+  mapsStartRequested = true;
+  startGoogleMapsLoad?.();
+}
 
 export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps) {
   const [isLoaded, setIsLoaded] = useState(isLoadedGlobal);
@@ -63,46 +71,53 @@ export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps
       return () => clearInterval(checkLoading);
     }
 
-    // Defer load until browser is idle so mobile main thread isn't blocked (better TBT/FCP)
+    // Places and the route map load when a booking actually needs them.
+    // They are not started on idle, so the homepage text can paint first.
     const scheduleLoad = () => {
-      if (!globalLoader) {
-        globalLoader = new Loader({
-          apiKey: finalApiKey,
-          version: 'weekly',
-          libraries: ['places'],
-          mapIds: ['DEMO_MAP_ID'],
+      if (isLoadedGlobal || isLoading || globalLoader) return;
+      globalLoader = new Loader({
+        apiKey: finalApiKey,
+        version: 'weekly',
+        libraries: ['places'],
+      });
+      isLoading = true;
+      globalLoader.load()
+        .then(() => {
+          isLoadedGlobal = true;
+          isLoading = false;
+          setIsLoaded(true);
+        })
+        .catch((err) => {
+          isLoading = false;
+          globalLoader = null;
+          if (err.message && err.message.includes('sandboxed')) {
+            const sandboxError = new Error(
+              'Google Maps cannot load due to iframe sandbox restrictions. ' +
+              'Please ensure the iframe has allow-scripts permission or load the page directly.'
+            );
+            setError(sandboxError);
+            console.error('Google Maps iframe sandbox error:', err);
+          } else {
+            setError(err);
+            console.error('Error loading Google Maps:', err);
+          }
         });
-        isLoading = true;
-        globalLoader.load()
-          .then(() => {
-            isLoadedGlobal = true;
-            isLoading = false;
-            setIsLoaded(true);
-            console.log('Google Maps loaded successfully');
-          })
-          .catch((err) => {
-            isLoading = false;
-            if (err.message && err.message.includes('sandboxed')) {
-              const sandboxError = new Error(
-                'Google Maps cannot load due to iframe sandbox restrictions. ' +
-                'Please ensure the iframe has allow-scripts permission or load the page directly.'
-              );
-              setError(sandboxError);
-              console.error('Google Maps iframe sandbox error:', err);
-            } else {
-              setError(err);
-              console.error('Error loading Google Maps:', err);
-            }
-          });
+    };
+    startGoogleMapsLoad = scheduleLoad;
+    if (mapsStartRequested) scheduleLoad();
+    const onFieldIntent = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        scheduleLoad();
       }
     };
-    if (typeof requestIdleCallback !== 'undefined') {
-      const id = requestIdleCallback(scheduleLoad, { timeout: 3000 });
-      return () => cancelIdleCallback(id);
-    } else {
-      const t = setTimeout(scheduleLoad, 100);
-      return () => clearTimeout(t);
-    }
+    document.addEventListener('focusin', onFieldIntent, true);
+    document.addEventListener('pointerdown', onFieldIntent, true);
+    return () => {
+      if (startGoogleMapsLoad === scheduleLoad) startGoogleMapsLoad = null;
+      document.removeEventListener('focusin', onFieldIntent, true);
+      document.removeEventListener('pointerdown', onFieldIntent, true);
+    };
   }, [apiKey]);
 
   const value = {

@@ -15,10 +15,12 @@ import { MessageCircle } from "lucide-react";
 import { commissionAPI } from '@/services/api/commissionAPI';
 import { fleetAPI } from '@/services/api/fleetAPI';
 import { getApiUrl } from '@/config/api';
+import { dedupeDriversByPhoneOrEmail } from '@/utils/driverListDedupe';
 
 interface DriverAssignmentProps {
   booking: Booking;
   onAssign: (driverData: { bookingId: string; driverId: string; driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
+  onRemoveAssignment?: () => Promise<void>;
   onCancel: () => void;
   onClose: () => void;
   isSubmitting: boolean;
@@ -27,6 +29,7 @@ interface DriverAssignmentProps {
 export function DriverAssignment({
   booking,
   onAssign,
+  onRemoveAssignment,
   onCancel,
   onClose,
   isSubmitting
@@ -43,6 +46,7 @@ export function DriverAssignment({
   } | null>(null);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [removing, setRemoving] = useState(false);
   const { toast } = useToast();
 
   // Fetch available drivers
@@ -54,7 +58,15 @@ export function DriverAssignment({
         const result = await response.json();
         
         if (response.ok && result.status === 'success' && Array.isArray(result.data)) {
-          setDrivers(result.data);
+          const assignable = result.data.filter((driver: Driver) => {
+            const status = String(driver.status || '').toLowerCase();
+            return status !== 'offline' && status !== 'inactive' && status !== 'blocked';
+          });
+          setDrivers(
+            dedupeDriversByPhoneOrEmail(assignable).sort((a, b) =>
+              a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+            )
+          );
         } else {
           console.error("Invalid API response:", result);
           toast({
@@ -146,6 +158,9 @@ export function DriverAssignment({
 
   useEffect(() => {
     setVehicleNumber(booking.vehicleNumber || '');
+    if (!booking.vehicleNumber && !booking.vehicleId) {
+      setSelectedVehicleId('');
+    }
   }, [booking.id, booking.vehicleNumber, booking.vehicleId]);
 
   // Reactively update selected vehicle if booking.vehicleNumber or vehicles change
@@ -171,6 +186,23 @@ export function DriverAssignment({
     }
   }, [booking, vehicles]);
 
+  useEffect(() => {
+    if (selectedDriver || drivers.length === 0) return;
+    const raw = String(booking.driverPhone || '').replace(/\D/g, '');
+    const last10 = raw.length >= 10 ? raw.slice(-10) : '';
+    if (last10.length !== 10) return;
+    const matches = drivers.filter((driver) => {
+      const digits = String(driver.phone || '').replace(/\D/g, '');
+      const key = digits.length >= 10 ? digits.slice(-10) : digits;
+      return key === last10;
+    });
+    if (matches.length === 1) {
+      setSelectedDriver(String(matches[0].id));
+      setDriverName(matches[0].name);
+      setDriverPhone(matches[0].phone);
+    }
+  }, [drivers, booking.id, booking.driverPhone, selectedDriver]);
+
   const handleDriverSelect = (value: string) => {
     setSelectedDriver(value);
     const selected = drivers.find(driver => driver.id.toString() === value);
@@ -187,6 +219,43 @@ export function DriverAssignment({
     const found = vehicles.find(v => v.id.toString() === val);
     if (found) {
       setVehicleNumber(found.vehicleNumber || found.vehicle_number);
+    }
+  };
+
+  const hasAssignment = Boolean(
+    booking.driverName ||
+    booking.driverPhone ||
+    booking.vehicleNumber ||
+    booking.vehicleId
+  );
+
+  const handleRemoveAssignment = async () => {
+    if (!hasAssignment || removing || isSubmitting) return;
+    const confirmed = window.confirm('Remove the assigned driver and vehicle from this booking?');
+    if (!confirmed) return;
+    setRemoving(true);
+    try {
+      if (onRemoveAssignment) {
+        await onRemoveAssignment();
+      }
+      setSelectedDriver('');
+      setDriverName('');
+      setDriverPhone('');
+      setVehicleNumber('');
+      setSelectedVehicleId('');
+      setCommissionData(null);
+      toast({
+        title: 'Assignment removed',
+        description: 'The driver and vehicle have been removed from this booking.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Could not remove assignment',
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -378,22 +447,34 @@ export function DriverAssignment({
               </div>
             )}
 
-            <div className="flex justify-between pt-4">
+            <div className="flex justify-between gap-2 pt-4">
               <Button
                 type="button"
                 variant="outline"
                 onClick={onCancel}
-                disabled={isSubmitting}
+                disabled={isSubmitting || removing}
               >
                 Cancel
               </Button>
 
-              <Button
-                type="submit"
-                disabled={isSubmitting || !selectedDriver || !driverName || !driverPhone || !vehicleNumber || !selectedVehicleId}
-              >
-                {isSubmitting ? 'Assigning...' : 'Assign Driver'}
-              </Button>
+              <div className="flex gap-2">
+                {hasAssignment && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleRemoveAssignment}
+                    disabled={isSubmitting || removing || !onRemoveAssignment}
+                  >
+                    {removing ? 'Removing...' : 'Remove assignment'}
+                  </Button>
+                )}
+                <Button
+                  type="submit"
+                  disabled={isSubmitting || removing || !selectedDriver || !driverName || !driverPhone || !vehicleNumber || !selectedVehicleId}
+                >
+                  {isSubmitting ? 'Assigning...' : 'Assign Driver'}
+                </Button>
+              </div>
             </div>
           </div>
         </form>

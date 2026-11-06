@@ -80,6 +80,64 @@ function getRazorpayPaymentAmount($payment_id, $key_id, $key_secret) {
     return null;
 }
 
+function fetchRazorpayEntity($url, $key_id, $key_secret) {
+    $auth = base64_encode($key_id . ":" . $key_secret);
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Basic ' . $auth,
+            'Content-Type: application/json'
+        ],
+        CURLOPT_TIMEOUT => 30
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($httpCode !== 200 || !$response) {
+        return null;
+    }
+    $decoded = json_decode($response, true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+/**
+ * Advance applied to the booking is the Razorpay order amount (the fare portion).
+ * The amount the customer is debited can be higher when Razorpay adds its own fee.
+ */
+function resolveAdvanceRupees($orderId, $paymentId, $key_id, $key_secret, $frontendAmount) {
+    $order = fetchRazorpayEntity('https://api.razorpay.com/v1/orders/' . rawurlencode((string)$orderId), $key_id, $key_secret);
+    if ($order && isset($order['amount']) && (int)$order['amount'] > 0) {
+        return round(((int)$order['amount']) / 100, 2);
+    }
+    if ($frontendAmount !== null && is_numeric($frontendAmount) && (float)$frontendAmount > 0) {
+        return round((float)$frontendAmount, 2);
+    }
+    $payment = fetchRazorpayEntity('https://api.razorpay.com/v1/payments/' . rawurlencode((string)$paymentId), $key_id, $key_secret);
+    if ($payment && isset($payment['amount']) && (int)$payment['amount'] > 0) {
+        return round(((int)$payment['amount']) / 100, 2);
+    }
+    return null;
+}
+
+function ensureBookingPaymentColumns($conn) {
+    $required = [
+        'advance_paid_amount' => 'DECIMAL(10,2) DEFAULT 0.00',
+        'razorpay_payment_id' => 'VARCHAR(100) DEFAULT NULL',
+        'razorpay_order_id' => 'VARCHAR(100) DEFAULT NULL',
+        'razorpay_signature' => 'VARCHAR(255) DEFAULT NULL',
+        'payment_method' => 'VARCHAR(32) DEFAULT NULL',
+        'payment_status' => 'VARCHAR(32) DEFAULT NULL',
+    ];
+    foreach ($required as $column => $type) {
+        $check = $conn->query("SHOW COLUMNS FROM bookings LIKE '" . $conn->real_escape_string($column) . "'");
+        if ($check && $check->num_rows === 0) {
+            $conn->query("ALTER TABLE bookings ADD COLUMN `$column` $type");
+        }
+    }
+}
+
 // Extract payment details
 $razorpay_payment_id = $data['razorpay_payment_id'];
 $razorpay_order_id = $data['razorpay_order_id'];
@@ -96,26 +154,17 @@ if (file_exists($processedFile)) {
     $processedPayments = json_decode(file_get_contents($processedFile), true) ?: [];
 }
 
-// Check if this payment was already processed today
-if (isset($processedPayments[$requestKey])) {
-    $lastProcessed = $processedPayments[$requestKey];
-    $timeDiff = time() - $lastProcessed['timestamp'];
-    
-    // If processed within last 60 seconds, skip (likely duplicate)
-    if ($timeDiff < 60) {
-        file_put_contents(__DIR__ . '/debug.log', 'SKIP: Duplicate payment verification request for ' . $requestKey . ' (processed ' . $timeDiff . 's ago)' . PHP_EOL, FILE_APPEND);
-        echo json_encode(['success' => true, 'message' => 'Payment already verified', 'duplicate' => true]);
-        exit;
-    }
+// Skip only after the booking advance was actually saved.
+// Marking the payment first caused a second callback to return success
+// without writing advance_paid_amount.
+if (!empty($processedPayments[$requestKey]['saved'])) {
+    file_put_contents(__DIR__ . '/debug.log', 'SKIP: Payment already saved for ' . $requestKey . PHP_EOL, FILE_APPEND);
+    echo json_encode(['success' => true, 'message' => 'Payment already verified', 'duplicate' => true]);
+    exit;
 }
 
-// Mark as processing
-$processedPayments[$requestKey] = [
-    'timestamp' => time(),
-    'booking_id' => $booking_id,
-    'amount' => $frontend_amount
-];
-file_put_contents($processedFile, json_encode($processedPayments));
+$bookingAdvanceSaved = false;
+$amount = null;
 
 // Generate the signature to verify the payment
 $generated_signature = hash_hmac('sha256', $razorpay_order_id . "|" . $razorpay_payment_id, $key_secret);
@@ -172,38 +221,27 @@ try {
                 exit;
             }
             
-            // Use amount from frontend first (most reliable)
-            if ($frontend_amount !== null) {
-                $amount = $frontend_amount;
-                file_put_contents(__DIR__ . '/debug.log', 'Using amount from frontend: ' . $amount . PHP_EOL, FILE_APPEND);
-            } else {
-                // Fallback: Get payment amount from Razorpay API
-                file_put_contents(__DIR__ . '/debug.log', 'Fetching payment amount from Razorpay API for payment_id: ' . $razorpay_payment_id . PHP_EOL, FILE_APPEND);
-                $amount = getRazorpayPaymentAmount($razorpay_payment_id, $key_id, $key_secret);
-                
-                if ($amount !== null) {
-                    file_put_contents(__DIR__ . '/debug.log', 'Payment amount from Razorpay API: ' . $amount . PHP_EOL, FILE_APPEND);
-                } else {
-                    file_put_contents(__DIR__ . '/debug.log', 'Could not fetch payment amount from Razorpay API' . PHP_EOL, FILE_APPEND);
-                    
-                    // Fallback: Try to get amount from razorpay_orders if table exists (optional)
-                    try {
-                        $stmt = $conn->prepare("SELECT amount FROM razorpay_orders WHERE order_id = ?");
-                        if ($stmt) {
-                            $stmt->bind_param("s", $razorpay_order_id);
-                            $stmt->execute();
-                            $result = $stmt->get_result();
-                            if ($result && $result->num_rows > 0) {
-                                $order = $result->fetch_assoc();
-                                $amount = isset($order['amount']) ? ($order['amount'] / 100.0) : null;
-                                file_put_contents(__DIR__ . '/debug.log', 'Payment amount from razorpay_orders table: ' . $amount . PHP_EOL, FILE_APPEND);
-                            }
-                            $stmt->close();
+            // Order amount is the fare advance. The customer debit can include Razorpay's fee.
+            $amount = resolveAdvanceRupees($razorpay_order_id, $razorpay_payment_id, $key_id, $key_secret, $frontend_amount);
+            file_put_contents(__DIR__ . '/debug.log', 'Resolved booking advance rupees: ' . var_export($amount, true) . PHP_EOL, FILE_APPEND);
+            if ($amount === null) {
+                try {
+                    $stmt = $conn->prepare("SELECT amount FROM razorpay_orders WHERE order_id = ?");
+                    if ($stmt) {
+                        $stmt->bind_param("s", $razorpay_order_id);
+                        $stmt->execute();
+                        $result = $stmt->get_result();
+                        if ($result && $result->num_rows > 0) {
+                            $order = $result->fetch_assoc();
+                            $amount = isset($order['amount']) ? ($order['amount'] / 100.0) : null;
+                            file_put_contents(__DIR__ . '/debug.log', 'Payment amount from razorpay_orders table: ' . $amount . PHP_EOL, FILE_APPEND);
                         }
-                    } catch (Exception $e) {
-                        // If razorpay_orders table doesn't exist or has different structure, continue
-                        file_put_contents(__DIR__ . '/debug.log', 'Could not fetch from razorpay_orders: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
+                        $stmt->close();
+                    } else {
+                        file_put_contents(__DIR__ . '/debug.log', 'razorpay_orders prepare failed: ' . $conn->error . PHP_EOL, FILE_APPEND);
                     }
+                } catch (Exception $e) {
+                    file_put_contents(__DIR__ . '/debug.log', 'Could not fetch from razorpay_orders: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
                 }
             }
 
@@ -215,16 +253,27 @@ try {
                 file_put_contents(__DIR__ . '/debug.log', 'ERROR: Could not determine payment amount from any source' . PHP_EOL, FILE_APPEND);
             }
             
-            // Try to insert into payments table (optional - might not exist)
+            // Audit row only. Status is not 'confirmed', so admin totals that sum
+            // confirmed payments plus advance_paid_amount do not count this twice.
             try {
-                $stmt = $conn->prepare("INSERT INTO payments (razorpay_payment_id, razorpay_order_id, amount, status, payment_method, created_at) VALUES (?, ?, ?, 'paid', 'razorpay', NOW())");
+                $paymentBookingId = (int)$booking_id;
+                $stmt = $conn->prepare("INSERT INTO payments (booking_id, razorpay_payment_id, razorpay_order_id, amount, status, payment_method, created_at) VALUES (?, ?, ?, ?, 'paid', 'razorpay', NOW())");
+                if (!$stmt) {
+                    file_put_contents(__DIR__ . '/debug.log', 'payments prepare failed: ' . $conn->error . PHP_EOL, FILE_APPEND);
+                    $stmt = $conn->prepare("INSERT INTO payments (razorpay_payment_id, razorpay_order_id, amount, status, payment_method, created_at) VALUES (?, ?, ?, 'paid', 'razorpay', NOW())");
+                    if ($stmt) {
+                        $stmt->bind_param("ssd", $razorpay_payment_id, $razorpay_order_id, $payAmount);
+                    }
+                } else {
+                    $stmt->bind_param("issd", $paymentBookingId, $razorpay_payment_id, $razorpay_order_id, $payAmount);
+                }
                 if ($stmt) {
-                    $stmt->bind_param("ssd", $razorpay_payment_id, $razorpay_order_id, $payAmount);
-                    $stmt->execute();
+                    if (!$stmt->execute()) {
+                        file_put_contents(__DIR__ . '/debug.log', 'payments insert failed: ' . $stmt->error . PHP_EOL, FILE_APPEND);
+                    }
                     $stmt->close();
                 }
             } catch (Exception $e) {
-                // Payments table might not exist, continue anyway
                 file_put_contents(__DIR__ . '/debug.log', 'Could not insert into payments table: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
             }
 
@@ -253,16 +302,40 @@ try {
                     file_put_contents(__DIR__ . '/debug.log', 'Failed to prepare booking select statement' . PHP_EOL, FILE_APPEND);
                 }
                 
-                // Determine payment status based on amount paid vs total amount
-                $totalAmount = $booking_data['total_amount'] ?? 0;
-                $paymentStatus = ($payAmount >= $totalAmount) ? 'paid' : 'payment_pending';
-                $bookingStatus = ($payAmount >= $totalAmount) ? 'confirmed' : 'pending';
+                ensureBookingPaymentColumns($conn);
+
+                $totalAmount = is_array($booking_data) ? (float)($booking_data['total_amount'] ?? 0) : 0;
+                $existingStatus = is_array($booking_data) ? (string)($booking_data['status'] ?? 'pending') : 'pending';
+                if ($payAmount > 0 && $totalAmount > 0 && ($payAmount + 0.49) >= $totalAmount) {
+                    $paymentStatus = 'paid';
+                    $bookingStatus = in_array($existingStatus, ['pending', 'payment_pending', ''], true) ? 'confirmed' : $existingStatus;
+                } elseif ($payAmount > 0) {
+                    $paymentStatus = 'partial_payment';
+                    $bookingStatus = $existingStatus !== '' ? $existingStatus : 'pending';
+                } else {
+                    $paymentStatus = 'pending';
+                    $bookingStatus = $existingStatus !== '' ? $existingStatus : 'pending';
+                }
                 
                 // Update booking with payment details
-                $update = $conn->prepare("UPDATE bookings SET payment_status=?, status=?, razorpay_payment_id=?, razorpay_order_id=?, razorpay_signature=?, advance_paid_amount=?, updated_at=NOW() WHERE id=?");
-                if ($update) {
-                    $update->bind_param("sssssdi", $paymentStatus, $bookingStatus, $razorpay_payment_id, $razorpay_order_id, $razorpay_signature, $payAmount, $booking_id);
-                    $update->execute();
+                $updateBookingId = (int)$booking_id;
+                $update = $conn->prepare("UPDATE bookings SET payment_status=?, status=?, razorpay_payment_id=?, razorpay_order_id=?, razorpay_signature=?, advance_paid_amount=?, payment_method='razorpay', updated_at=NOW() WHERE id=?");
+                if (!$update) {
+                    file_put_contents(__DIR__ . '/debug.log', 'Booking update prepare failed: ' . $conn->error . PHP_EOL, FILE_APPEND);
+                    $update = $conn->prepare("UPDATE bookings SET payment_status=?, status=?, razorpay_payment_id=?, razorpay_order_id=?, razorpay_signature=?, advance_paid_amount=? WHERE id=?");
+                }
+                if (!$update) {
+                    file_put_contents(__DIR__ . '/debug.log', 'Booking update prepare failed again: ' . $conn->error . PHP_EOL, FILE_APPEND);
+                } else {
+                    $update->bind_param("sssssdi", $paymentStatus, $bookingStatus, $razorpay_payment_id, $razorpay_order_id, $razorpay_signature, $payAmount, $updateBookingId);
+                    if (!$update->execute()) {
+                        file_put_contents(__DIR__ . '/debug.log', 'Booking update execute failed: ' . $update->error . PHP_EOL, FILE_APPEND);
+                    } elseif ($update->affected_rows > 0 && $payAmount > 0) {
+                        $bookingAdvanceSaved = true;
+                        file_put_contents(__DIR__ . '/debug.log', 'Booking advance saved. id=' . $updateBookingId . ' amount=' . $payAmount . ' status=' . $paymentStatus . PHP_EOL, FILE_APPEND);
+                    } else {
+                        file_put_contents(__DIR__ . '/debug.log', 'Booking update matched no rows. id=' . $updateBookingId . PHP_EOL, FILE_APPEND);
+                    }
                     $update->close();
                 }
 
@@ -477,6 +550,16 @@ try {
             file_put_contents(__DIR__ . '/debug.log', 'DB exception during verify: ' . $e->getMessage() . ' - Trace: ' . $e->getTraceAsString() . PHP_EOL, FILE_APPEND);
             // Continue; verification already passed
         }
+    }
+
+    if (!empty($bookingAdvanceSaved)) {
+        $processedPayments[$requestKey] = [
+            'timestamp' => time(),
+            'booking_id' => $booking_id,
+            'amount' => $amount ?? $frontend_amount,
+            'saved' => true,
+        ];
+        file_put_contents($processedFile, json_encode($processedPayments));
     }
 
     echo json_encode(['success' => true, 'message' => 'Payment verified successfully']);

@@ -67,12 +67,14 @@ try {
         $result2 = $stmt2->get_result();
         $userCheck = $result2->fetch_assoc();
         
-        if ($userCheck) {
+        if ($userCheck && (int) $userCheck['is_active'] !== 1) {
             error_log("DEBUG: me.php - User exists but is_active = " . $userCheck['is_active']);
-        } else {
-            error_log("DEBUG: me.php - User with ID " . $user_id . " does not exist in users table");
+            http_response_code(403);
+            echo json_encode(['error' => 'Account is inactive']);
+            exit();
         }
-        
+
+        error_log("DEBUG: me.php - User with ID " . $user_id . " does not exist in users table");
         http_response_code(401);
         echo json_encode(['error' => 'User not found or inactive']);
         exit();

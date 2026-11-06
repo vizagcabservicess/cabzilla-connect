@@ -70,13 +70,15 @@ export async function cropImageFile(file: File, crop: ImageCropRect): Promise<Fi
     const sy = Math.round(img.naturalHeight * clamp(crop.y, 0, 1));
     const sw = Math.max(1, Math.round(img.naturalWidth * clamp(crop.w, 0.02, 1)));
     const sh = Math.max(1, Math.round(img.naturalHeight * clamp(crop.h, 0.02, 1)));
-    const maxEdge = 2000;
+    const maxEdge = 2560;
     const scale = Math.min(1, maxEdge / Math.max(sw, sh));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(sw * scale));
     canvas.height = Math.max(1, Math.round(sh * scale));
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not crop image');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     return await canvasToJpeg(canvas, `${file.name.replace(/\.[^.]+$/, '') || 'document'}-cropped`);
   } finally {

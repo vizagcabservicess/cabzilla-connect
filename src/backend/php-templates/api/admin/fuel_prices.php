@@ -93,27 +93,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sendErrorResponse('Missing required fields: fuelType, price', [], 400);
             exit;
         }
+        $allowedTypes = ['Petrol', 'Diesel', 'CNG'];
         $fuelType = $data['fuelType'];
-        $price = floatval($data['price']);
-        $location = isset($data['location']) ? $data['location'] : 'Visakhapatnam';
-        $effectiveDate = isset($data['effectiveDate']) ? $data['effectiveDate'] : date('Y-m-d');
+        if (!in_array($fuelType, $allowedTypes, true)) {
+            sendErrorResponse('Invalid fuel type', 400);
+        }
+        $price = round(floatval($data['price']), 2);
+        if ($price <= 0) {
+            sendErrorResponse('Enter a price greater than zero', 400);
+        }
+        $location = isset($data['location']) ? trim($data['location']) : 'Visakhapatnam';
+        if ($location === '') {
+            $location = 'Visakhapatnam';
+        }
+        $effectiveDate = isset($data['effectiveDate']) ? substr((string)$data['effectiveDate'], 0, 10) : date('Y-m-d');
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $effectiveDate)) {
+            $effectiveDate = date('Y-m-d');
+        }
+        $id = isset($data['id']) ? (int)$data['id'] : 0;
 
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-
-        // Log the SQL and parameters
-        error_log('SQL: INSERT INTO fuel_prices (fuel_type, price, effective_date, location) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE price = VALUES(price), effective_date = VALUES(effective_date)');
-        error_log('PARAMS: fuelType=' . $fuelType . ', price=' . $price . ', effectiveDate=' . $effectiveDate . ', location=' . $location);
-
-        $stmt = $conn->prepare("INSERT INTO fuel_prices (fuel_type, price, effective_date, location) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE price = VALUES(price), effective_date = VALUES(effective_date)");
-        $stmt->bind_param("sdss", $fuelType, $price, $effectiveDate, $location);
-        $stmt->execute();
-        error_log('SQL EXECUTED: affected_rows=' . $stmt->affected_rows . ', error=' . $stmt->error); // Log SQL result
-
-        if ($stmt->affected_rows > 0) {
-            sendSuccessResponse([], 'Fuel price updated successfully');
-        } else {
-            sendErrorResponse('No rows updated. Check if the data matches an existing row and the values are actually different.', [], 400);
+        if ($conn->connect_error) {
+            sendErrorResponse('Database connection failed', 500);
         }
+        ensureFuelPricesTableExists($conn);
+
+        if ($id > 0) {
+            $stmt = $conn->prepare("UPDATE fuel_prices SET price = ?, effective_date = ?, location = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND fuel_type = ?");
+            $stmt->bind_param("dssis", $price, $effectiveDate, $location, $id, $fuelType);
+        } else {
+            $stmt = $conn->prepare("INSERT INTO fuel_prices (fuel_type, price, effective_date, location) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE price = VALUES(price), effective_date = VALUES(effective_date), location = VALUES(location), updated_at = CURRENT_TIMESTAMP");
+            $stmt->bind_param("sdss", $fuelType, $price, $effectiveDate, $location);
+        }
+        if (!$stmt || !$stmt->execute()) {
+            sendErrorResponse('Failed to update fuel price: ' . ($stmt ? $stmt->error : $conn->error), 500);
+        }
+
+        $saved = $conn->prepare("SELECT * FROM fuel_prices WHERE fuel_type = ? AND location = ? ORDER BY updated_at DESC LIMIT 1");
+        $saved->bind_param("ss", $fuelType, $location);
+        $saved->execute();
+        $row = $saved->get_result()->fetch_assoc();
+        $fuelPrice = $row ? [
+            'id' => $row['id'],
+            'fuelType' => $row['fuel_type'],
+            'price' => (float)$row['price'],
+            'effectiveDate' => $row['effective_date'],
+            'location' => $row['location'],
+            'createdAt' => $row['created_at'],
+            'updatedAt' => $row['updated_at']
+        ] : null;
+
+        sendSuccessResponse(['fuelPrice' => $fuelPrice], 'Fuel price updated successfully');
     } catch (Exception $e) {
         sendErrorResponse('Failed to update fuel price: ' . $e->getMessage());
     }
