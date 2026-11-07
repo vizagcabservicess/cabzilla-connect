@@ -30,6 +30,7 @@ import { AdminDriverFormScreen } from '../screens/AdminDriverFormScreen';
 import { AdminVehiclesListScreen } from '../screens/AdminVehiclesListScreen';
 import { AdminVehicleFormScreen } from '../screens/AdminVehicleFormScreen';
 import { AdminCreateBookingScreen } from '../screens/AdminCreateBookingScreen';
+import { AdminAiAssistantScreen } from '../screens/AdminAiAssistantScreen';
 import { AdminComingSoonScreen } from '../screens/AdminComingSoonScreen';
 import { AdminGroupToursScreen } from '../screens/AdminGroupToursScreen';
 import { AdminEventsScreen } from '../screens/AdminEventsScreen';
@@ -53,7 +54,6 @@ import { ChangeAssignmentScreen } from '../screens/ChangeAssignmentScreen';
 import { AssignVehicleScreen } from '../screens/AssignVehicleScreen';
 import { InvoiceScreen } from '../screens/InvoiceScreen';
 import { WebViewScreen } from '../screens/WebViewScreen';
-import { ChatScreen } from '../screens/ChatScreen';
 import { BuildMyTripScreen } from '../screens/BuildMyTripScreen';
 import { QuotationScreen } from '../screens/QuotationScreen';
 import { ContactUsScreen } from '../screens/ContactUsScreen';
@@ -65,7 +65,6 @@ import { FuelEntryScreen } from '../screens/FuelEntryScreen';
 import { DriverTripsDashboardScreen } from '../screens/DriverTripsDashboardScreen';
 import { DriverFuelScreen } from '../screens/DriverFuelScreen';
 import { MenuProvider } from '../providers/MenuProvider';
-import { VthAiAssistant } from '../components/VthAiAssistant';
 import type { RootStackParamList, ServicesStackParamList } from './types';
 import { colors } from '../theme/colors';
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -94,6 +93,7 @@ function ProfileStack() {
       <Stack.Screen name="AdminVehicleAdd" component={AdminVehicleFormScreen} />
       <Stack.Screen name="AdminVehicleEdit" component={AdminVehicleFormScreen} />
       <Stack.Screen name="AdminCreateBooking" component={AdminCreateBookingScreen} />
+      <Stack.Screen name="AdminAiAssistant" component={AdminAiAssistantScreen} />
       <Stack.Screen name="AdminGroupTours" component={AdminGroupToursScreen} />
       <Stack.Screen name="AdminEvents" component={AdminEventsScreen} />
       <Stack.Screen name="AdminEventDetail" component={AdminEventDetailScreen} />
@@ -134,7 +134,6 @@ function ServicesStack() {
     <ServicesStackNav.Navigator screenOptions={{ headerShown: false }}>
       <ServicesStackNav.Screen name="ServicesList" component={ServicesScreen} />
       <ServicesStackNav.Screen name="HireDriver" component={HireDriverScreen} />
-      <ServicesStackNav.Screen name="Chat" component={ChatScreen} />
       <ServicesStackNav.Screen name="BuildMyTrip" component={BuildMyTripScreen} />
       <ServicesStackNav.Screen name="Quotation" component={QuotationScreen} />
     </ServicesStackNav.Navigator>
@@ -280,7 +279,6 @@ export function RootNavigator() {
         }}
       />
     </Tab.Navigator>
-    <VthAiAssistant />
     </View>
   );
 }

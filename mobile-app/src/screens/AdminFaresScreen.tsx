@@ -27,6 +27,7 @@ import {
   updateOutstationFare,
   updateAirportFare,
   updateLocalFare,
+  FARE_VEHICLE_LABELS,
   type OutstationFare,
   type LocalPackageMatrix,
   type LocalFareExtras,
@@ -47,8 +48,10 @@ function fleetVehicleToTourKey(v: AdminFleetVehicle): { key: string; label: stri
   const vNum = (v as { vehicle_number?: string }).vehicle_number ?? v.vehicleNumber;
   const name = String(v.name ?? vNum ?? '').toLowerCase();
   const vtype = String((v as { vehicleType?: string }).vehicleType ?? (v as { cabTypeId?: string }).cabTypeId ?? '').toLowerCase().replace(/\s+/g, '_');
-  if (name.includes('amaze')) return { key: 'amaze', label: v.name ?? 'Honda Amaze' };
-  if (name.includes('ertiga') || vtype === 'mpv' || vtype === 'minivan') return { key: 'ertiga', label: v.name ?? 'Ertiga' };
+  if (name.includes('amaze') || name.includes('aura')) return { key: 'amaze', label: v.name ?? 'Hyundai Aura' };
+  if (name.includes('urbania') || vtype === 'bus' || vtype === 'urbania') return { key: 'urbania', label: v.name ?? 'Urbania' };
+  if (name.includes('hycross')) return { key: 'mpv', label: v.name ?? 'Innova Hycross' };
+  if (name.includes('ertiga') || vtype === 'minivan') return { key: 'ertiga', label: v.name ?? 'Ertiga' };
   if (name.includes('innova') || name.includes('crysta') || vtype === 'suv') return { key: 'innova_crysta', label: v.name ?? 'Innova Crysta' };
   if (name.includes('glanza')) return { key: 'toyota_glanza', label: v.name ?? 'Toyota Glanza' };
   if (name.includes('tempo') || name.includes('traveller') || vtype === 'tempo') return { key: 'tempo_traveller', label: v.name ?? 'Tempo Traveller' };
@@ -62,15 +65,19 @@ const DEFAULT_TOUR_VEHICLES: { key: string; label: string }[] = [
   { key: 'ertiga', label: 'Ertiga / MPV' },
   { key: 'innova_crysta', label: 'Innova Crysta' },
   { key: 'tempo_traveller', label: 'Tempo Traveller' },
+  { key: 'urbania', label: 'Urbania' },
   { key: 'toyota_glanza', label: 'Toyota Glanza' },
-  { key: 'amaze', label: 'Honda Amaze' },
+  { key: 'amaze', label: 'Hyundai Aura' },
+  { key: 'mpv', label: 'Innova Hycross' },
 ];
 
 /** Map vehicle id/name from loadVehicles (Fleet tab source) to canonical tour pricing key */
 function vehicleToTourKey(v: Vehicle): string {
   const id = String(v.id ?? '').toLowerCase().replace(/-/g, '_').trim();
   const name = String(v.name ?? '').toLowerCase();
-  if (name.includes('amaze')) return 'amaze';
+  if (name.includes('amaze') || name.includes('aura')) return 'amaze';
+  if (name.includes('urbania') || id === 'bus' || id === 'urbania') return 'urbania';
+  if (name.includes('hycross') || id === 'mpv') return 'mpv';
   if (name.includes('ertiga')) return 'ertiga';
   if (name.includes('innova') || name.includes('crysta')) return 'innova_crysta';
   if (name.includes('glanza')) return 'toyota_glanza';
@@ -143,9 +150,11 @@ function resolveTourPrice(pricing: Record<string, number> | undefined, key: stri
     sedan: ['sedan', 'swift_dzire', 'swift', 'dzire'],
     ertiga: ['ertiga', 'mpv', 'minivan'],
     innova_crysta: ['innova_crysta', 'innova', 'suv'],
-    tempo_traveller: ['tempo_traveller', 'tempo', 'bus'],
+    tempo_traveller: ['tempo_traveller', 'tempo'],
+    urbania: ['urbania', 'bus'],
+    mpv: ['mpv', 'hycross', 'innova_hycross'],
     toyota_glanza: ['toyota_glanza', 'glanza', 'toyota', 'toyota-glanza'],
-    amaze: ['amaze'],
+    amaze: ['amaze', 'aura', 'hyundai_aura'],
   };
   if (typeof pricing[key] === 'number' && pricing[key] > 0) return pricing[key];
   for (const alias of aliases[key] ?? []) {
@@ -165,6 +174,25 @@ function resolveTourPrice(pricing: Record<string, number> | undefined, key: stri
 
 function formatAmount(n: number): string {
   return `₹${n.toLocaleString('en-IN')}`;
+}
+
+const FARE_CARD_ORDER = ['sedan', 'amaze', 'toyota_glanza', 'ertiga', 'innova_crysta', 'mpv', 'tempo_traveller', 'urbania'];
+
+function sortFareIds(ids: string[]): string[] {
+  return [...ids].sort((a, b) => {
+    const ia = FARE_CARD_ORDER.indexOf(a);
+    const ib = FARE_CARD_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
+
+function fareCardLabel(
+  vehicleId: string,
+  displayName: string | undefined,
+  fleet: AdminFleetVehicle[],
+  publicVehicles: Vehicle[]
+): string {
+  return FARE_VEHICLE_LABELS[vehicleId] || displayName?.trim() || getVehicleDisplayLabel(vehicleId, fleet, publicVehicles);
 }
 
 function OutstationFareCard({
@@ -824,16 +852,20 @@ export function AdminFaresScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Outstation Fares (API)</Text>
               <Text style={localStyles.subtitle}>Fetched from outstation-fares-update.php</Text>
-              {Object.entries(outstationFares).map(([vid, fare]) => (
+              {sortFareIds(Object.keys(outstationFares)).map((vid) => {
+                const fare = outstationFares[vid];
+                const label = fareCardLabel(vid, fare.displayName, fleetVehicles, publicVehicles);
+                return (
                 <OutstationFareCard
                   key={vid}
                   vehicleId={vid}
-                  vehicleLabel={getVehicleDisplayLabel(vid, fleetVehicles, publicVehicles)}
+                  vehicleLabel={label}
                   fare={fare}
                   onEdit={handleEditOutstation}
-                  onEditVehicleDetails={(id) => handleEditVehicleDetails(id, getVehicleDisplayLabel(vid, fleetVehicles, publicVehicles))}
+                  onEditVehicleDetails={(id) => handleEditVehicleDetails(id, label)}
                 />
-              ))}
+                );
+              })}
             </View>
           ) : tripType === 'local' && hasLocal ? (
             <View style={styles.card}>
@@ -848,32 +880,40 @@ export function AdminFaresScreen() {
                     localMatrix['4hrs-40km'] || {}
                   )
                 )
-                  .map((vehicleId) => (
+                  .sort((a, b) => FARE_CARD_ORDER.indexOf(a) - FARE_CARD_ORDER.indexOf(b) || a.localeCompare(b))
+                  .map((vehicleId) => {
+                    const label = fareCardLabel(vehicleId, undefined, fleetVehicles, publicVehicles);
+                    return (
                     <LocalFareCard
                       key={vehicleId}
                       vehicleId={vehicleId}
-                      vehicleLabel={getVehicleDisplayLabel(vehicleId, fleetVehicles, publicVehicles)}
+                      vehicleLabel={label}
                       matrix={localMatrix!}
                       extras={localExtras}
                       onEdit={handleEditLocal}
-                      onEditVehicleDetails={(id) => handleEditVehicleDetails(id, getVehicleDisplayLabel(vehicleId, fleetVehicles, publicVehicles))}
+                      onEditVehicleDetails={(id) => handleEditVehicleDetails(id, label)}
                     />
-                  ))}
+                    );
+                  })}
             </View>
           ) : tripType === 'airport' && hasAirport ? (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Airport Fares (API)</Text>
               <Text style={localStyles.subtitle}>Fetched from direct-airport-fares.php</Text>
-              {Object.entries(airportFares).map(([vid, fare]) => (
+              {sortFareIds(Object.keys(airportFares)).map((vid) => {
+                const fare = airportFares[vid];
+                const label = fareCardLabel(vid, fare.displayName, fleetVehicles, publicVehicles);
+                return (
                 <AirportFareCard
                   key={vid}
                   vehicleId={vid}
-                  vehicleLabel={getVehicleDisplayLabel(vid, fleetVehicles, publicVehicles)}
+                  vehicleLabel={label}
                   fare={fare}
                   onEdit={handleEditAirport}
-                  onEditVehicleDetails={(id) => handleEditVehicleDetails(id, getVehicleDisplayLabel(vid, fleetVehicles, publicVehicles))}
+                  onEditVehicleDetails={(id) => handleEditVehicleDetails(id, label)}
                 />
-              ))}
+                );
+              })}
             </View>
           ) : tripType === 'tours' && hasTours ? (
             <View style={styles.card}>

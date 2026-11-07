@@ -11,13 +11,17 @@ import { HeroSkeleton, PageSkeleton } from './components/SkeletonLoader';
 import { Button } from '@/components/ui/button';
 import { FaWhatsapp } from 'react-icons/fa';
 import { trackContactCta } from './utils/trackContactCta';
+import { captureGclidFromSearch } from '@/lib/gclid';
 import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
 import { RouteErrorFallback } from './components/ErrorBoundary';
 
-if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('buildTrip') === '1') {
-  const bootParams = new URLSearchParams(window.location.search);
-  void import('./lib/buildYourTrip').then(({ applySharedBuildTrip }) => applySharedBuildTrip(bootParams));
+if (typeof window !== 'undefined') {
+  captureGclidFromSearch(window.location.search);
+  if (new URLSearchParams(window.location.search).get('buildTrip') === '1') {
+    const bootParams = new URLSearchParams(window.location.search);
+    void import('./lib/buildYourTrip').then(({ applySharedBuildTrip }) => applySharedBuildTrip(bootParams));
+  }
 }
 
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -325,6 +329,10 @@ function Root() {
     const message = encodeURIComponent(getWhatsAppMessage());
     window.open(`https://wa.me/919966363662?text=${message}`, '_blank');
   };
+
+  useEffect(() => {
+    captureGclidFromSearch(location.search);
+  }, [location.search]);
 
   // Stop session recording when entering admin (prevents vehicles edit freeze)
   useEffect(() => {

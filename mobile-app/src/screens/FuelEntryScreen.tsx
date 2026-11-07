@@ -1422,7 +1422,7 @@ export function FuelEntryScreen() {
             </Text>
             {receiptPhoto ? (
               <>
-                <Image source={{ uri: receiptPhoto.localUri }} style={styles.capturePreview} pointerEvents="none" />
+                <Image source={{ uri: receiptPhoto.localUri }} style={styles.capturePreview}  />
                 <View style={styles.retakeBtnSm}>
                   <Text style={styles.retakeBtnTextSm}>Retake</Text>
                 </View>
@@ -1462,7 +1462,7 @@ export function FuelEntryScreen() {
             </Text>
             {pumpPhoto ? (
               <>
-                <Image source={{ uri: pumpPhoto.localUri }} style={styles.capturePreview} pointerEvents="none" />
+                <Image source={{ uri: pumpPhoto.localUri }} style={styles.capturePreview}  />
                 <View style={styles.retakeBtnSm}>
                   <Text style={styles.retakeBtnTextSm}>Retake</Text>
                 </View>
@@ -1495,7 +1495,7 @@ export function FuelEntryScreen() {
             </Text>
             {odometerPhoto ? (
               <>
-                <Image source={{ uri: odometerPhoto.localUri }} style={styles.capturePreview} pointerEvents="none" />
+                <Image source={{ uri: odometerPhoto.localUri }} style={styles.capturePreview}  />
                 <View style={styles.retakeBtnSm}>
                   <Text style={styles.retakeBtnTextSm}>Retake</Text>
                 </View>
@@ -1722,7 +1722,7 @@ export function FuelEntryScreen() {
 
         <TouchableOpacity
           style={[styles.submitBtn, saveDisabled && styles.btnDisabled]}
-          onPress={handleSubmit}
+          onPress={() => { void handleSubmit(); }}
           disabled={saveDisabled}
         >
           {submitting ? (

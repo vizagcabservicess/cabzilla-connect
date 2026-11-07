@@ -52,6 +52,7 @@ export function buildSearchAlertExportRows(alerts: SearchAlert[]): Record<string
   return alerts.map((a) => ({
     'Searched At': formatSearchAlertDateTime(a.searchedAt),
     'Guest Phone': a.guestPhone,
+    GCLID: a.gclid?.trim() || '',
     Pickup: a.pickup,
     Drop: a.drop,
     'Trip Type': a.tripType.replace(/\n/g, ' '),
@@ -79,6 +80,7 @@ export function searchAlertMatchesTerm(alert: SearchAlert, term: string): boolea
   if (!q) return true;
   const haystack = [
     alert.guestPhone,
+    alert.gclid,
     alert.pickup,
     alert.drop,
     alert.tripType,

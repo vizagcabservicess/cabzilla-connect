@@ -29,6 +29,7 @@ import { Booking } from '@/types/api';
 import { BookingInvoice } from './BookingInvoice';
 import { BookingShare } from './BookingShare';
 import { EditProfileModal } from './EditProfileModal';
+import { CustomerLiveCab } from './CustomerLiveCab';
 
 interface GuestDashboardProps {
   user: any;
@@ -343,6 +344,10 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
                               )}
                             </div>
                           )}
+
+                          {['assigned', 'in_progress', 'started', 'on_trip', 'ongoing'].includes((booking.status || '').toLowerCase()) ? (
+                            <CustomerLiveCab bookingId={Number(booking.id)} status={booking.status || ''} />
+                          ) : null}
 
                           {/* Extra Charges */}
                           {booking.extraCharges && Object.keys(booking.extraCharges).length > 0 && (

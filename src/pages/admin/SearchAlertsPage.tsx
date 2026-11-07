@@ -380,6 +380,7 @@ export default function SearchAlertsPage() {
                   <TableRow>
                     <TableHead>Searched At</TableHead>
                     <TableHead>Guest</TableHead>
+                    <TableHead>GCLID</TableHead>
                     <TableHead>Pickup</TableHead>
                     <TableHead>Drop</TableHead>
                     <TableHead>Trip</TableHead>
@@ -392,14 +393,14 @@ export default function SearchAlertsPage() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                         <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
                         Loading search alerts…
                       </TableCell>
                     </TableRow>
                   ) : filteredAlerts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                         No search alerts found for the selected filters.
                       </TableCell>
                     </TableRow>
@@ -426,6 +427,9 @@ export default function SearchAlertsPage() {
                             <FaWhatsapp className="h-4 w-4 shrink-0" />
                             {alert.guestPhone}
                           </button>
+                        </TableCell>
+                        <TableCell className="max-w-[140px] truncate font-mono text-xs" title={alert.gclid || ''}>
+                          {alert.gclid?.trim() || '—'}
                         </TableCell>
                         <TableCell className="max-w-[180px] truncate" title={alert.pickup}>
                           {alert.pickup}
@@ -575,6 +579,10 @@ export default function SearchAlertsPage() {
                 </DialogDescription>
               </DialogHeader>
               <dl className="grid gap-3 text-sm">
+                <div>
+                  <dt className="font-medium text-muted-foreground">GCLID</dt>
+                  <dd className="break-all font-mono text-xs">{selectedAlert.gclid?.trim() || '—'}</dd>
+                </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">Pickup</dt>
                   <dd>{selectedAlert.pickup || '—'}</dd>

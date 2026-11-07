@@ -612,6 +612,7 @@ export function MyTourListPanel() {
         ? [{ name: selectedOption.name, fareText: fareText || 'Quote on request' }]
         : undefined,
       searchSummaryUrl: tourSummaryUrl,
+      fareLeadTripType: 'Tour',
     });
     setGuestPhoneDigits('');
     setGuestPhoneCountry(defaultWhatsappCountry());

@@ -223,8 +223,8 @@ try {
             $vehicleStmt->close();
         }
 
-        // Update the booking table with fleet_vehicle_id, vehicle_number, and status
-        $updateBookingSql = "UPDATE bookings SET fleet_vehicle_id = ?, vehicle_number = COALESCE(?, vehicle_number), status = 'confirmed', updated_at = NOW() WHERE id = ?";
+        // Keep an assigned driver assigned. Only move a new booking to confirmed.
+        $updateBookingSql = "UPDATE bookings SET fleet_vehicle_id = ?, vehicle_number = COALESCE(?, vehicle_number), status = CASE WHEN status IN ('assigned','in_progress','started','completed','cancelled') THEN status ELSE 'confirmed' END, updated_at = NOW() WHERE id = ?";
         $updateBookingStmt = $conn->prepare($updateBookingSql);
         $updateBookingStmt->bind_param("ssi", $vehicleId, $vehicleNum, $bookingId);
         
@@ -233,6 +233,17 @@ try {
             // Not throwing exception as assignment was successful
         } else {
             logDebug("Updated booking #$bookingId with vehicle $vehicleId");
+        }
+
+        $segmentTable = @$conn->query("SHOW TABLES LIKE 'booking_duty_segments'");
+        if ($segmentTable && $segmentTable->num_rows > 0 && $vehicleNum) {
+            $fleetInt = (int) $vehicleId;
+            $syncSegment = $conn->prepare("UPDATE booking_duty_segments SET fleet_vehicle_id = ?, vehicle_number = ? WHERE booking_id = ? AND status <> 'completed'");
+            if ($syncSegment) {
+                $syncSegment->bind_param("isi", $fleetInt, $vehicleNum, $bookingId);
+                $syncSegment->execute();
+                $syncSegment->close();
+            }
         }
         
         // Commit transaction

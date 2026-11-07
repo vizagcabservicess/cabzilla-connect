@@ -412,8 +412,8 @@ export function DriverTripDetailScreen() {
         if (cancelled) return;
         setTrackingNote(
           mode === 'background'
-            ? 'Sharing location with the office until this trip ends, including when the phone is locked.'
-            : 'Sharing location until this trip ends. Allow location all the time so it continues when the phone is locked.',
+            ? 'The passenger can see this cab until the trip ends, including when the phone is locked.'
+            : 'The passenger can see this cab until the trip ends. Allow location all the time so it continues when the phone is locked.',
         );
       } catch (e) {
         if (cancelled) return;

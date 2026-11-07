@@ -15,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/core';
 import { colors, fonts } from '../theme/colors';
-import { openVthAi } from '../lib/vthAi';
 import type { TripType } from '../types';
 
 const WHATSAPP_NUMBER = '919966363662';
@@ -27,7 +26,7 @@ const SERVICE_ITEMS: Array<{
   label: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   tripType?: TripType;
-  action?: 'hire-driver' | 'whatsapp' | 'chat' | 'build-trip';
+  action?: 'hire-driver' | 'whatsapp' | 'build-trip';
 }> = [
   { id: 'outstation', label: 'Outstation Trips', icon: 'car-side', tripType: 'outstation' },
   { id: 'airport', label: 'Airport Transfer', icon: 'airplane', tripType: 'airport' },
@@ -35,7 +34,6 @@ const SERVICE_ITEMS: Array<{
   { id: 'tour', label: 'Tour', icon: 'map-marker-path', tripType: 'tour' },
   { id: 'hire', label: 'Hire Driver', icon: 'account', action: 'hire-driver' },
   { id: 'whatsapp', label: 'Chat on WhatsApp', icon: 'whatsapp', action: 'whatsapp' },
-  { id: 'chat', label: 'VTH AI', icon: 'creation', action: 'chat' },
   { id: 'build-trip', label: 'Build My Trip', icon: 'map-marker-path', action: 'build-trip' },
 ];
 
@@ -45,10 +43,6 @@ export function ServicesScreen() {
   const handleServicePress = (item: (typeof SERVICE_ITEMS)[0]) => {
     if (item.action === 'whatsapp') {
       Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}`).catch(() => {});
-      return;
-    }
-    if (item.action === 'chat') {
-      openVthAi();
       return;
     }
     if (item.action === 'build-trip') {

@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS search_alerts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     guest_phone VARCHAR(20) NOT NULL,
+    gclid VARCHAR(255) NULL DEFAULT NULL,
     pickup TEXT NOT NULL,
     drop_location TEXT NOT NULL,
     trip_type TEXT,
@@ -18,3 +19,7 @@ CREATE TABLE IF NOT EXISTS search_alerts (
     INDEX idx_search_alerts_guest_phone (guest_phone),
     INDEX idx_search_alerts_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Existing databases already have the table. The API also adds this column on first save.
+-- Run once if you apply schema changes by hand:
+-- ALTER TABLE search_alerts ADD COLUMN gclid VARCHAR(255) NULL DEFAULT NULL AFTER guest_phone;

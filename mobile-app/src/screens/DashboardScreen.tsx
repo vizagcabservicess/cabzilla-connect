@@ -177,6 +177,9 @@ export function DashboardScreen({ navigation, route }: Props) {
                   {formatDisplayDate(b.pickup_date, b.pickup_time)}
                 </Text>
               </View>
+              {['in_progress', 'started', 'on_trip', 'ongoing'].includes((b.status || '').toLowerCase()) ? (
+                <Text style={styles.liveLine}>Live GPS — tap to follow the cab</Text>
+              ) : null}
               <View style={styles.cardFooter}>
                 <Text style={styles.cardType}>{b.vehicle_type || b.trip_type || 'Taxi'}</Text>
                 <View style={styles.cardRight}>
@@ -242,6 +245,7 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   cardRoute: { flex: 1, fontSize: 15, fontWeight: '500', color: colors.foreground },
   cardDate: { fontSize: 13, color: colors.gray600 },
+  liveLine: { fontSize: 13, fontWeight: '600', color: '#059669', marginTop: 4 },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',

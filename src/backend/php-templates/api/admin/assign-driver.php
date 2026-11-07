@@ -397,7 +397,53 @@ try {
             throw new Exception("Failed to update booking: " . $updateBookingStmt->error);
         }
 
+        $fleetId = 0;
+        if ($vehicleToUse !== '') {
+            $fleetLookup = $conn->prepare("SELECT id FROM fleet_vehicles WHERE REPLACE(UPPER(vehicle_number), ' ', '') = REPLACE(UPPER(?), ' ', '') LIMIT 1");
+            if ($fleetLookup) {
+                $fleetLookup->bind_param('s', $vehicleToUse);
+                $fleetLookup->execute();
+                $fleetRow = $fleetLookup->get_result()->fetch_assoc();
+                $fleetLookup->close();
+                if ($fleetRow) {
+                    $fleetId = (int) $fleetRow['id'];
+                }
+            }
+        }
+        if ($fleetId > 0) {
+            $fleetCol = @$conn->query("SHOW COLUMNS FROM bookings LIKE 'fleet_vehicle_id'");
+            if ($fleetCol && $fleetCol->num_rows > 0) {
+                $setFleet = $conn->prepare("UPDATE bookings SET fleet_vehicle_id = ? WHERE id = ?");
+                if ($setFleet) {
+                    $bookingIdInt = (int) $bookingId;
+                    $setFleet->bind_param('ii', $fleetId, $bookingIdInt);
+                    $setFleet->execute();
+                    $setFleet->close();
+                }
+            }
+        }
+
         duty_ensure_booking($conn, (int) $bookingId);
+
+        $segmentTable = @$conn->query("SHOW TABLES LIKE 'booking_duty_segments'");
+        if ($segmentTable && $segmentTable->num_rows > 0) {
+            $bookingIdInt = (int) $bookingId;
+            $driverIdInt = (int) $driver['id'];
+            $driverName = (string) ($driver['name'] ?? '');
+            $driverPhone = (string) ($driver['phone'] ?? '');
+            $syncSegment = $conn->prepare("
+                UPDATE booking_duty_segments
+                SET driver_id = ?, driver_name = ?, driver_phone = ?,
+                    fleet_vehicle_id = IF(? > 0, ?, fleet_vehicle_id),
+                    vehicle_number = IF(? <> '', ?, vehicle_number)
+                WHERE booking_id = ? AND status <> 'completed'
+            ");
+            if ($syncSegment) {
+                $syncSegment->bind_param('issiissi', $driverIdInt, $driverName, $driverPhone, $fleetId, $fleetId, $vehicleToUse, $vehicleToUse, $bookingIdInt);
+                $syncSegment->execute();
+                $syncSegment->close();
+            }
+        }
         
         // Update driver status to busy
         $updateDriverStmt = $conn->prepare("

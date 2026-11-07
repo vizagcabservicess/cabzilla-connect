@@ -29,6 +29,51 @@ function logUpdateDebug($message, $data = null) {
     file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
 }
 
+function vehicleUpdateAliasKey($id) {
+    return strtolower(str_replace([' ', '-'], '_', trim((string)$id)));
+}
+
+function vehicleUpdateAliasIds($id) {
+    $key = vehicleUpdateAliasKey($id);
+    $groups = [
+        ['bus', 'urbania'],
+        ['toyota_glanza', 'glanza', 'toyota'],
+        ['sedan', 'swift_dzire', 'dzire'],
+        ['amaze', 'aura', 'hyundai_aura'],
+        ['mpv', 'hycross', 'innova_hycross'],
+        ['innova_crysta', 'innova', 'crysta'],
+        ['tempo_traveller', 'tempo'],
+        ['ertiga'],
+    ];
+    foreach ($groups as $group) {
+        if (in_array($key, $group, true)) {
+            return $group;
+        }
+    }
+    return $key === '' ? [] : [$key];
+}
+
+function vehicleUpdateResolveIds($conn, $vehicleId) {
+    $aliases = vehicleUpdateAliasIds($vehicleId);
+    $found = [];
+    $result = $conn->query('SELECT vehicle_id FROM vehicles');
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $rowKey = vehicleUpdateAliasKey($row['vehicle_id'] ?? '');
+            if ($rowKey !== '' && in_array($rowKey, $aliases, true)) {
+                $found[$rowKey] = $row['vehicle_id'];
+            }
+        }
+    }
+    $ids = [];
+    foreach ($aliases as $alias) {
+        if (isset($found[$alias]) && !in_array($found[$alias], $ids, true)) {
+            $ids[] = $found[$alias];
+        }
+    }
+    return $ids;
+}
+
 logUpdateDebug("Starting vehicle update");
 
 // Get the vehicle data from the calling script or from the request
@@ -72,6 +117,7 @@ if (!isset($vehicleData['id']) && !isset($vehicleData['vehicleId']) && !isset($v
 // Get the vehicle ID from various possible fields
 $vehicleId = isset($vehicleData['id']) ? $vehicleData['id'] : 
             (isset($vehicleData['vehicleId']) ? $vehicleData['vehicleId'] : $vehicleData['vehicle_id']);
+$requestedVehicleId = (string)$vehicleId;
 
 logUpdateDebug("Processing update for vehicle ID: $vehicleId");
 
@@ -148,14 +194,15 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                 }
                 logUpdateDebug("Inactive dates processed", ['raw' => $vehicleData['inactiveDates'] ?? 'not set', 'processed' => $inactiveDates]);
                 
-                // Check if vehicle exists
-                $checkSql = "SELECT * FROM vehicles WHERE vehicle_id = ? OR id = ?";
-                $stmt = $conn->prepare($checkSql);
-                $stmt->bind_param("ss", $vehicleId, $vehicleId);
-                $stmt->execute();
-                $result = $stmt->get_result();
+                // Match the stored vehicle id, including aliases such as urbania -> bus.
+                $resolvedIds = vehicleUpdateResolveIds($conn, $requestedVehicleId);
+                $extraVehicleIds = [];
+                if (!empty($resolvedIds)) {
+                    $vehicleId = $resolvedIds[0];
+                    $extraVehicleIds = array_slice($resolvedIds, 1);
+                }
                 
-                if ($result->num_rows > 0) {
+                if (!empty($resolvedIds)) {
                     // Update existing vehicle
                     logUpdateDebug("Updating existing vehicle in database");
                     
@@ -177,7 +224,7 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         cancellation_policy = ?, 
                         fuel_type = ?,
                         inactive_dates = ?
-                    WHERE vehicle_id = ? OR id = ?";
+                    WHERE vehicle_id = ?";
                     
                     $stmt = $conn->prepare($sql);
                     
@@ -200,7 +247,7 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                     $isActive = isset($vehicleData['isActive']) ? (int)(bool)$vehicleData['isActive'] : 
                                (isset($vehicleData['is_active']) ? (int)(bool)$vehicleData['is_active'] : 1);
                     
-                    $stmt->bind_param("siiddsssiddisssssss", 
+                    $stmt->bind_param("siiddsssiddissssss", 
                         $name, 
                         $capacity, 
                         $luggageCapacity, 
@@ -214,12 +261,19 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         $driverAllowance, 
                         $isActive,
                         $inclusions, $exclusions, $cancellationPolicy, $fuelType, $inactiveDates,
-                        $vehicleId, $vehicleId
+                        $vehicleId
                     );
                     
                     if ($stmt->execute()) {
                         logUpdateDebug("Vehicle updated in database successfully");
                         $databaseUpdated = true;
+                        foreach ($extraVehicleIds as $extraVehicleId) {
+                            $vehicleId = $extraVehicleId;
+                            if ($stmt->execute()) {
+                                logUpdateDebug("Also updated alias vehicle id: $extraVehicleId");
+                            }
+                        }
+                        $vehicleId = $resolvedIds[0];
                     } else {
                         logUpdateDebug("Failed to update vehicle in database: " . $stmt->error);
                     }
@@ -286,12 +340,14 @@ if (file_exists(__DIR__ . '/../../config.php')) {
     }
 }
 
-// Find the vehicle in persistent data
+// Find the vehicle in persistent data, including alias ids such as urbania/bus.
 $vehicleIndex = -1;
+$aliasIds = vehicleUpdateAliasIds($requestedVehicleId);
 foreach ($persistentData as $index => $vehicle) {
-    if ((isset($vehicle['id']) && $vehicle['id'] === $vehicleId) || 
-        (isset($vehicle['vehicleId']) && $vehicle['vehicleId'] === $vehicleId)) {
+    $storedKey = vehicleUpdateAliasKey($vehicle['id'] ?? $vehicle['vehicleId'] ?? '');
+    if ($storedKey !== '' && in_array($storedKey, $aliasIds, true)) {
         $vehicleIndex = $index;
+        $vehicleId = $vehicle['id'] ?? $vehicle['vehicleId'] ?? $vehicleId;
         logUpdateDebug("Found vehicle at index $index in persistent data");
         break;
     }
@@ -450,8 +506,20 @@ if (isset($vehicleData['inactiveDates'])) {
 
 logUpdateDebug("Normalized vehicle data", $normalizedVehicle);
 
-// Update the vehicle in persistent data
+// Update the vehicle in persistent data, and keep alias rows in sync.
 $persistentData[$vehicleIndex] = $normalizedVehicle;
+foreach ($persistentData as $aliasIndex => $aliasVehicle) {
+    $aliasKey = vehicleUpdateAliasKey($aliasVehicle['id'] ?? $aliasVehicle['vehicleId'] ?? '');
+    if ($aliasKey === '' || !in_array($aliasKey, $aliasIds, true)) {
+        continue;
+    }
+    if (isset($normalizedVehicle['isActive'])) {
+        $persistentData[$aliasIndex]['isActive'] = $normalizedVehicle['isActive'];
+    }
+    if (isset($normalizedVehicle['inactiveDates'])) {
+        $persistentData[$aliasIndex]['inactiveDates'] = $normalizedVehicle['inactiveDates'];
+    }
+}
 
 // Save the updated data back to the persistent cache file
 if (file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT))) {

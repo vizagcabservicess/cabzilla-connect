@@ -207,6 +207,7 @@ RewriteRule ^api/admin/vehicles-update(.*)$ /api/admin/vehicles-update.php [L,NC
 RewriteRule ^api/admin/(.*)\.php$ /api/admin/$1.php [L,NC,QSA]
 
 # Regular API routes
+RewriteRule ^api/user/booking-live-location/?$ /api/user/booking-live-location.php [L,NC,QSA]
 RewriteRule ^api/user/bookings(.*)$ /api/user/bookings.php [L,NC,QSA]
 RewriteRule ^api/driver/me/?$ /api/driver/me.php [L,NC,QSA]
 RewriteRule ^api/driver/trips/?$ /api/driver/trips.php [L,NC,QSA]

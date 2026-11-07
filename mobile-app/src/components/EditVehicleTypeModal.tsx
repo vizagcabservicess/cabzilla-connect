@@ -20,6 +20,16 @@ import { format } from 'date-fns';
 import { colors } from '../theme/colors';
 import { adminAPI, type AdminVehicleType } from '../services/adminAPI';
 
+function parseDay(text: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text.trim());
+  if (!match) return null;
+  const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (parsed.getMonth() !== Number(match[2]) - 1) return null;
+  parsed.setHours(0, 0, 0, 0);
+  return parsed;
+}
+
 const AMENITY_OPTIONS = [
   'AC',
   'Bottle Water',
@@ -49,8 +59,10 @@ export function EditVehicleTypeModal({
 }: EditVehicleTypeModalProps) {
   const [vehicle, setVehicle] = useState<AdminVehicleType | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [amenities, setAmenities] = useState<string[]>([]);
+  const [isActive, setIsActive] = useState(true);
   const [inactiveDates, setInactiveDates] = useState<
     Array<{ id: string; from: Date; to: Date; reason?: string }>
   >([]);
@@ -72,33 +84,53 @@ export function EditVehicleTypeModal({
   const [newRangeReason, setNewRangeReason] = useState('');
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
+  const [fromText, setFromText] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [toText, setToText] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return format(d, 'yyyy-MM-dd');
+  });
 
   useEffect(() => {
-    if (visible && vehicleId) {
-      setLoading(true);
-      adminAPI
-        .getVehicleType(vehicleId)
-        .then((v) => {
-          setVehicle(v);
-          setAmenities(v.amenities ?? []);
-          const dates = (v.inactiveDates ?? []).map((r) => ({
+    if (!visible || !vehicleId) return;
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
+    adminAPI
+      .getVehicleType(vehicleId)
+      .then((v) => {
+        if (cancelled) return;
+        setVehicle(v);
+        setIsActive(v.isActive !== false);
+        setAmenities(v.amenities ?? []);
+        const dates = (v.inactiveDates ?? []).flatMap((r) => {
+          const from = r.from instanceof Date ? r.from : new Date(String(r.from));
+          const to = r.to instanceof Date ? r.to : new Date(String(r.to));
+          if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return [];
+          return [{
             id: (r as { id?: string }).id ?? String(Date.now()),
-            from: r.from instanceof Date ? r.from : new Date(String(r.from)),
-            to: r.to instanceof Date ? r.to : new Date(String(r.to)),
-            reason: (r as { reason?: string }).reason,
-          }));
-          setInactiveDates(dates);
-          setInclusionsText(Array.isArray(v.inclusions) ? v.inclusions.join(', ') : (v.inclusions ?? ''));
-          setExclusionsText(Array.isArray(v.exclusions) ? v.exclusions.join(', ') : (v.exclusions ?? ''));
-          setCancellationPolicy(v.cancellationPolicy ?? '');
-        })
-        .catch((e) => {
-          Alert.alert('Error', e instanceof Error ? e.message : 'Failed to load vehicle');
-          onClose();
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [visible, vehicleId, onClose]);
+            from,
+            to,
+            reason: (r as { reason?: string }).reason || undefined,
+          }];
+        });
+        setInactiveDates(dates);
+        setInclusionsText(Array.isArray(v.inclusions) ? v.inclusions.join(', ') : (v.inclusions ?? ''));
+        setExclusionsText(Array.isArray(v.exclusions) ? v.exclusions.join(', ') : (v.exclusions ?? ''));
+        setCancellationPolicy(v.cancellationPolicy ?? '');
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setVehicle(null);
+        setLoadError(e instanceof Error ? e.message : 'Failed to load vehicle');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, vehicleId]);
 
   const toggleAmenity = (a: string) => {
     setAmenities((prev) =>
@@ -106,22 +138,37 @@ export function EditVehicleTypeModal({
     );
   };
 
+  const applyDateText = (text: string, which: 'from' | 'to') => {
+    const parsed = parseDay(text);
+    if (!parsed) return;
+    if (which === 'from') setNewRangeFrom(parsed);
+    else setNewRangeTo(parsed);
+  };
+
   const addInactiveRange = () => {
-    if (newRangeFrom > newRangeTo) {
-      Alert.alert('Invalid dates', 'From date must be before To date');
+    const from = parseDay(fromText) ?? newRangeFrom;
+    const to = parseDay(toText) ?? newRangeTo;
+    if (from > to) {
+      Alert.alert('Invalid dates', 'From date must be on or before the To date. Use YYYY-MM-DD.');
       return;
     }
     setInactiveDates((prev) => [
       ...prev,
       {
         id: `range-${Date.now()}`,
-        from: new Date(newRangeFrom),
-        to: new Date(newRangeTo),
+        from,
+        to,
         reason: newRangeReason.trim() || undefined,
       },
     ]);
-    setNewRangeFrom(new Date(newRangeTo.getTime() + 86400000));
-    setNewRangeTo(new Date(newRangeFrom.getTime() + 86400000));
+    const nextFrom = new Date(to);
+    nextFrom.setDate(nextFrom.getDate() + 1);
+    const nextTo = new Date(nextFrom);
+    nextTo.setDate(nextTo.getDate() + 1);
+    setNewRangeFrom(nextFrom);
+    setNewRangeTo(nextTo);
+    setFromText(format(nextFrom, 'yyyy-MM-dd'));
+    setToText(format(nextTo, 'yyyy-MM-dd'));
     setNewRangeReason('');
     setAddingRange(false);
   };
@@ -144,6 +191,7 @@ export function EditVehicleTypeModal({
         .filter(Boolean);
       await adminAPI.updateVehicleType({
         ...vehicle,
+        isActive,
         amenities,
         inactiveDates,
         inclusions,
@@ -179,6 +227,10 @@ export function EditVehicleTypeModal({
             <View style={styles.loading}>
               <ActivityIndicator size="large" color={colors.primary} />
             </View>
+          ) : loadError ? (
+            <View style={styles.loading}>
+              <Text style={styles.loadError}>{loadError}</Text>
+            </View>
           ) : (
             <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
               <Text style={styles.sectionTitle}>Amenities</Text>
@@ -201,7 +253,26 @@ export function EditVehicleTypeModal({
                 ))}
               </View>
 
-              <Text style={styles.sectionTitle}>Inactive Dates</Text>
+              <View style={styles.activeRow}>
+                <View style={styles.activeCopy}>
+                  <Text style={styles.activeTitle}>Vehicle is active</Text>
+                  <Text style={styles.activeHint}>Turn this off to hide the vehicle from search and the fleet.</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setIsActive((current) => !current)}
+                  style={[styles.switchTrack, isActive && styles.switchTrackOn]}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: isActive }}
+                >
+                  <View style={[styles.switchThumb, isActive && styles.switchThumbOn]} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.sectionTitle}>Inactive period</Text>
+              <Text style={styles.sectionHint}>The vehicle stays hidden from search on these dates. This is the same list as the website.</Text>
+              {inactiveDates.length === 0 ? (
+                <Text style={styles.emptyRange}>No inactive period yet.</Text>
+              ) : null}
               {inactiveDates.map((r) => (
                 <View key={r.id} style={styles.rangeRow}>
                   <Text style={styles.rangeText}>
@@ -216,9 +287,20 @@ export function EditVehicleTypeModal({
               {addingRange ? (
                 <View style={styles.addRangeBlock}>
                   <View style={styles.dateRow}>
-                    <Text style={styles.label}>From</Text>
+                    <Text style={styles.label}>From (YYYY-MM-DD)</Text>
+                    <TextInput
+                      style={styles.dateInput}
+                      value={fromText}
+                      onChangeText={(text) => {
+                        setFromText(text);
+                        applyDateText(text, 'from');
+                      }}
+                      placeholder="2026-12-01"
+                      placeholderTextColor={colors.gray600}
+                      autoCapitalize="none"
+                    />
                     <TouchableOpacity style={styles.dateBtn} onPress={() => setShowFromPicker(true)}>
-                      <Text>{format(newRangeFrom, 'yyyy-MM-dd')}</Text>
+                      <Text style={styles.dateBtnText}>Pick from date</Text>
                     </TouchableOpacity>
                     {showFromPicker && (
                       <DateTimePicker
@@ -226,16 +308,30 @@ export function EditVehicleTypeModal({
                         mode="date"
                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                         onChange={(_, d) => {
-                          if (d) setNewRangeFrom(d);
+                          if (d) {
+                            setNewRangeFrom(d);
+                            setFromText(format(d, 'yyyy-MM-dd'));
+                          }
                           if (Platform.OS === 'android') setShowFromPicker(false);
                         }}
                       />
                     )}
                   </View>
                   <View style={styles.dateRow}>
-                    <Text style={styles.label}>To</Text>
+                    <Text style={styles.label}>To (YYYY-MM-DD)</Text>
+                    <TextInput
+                      style={styles.dateInput}
+                      value={toText}
+                      onChangeText={(text) => {
+                        setToText(text);
+                        applyDateText(text, 'to');
+                      }}
+                      placeholder="2026-12-05"
+                      placeholderTextColor={colors.gray600}
+                      autoCapitalize="none"
+                    />
                     <TouchableOpacity style={styles.dateBtn} onPress={() => setShowToPicker(true)}>
-                      <Text>{format(newRangeTo, 'yyyy-MM-dd')}</Text>
+                      <Text style={styles.dateBtnText}>Pick to date</Text>
                     </TouchableOpacity>
                     {showToPicker && (
                       <DateTimePicker
@@ -243,7 +339,10 @@ export function EditVehicleTypeModal({
                         mode="date"
                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                         onChange={(_, d) => {
-                          if (d) setNewRangeTo(d);
+                          if (d) {
+                            setNewRangeTo(d);
+                            setToText(format(d, 'yyyy-MM-dd'));
+                          }
                           if (Platform.OS === 'android') setShowToPicker(false);
                         }}
                       />
@@ -315,7 +414,7 @@ export function EditVehicleTypeModal({
             <TouchableOpacity
               style={[styles.footerSave, saving && styles.footerSaveDisabled]}
               onPress={handleSave}
-              disabled={saving || loading}
+              disabled={saving || loading || !!loadError || !vehicle}
             >
               {saving ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -356,8 +455,48 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: colors.foreground, flex: 1 },
   closeBtn: { padding: 4 },
   loading: { padding: 48, alignItems: 'center' },
+  loadError: { fontSize: 14, color: '#b91c1c', textAlign: 'center' },
+  sectionHint: { fontSize: 12, color: colors.gray600, marginBottom: 8 },
+  emptyRange: { fontSize: 13, color: colors.gray600, marginBottom: 8 },
+  dateInput: {
+    padding: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    fontSize: 14,
+    color: colors.foreground,
+    marginBottom: 8,
+  },
+  dateBtnText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   body: { maxHeight: 400, padding: 16 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.foreground, marginTop: 16, marginBottom: 8 },
+  activeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+  },
+  activeCopy: { flex: 1 },
+  activeTitle: { fontSize: 14, fontWeight: '700', color: colors.foreground },
+  activeHint: { fontSize: 12, color: colors.gray600, marginTop: 2 },
+  switchTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.gray200,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  switchTrackOn: { backgroundColor: colors.primary },
+  switchThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+  },
+  switchThumbOn: { marginLeft: 'auto' },
   amenityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   amenityChip: {
     flexDirection: 'row',

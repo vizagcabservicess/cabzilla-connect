@@ -13,6 +13,7 @@ import {
   Image,
   Platform,
   KeyboardAvoidingView,
+  Linking,
   Switch,
   Share,
   Modal,

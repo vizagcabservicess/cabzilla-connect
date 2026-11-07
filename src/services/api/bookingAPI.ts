@@ -140,6 +140,31 @@ export const bookingAPI = {
       throw error; // Let the calling code handle the error
     }
   },
+
+  /** Driver GPS for one booking. Coordinates exist only while that trip is running. */
+  getBookingLiveLocation: async (bookingId: number) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = localStorage.getItem('auth_token');
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await axios.get(`/api/user/booking-live-location.php`, {
+      params: { bookingId },
+      headers,
+      timeout: 12000,
+    });
+    const data = response.data ?? {};
+    const lat = Number(data.lat);
+    const lng = Number(data.lng);
+    const hasPoint = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+    return {
+      active: data.active === true,
+      bookingStatus: typeof data.bookingStatus === 'string' ? data.bookingStatus : '',
+      driverName: typeof data.driverName === 'string' ? data.driverName : '',
+      vehicleNumber: typeof data.vehicleNumber === 'string' ? data.vehicleNumber : '',
+      lat: hasPoint ? lat : null,
+      lng: hasPoint ? lng : null,
+      trackedAt: typeof data.trackedAt === 'string' ? data.trackedAt : null,
+    };
+  },
   
   /**
    * Get booking by ID

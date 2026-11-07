@@ -205,6 +205,7 @@ RewriteRule ^test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
 
 
 # User bookings endpoints
+RewriteRule ^api/user/booking-live-location/?$ /api/user/booking-live-location.php [L,NC,QSA]
 RewriteRule ^api/user/bookings/?$ /api/user/bookings.php [L,NC,QSA]
 RewriteRule ^api/bookings/?$ /api/bookings.php [L,NC,QSA]
 

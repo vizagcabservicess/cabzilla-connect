@@ -455,7 +455,7 @@ const VehicleDetailPage = () => {
         <div
           className={
             embedConfig
-              ? 'container mx-auto max-w-7xl px-4 pb-16 pt-2 md:pb-32 lg:pt-28'
+              ? 'container mx-auto max-w-7xl px-4 pb-16 pt-2 md:pb-32 lg:pt-4'
               : 'container mx-auto max-w-7xl px-4 pb-16 pt-4 md:pb-32'
           }
         >

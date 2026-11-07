@@ -221,7 +221,7 @@ export async function startDriverTripTracking(bookingId: number): Promise<'backg
     showsBackgroundLocationIndicator: true,
     foregroundService: {
       notificationTitle: 'Trip live tracking',
-      notificationBody: 'Vizag Taxi Hub is sharing your location with the office.',
+      notificationBody: 'Vizag Taxi Hub is sharing this trip’s location with the passenger.',
       notificationColor: '#2563eb',
     },
   });

@@ -251,7 +251,30 @@ foreach ($defaultVehicles as $defaultVehicle) {
 $vehicles = $persistentData;
 file_put_contents($logFile, "[$timestamp] Using " . count($vehicles) . " vehicles from persistent data\n", FILE_APPEND);
 
-// Load inactive dates from database if available
+function vehicleDataAliasKey($id) {
+    return strtolower(str_replace([' ', '-'], '_', trim((string)$id)));
+}
+
+function vehicleDataAliasIds($key) {
+    $groups = [
+        ['bus', 'urbania'],
+        ['toyota_glanza', 'glanza', 'toyota'],
+        ['sedan', 'swift_dzire', 'dzire'],
+        ['amaze', 'aura', 'hyundai_aura'],
+        ['mpv', 'hycross', 'innova_hycross'],
+        ['innova_crysta', 'innova', 'crysta'],
+        ['tempo_traveller', 'tempo'],
+        ['ertiga'],
+    ];
+    foreach ($groups as $group) {
+        if (in_array($key, $group, true)) {
+            return $group;
+        }
+    }
+    return $key === '' ? [] : [$key];
+}
+
+// Load inactive dates and active flag from database if available
 if (file_exists(__DIR__ . '/../../config.php')) {
     try {
         require_once __DIR__ . '/../../config.php';
@@ -260,36 +283,45 @@ if (file_exists(__DIR__ . '/../../config.php')) {
             if ($conn) {
                 file_put_contents($logFile, "[$timestamp] *** UPDATED FILE IS RUNNING *** Loading inactive dates from database\n", FILE_APPEND);
                 
-                // Get inactive dates for all vehicles
-                $sql = "SELECT vehicle_id, inactive_dates FROM vehicles WHERE inactive_dates IS NOT NULL AND inactive_dates != ''";
+                // Get active flag and inactive dates for all vehicles
+                $sql = "SELECT vehicle_id, inactive_dates, is_active FROM vehicles";
                 $result = $conn->query($sql);
                 
                 if ($result && $result->num_rows > 0) {
-                    $inactiveDatesMap = [];
+                    $rowsByKey = [];
                     while ($row = $result->fetch_assoc()) {
-                        $vehicleId = $row['vehicle_id'];
-                        $inactiveDatesJson = $row['inactive_dates'];
-                        
+                        $key = vehicleDataAliasKey($row['vehicle_id'] ?? '');
+                        if ($key === '') continue;
+                        $rowsByKey[$key] = $row;
+                    }
+
+                    foreach ($vehicles as &$vehicle) {
+                        $vehicleKey = vehicleDataAliasKey($vehicle['id'] ?? $vehicle['vehicleId'] ?? '');
+                        $row = null;
+                        foreach (vehicleDataAliasIds($vehicleKey) as $alias) {
+                            if (isset($rowsByKey[$alias])) {
+                                $row = $rowsByKey[$alias];
+                                break;
+                            }
+                        }
+                        if (!$row) continue;
+
+                        if ($row['is_active'] !== null && $row['is_active'] !== '') {
+                            $vehicle['isActive'] = ((int)$row['is_active']) === 1;
+                        }
+
+                        $inactiveDatesJson = $row['inactive_dates'] ?? '';
                         if ($inactiveDatesJson) {
                             $inactiveDates = json_decode($inactiveDatesJson, true);
                             if (is_array($inactiveDates)) {
-                                $inactiveDatesMap[$vehicleId] = $inactiveDates;
-                                file_put_contents($logFile, "[$timestamp] Loaded inactive dates for vehicle $vehicleId: " . count($inactiveDates) . " date ranges\n", FILE_APPEND);
+                                $vehicle['inactiveDates'] = $inactiveDates;
+                                file_put_contents($logFile, "[$timestamp] Updated vehicle $vehicleKey with inactive dates from database\n", FILE_APPEND);
                             }
-                        }
-                    }
-                    
-                    // Update vehicles with inactive dates from database
-                    foreach ($vehicles as &$vehicle) {
-                        $vehicleId = $vehicle['id'] ?? $vehicle['vehicleId'] ?? '';
-                        if (isset($inactiveDatesMap[$vehicleId])) {
-                            $vehicle['inactiveDates'] = $inactiveDatesMap[$vehicleId];
-                            file_put_contents($logFile, "[$timestamp] Updated vehicle $vehicleId with inactive dates from database\n", FILE_APPEND);
                         }
                     }
                     unset($vehicle); // Break reference
                 } else {
-                    file_put_contents($logFile, "[$timestamp] No inactive dates found in database\n", FILE_APPEND);
+                    file_put_contents($logFile, "[$timestamp] No vehicles found in database for inactive dates\n", FILE_APPEND);
                 }
             } else {
                 file_put_contents($logFile, "[$timestamp] Could not connect to database for inactive dates\n", FILE_APPEND);
@@ -312,19 +344,20 @@ if (!$includeInactive) {
     file_put_contents($logFile, "[$timestamp] Filtered to " . count($vehicles) . " active vehicles\n", FILE_APPEND);
 }
 
-// Filter by vehicle ID if specified
+// Filter by vehicle ID if specified. An unknown id returns no vehicles.
 if ($vehicleId) {
+    $wanted = vehicleDataAliasIds(vehicleDataAliasKey($vehicleId));
     $filteredVehicles = [];
     foreach ($vehicles as $vehicle) {
-        if ((isset($vehicle['id']) && $vehicle['id'] === $vehicleId) || 
-            (isset($vehicle['vehicleId']) && $vehicle['vehicleId'] === $vehicleId)) {
+        $ids = vehicleDataAliasIds(vehicleDataAliasKey($vehicle['id'] ?? $vehicle['vehicleId'] ?? ''));
+        if (array_intersect($wanted, $ids)) {
             $filteredVehicles[] = $vehicle;
             break;
         }
     }
-    
+    $vehicles = $filteredVehicles;
+
     if (!empty($filteredVehicles)) {
-        $vehicles = $filteredVehicles;
         file_put_contents($logFile, "[$timestamp] Filtered to vehicle ID: $vehicleId\n", FILE_APPEND);
     } else {
         file_put_contents($logFile, "[$timestamp] WARNING: No vehicle found with ID: $vehicleId\n", FILE_APPEND);

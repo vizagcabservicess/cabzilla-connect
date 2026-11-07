@@ -22,7 +22,8 @@ import { useNavigation } from '@react-navigation/core';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts } from '../theme/colors';
-import { loadVehicles, type Vehicle } from '../services/vehiclesAPI';
+import { loadFleetUnits, loadVehicles, type Vehicle } from '../services/vehiclesAPI';
+import { filterAvailableVehicles, hideInactiveFleetTypes } from '../lib/vehicleAvailability';
 import {
   getLocalPackageFares,
   getAirportFares,
@@ -57,9 +58,9 @@ export function FleetVehiclesScreen() {
     useCallback(() => {
       let cancelled = false;
       setLoading(true);
-      loadVehicles()
-        .then((v) => {
-          if (!cancelled) setVehicles(v);
+      Promise.all([loadVehicles(), loadFleetUnits()])
+        .then(([v, fleet]) => {
+          if (!cancelled) setVehicles(hideInactiveFleetTypes(filterAvailableVehicles(v, new Date()), fleet));
         })
         .catch(() => {
           if (!cancelled) setVehicles([]);

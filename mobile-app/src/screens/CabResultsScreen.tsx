@@ -16,7 +16,8 @@ import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/core';
-import { loadVehicles } from '../services/vehiclesAPI';
+import { loadFleetUnits, loadVehicles } from '../services/vehiclesAPI';
+import { filterAvailableVehicles, hideInactiveFleetTypes } from '../lib/vehicleAvailability';
 import {
   getOutstationFares,
   getLocalPackageFares,
@@ -26,6 +27,7 @@ import {
   calculateLocalFare,
   calculateAirportFare,
   isNumericFleetIdOnly,
+  resolveOutstationFare,
   type LocalPackageMatrix,
 } from '../services/fareService';
 import { tourAPI } from '../services/tourAPI';
@@ -82,8 +84,9 @@ export function CabResultsScreen({ route, navigation }: Props) {
       setLoading(true);
       (async () => {
         try {
-          const vList = await loadVehicles();
-          if (!cancelled) setVehicles(vList);
+          const [vList, fleet] = await Promise.all([loadVehicles(), loadFleetUnits()]);
+          const available = hideInactiveFleetTypes(filterAvailableVehicles(vList, pickupDate, returnDate), fleet);
+          if (!cancelled) setVehicles(available);
 
           if (tripType === 'local') {
             const { matrix } = await getLocalPackageFares();
@@ -130,7 +133,7 @@ export function CabResultsScreen({ route, navigation }: Props) {
         }
       })();
       return () => { cancelled = true; };
-    }, [tripType, tourId])
+    }, [tripType, tourId, pickupDateTs, returnDateTs])
   );
 
   const getFareForVehicle = (vehicle: { id?: string; vehicleId?: string; name?: string }): number => {
@@ -154,9 +157,12 @@ export function CabResultsScreen({ route, navigation }: Props) {
         n.replace(/\s+/g, '_'),
         n.replace(/-/g, '_'),
         (n.includes('swift') || n.includes('dzire')) ? 'sedan' : null,
-        ...(n.includes('glanza') ? (['sedan', 'swift_dzire', 'toyota_glanza', 'glanza'] as const) : []),
+        ...(n.includes('glanza') ? (['toyota_glanza', 'glanza'] as const) : []),
         n.includes('ertiga') ? 'ertiga' : null,
-        n.includes('innova') ? 'innova_crysta' : null,
+        n.includes('hycross') ? 'mpv' : null,
+        n.includes('innova') && !n.includes('hycross') ? 'innova_crysta' : null,
+        n.includes('urbania') ? 'urbania' : null,
+        n.includes('urbania') ? 'bus' : null,
         n.includes('tempo') ? 'tempo_traveller' : null,
         n.includes('tempo') ? 'tempo' : null,
       ].filter(Boolean) as string[];
@@ -171,32 +177,14 @@ export function CabResultsScreen({ route, navigation }: Props) {
       // Vehicle not in tour pricing - fall back to outstation to avoid showing 0
     }
 
-    const id = String(vehicle.id || vehicle.vehicleId || '').toLowerCase().replace(/-/g, '_').trim();
-    const nameLower = name.toLowerCase();
-    const nameKey = nameLower.replace(/\s+/g, '_');
-    // Name-first for sedan-class: id/nameKey can be toyota_glanza with wrong API tiers while Swift uses sedan (59km outstation).
-    // Numeric fleet PKs must not index fares{} when API used array indices as keys.
-    const fare =
-      (nameLower.includes('swift') || nameLower.includes('dzire') ? fares['sedan'] : null) ||
-      (nameLower.includes('glanza')
-        ? fares['sedan'] || fares['swift_dzire'] || fares['toyota_glanza'] || fares['glanza'] || fares['toyota']
-        : null) ||
-      (nameLower.includes('amaze') ? fares['amaze'] || fares['sedan'] : null) ||
-      (!isNumericFleetIdOnly(id) ? fares[id] : null) ||
-      fares[nameKey] ||
-      fares[nameLower] ||
-      (nameLower.includes('ertiga') ? fares['ertiga'] : null) ||
-      (nameLower.includes('innova') ? fares['innova_crysta'] : null) ||
-      (nameLower.includes('tempo') ? fares['tempo_traveller'] || fares['tempo'] : null) ||
-      (nameLower.includes('luxury') ? fares['luxury'] : null) ||
-      fares['sedan'];
+    const fare = resolveOutstationFare(fares, vehicle.id || vehicle.vehicleId, name);
     if (!fare || (fare.basePrice <= 0 && fare.pricePerKm <= 0)) return 0;
     // Only use round-trip fare when we have return date - prevents wrong fare when tripMode
     // is round-trip but returnDate wasn't passed (e.g. one-way flow)
     if (tripType === 'outstation' && tripMode === 'round-trip' && returnDate) {
       return calculateOutstationRoundTripFare(fare, distance, pickupDate, returnDate);
     }
-    return calculateOutstationFare(fare, distance);
+    return calculateOutstationFare(fare, distance, pickupDate);
   };
 
   const dropName =
@@ -207,7 +195,7 @@ export function CabResultsScreen({ route, navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header - match web: logo + menu */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home'))} style={styles.backBtn}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <Image
@@ -244,7 +232,7 @@ export function CabResultsScreen({ route, navigation }: Props) {
                 </>
               )}
             </View>
-            <TouchableOpacity style={styles.editBtn} onPress={() => navigation.goBack()}>
+            <TouchableOpacity style={styles.editBtn} onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home'))}>
               <Feather name="edit-2" size={16} color="#fff" />
             </TouchableOpacity>
           </View>

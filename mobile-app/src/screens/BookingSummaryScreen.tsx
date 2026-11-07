@@ -26,6 +26,7 @@ import {
   getAirportFares,
   calculateLocalFare,
   calculateAirportFare,
+  resolveOutstationFare,
   type LocalPackageMatrix,
 } from '../services/fareService';
 import { tourAPI } from '../services/tourAPI';
@@ -63,20 +64,7 @@ function getFareForVehicle(
   fares: Record<string, { basePrice: number; pricePerKm: number; driverAllowance: number }>,
   vehicle: { id?: string; name?: string }
 ): { basePrice: number; pricePerKm: number; driverAllowance: number } | null {
-  const id = String(vehicle.id || '').toLowerCase().replace(/-/g, '_').trim();
-  const name = String(vehicle.name || '').toLowerCase();
-  const fare =
-    fares[id] ||
-    fares[name.replace(/\s+/g, '_')] ||
-    (name.includes('swift') || name.includes('dzire') ? fares['sedan'] : null) ||
-    (name.includes('glanza') ? fares['glanza'] || fares['toyota_glanza'] || fares['toyota'] || fares['sedan'] : null) ||
-    (name.includes('amaze') ? fares['amaze'] || fares['sedan'] : null) ||
-    (name.includes('ertiga') ? fares['ertiga'] : null) ||
-    (name.includes('innova') ? fares['innova_crysta'] : null) ||
-    (name.includes('tempo') ? fares['tempo_traveller'] || fares['tempo'] : null) ||
-    (name.includes('luxury') ? fares['luxury'] : null) ||
-    fares['sedan'];
-  return fare && (fare.basePrice > 0 || fare.pricePerKm > 0) ? fare : null;
+  return resolveOutstationFare(fares, vehicle.id, vehicle.name);
 }
 
 export function BookingSummaryScreen({ route, navigation }: Props) {
@@ -138,7 +126,7 @@ export function BookingSummaryScreen({ route, navigation }: Props) {
     tripType === 'outstation' && tripMode === 'round-trip' && returnDate != null;
   const outstationBreakdown =
     fareData && tripType === 'outstation' && !isOutstationRoundTrip
-      ? calculateOutstationFareBreakdown(fareData, distance)
+      ? calculateOutstationFareBreakdown(fareData, distance, pickupDate)
       : null;
   const roundTripBreakdown =
     fareData && isOutstationRoundTrip && returnDate
@@ -395,6 +383,14 @@ export function BookingSummaryScreen({ route, navigation }: Props) {
                     ₹{breakdown.driverAllowance.toLocaleString('en-IN')}
                   </Text>
                 </View>
+                {breakdown.nightAllowance > 0 && (
+                  <View style={styles.fareRow}>
+                    <Text style={styles.fareLabel}>Night allowance</Text>
+                    <Text style={styles.fareValue} numberOfLines={1}>
+                      ₹{breakdown.nightAllowance.toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+                )}
                 {breakdown.extraDistanceFare > 0 && (
                   <View style={styles.fareRow}>
                     <Text style={styles.fareLabel}>

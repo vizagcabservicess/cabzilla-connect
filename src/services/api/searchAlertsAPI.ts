@@ -9,6 +9,7 @@ export type SearchAlertVehicleFare = {
 export type SearchAlert = {
   id: number;
   guestPhone: string;
+  gclid?: string;
   pickup: string;
   drop: string;
   tripType: string;

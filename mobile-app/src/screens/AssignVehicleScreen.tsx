@@ -63,7 +63,17 @@ export function AssignVehicleScreen() {
         onPress: async () => {
           setSubmitting(true);
           try {
-            await adminAPI.assignVehicle(bookingId, vid);
+            const plate = String(vehicle.vehicleNumber ?? vehicle.vehicle_number ?? '').trim();
+            const existingDriverId = booking?.driverId ?? booking?.driver_id;
+            await adminAPI.assignVehicle(bookingId, vid, existingDriverId == null ? undefined : Number(existingDriverId));
+            if (existingDriverId != null && String(existingDriverId) !== '' && String(existingDriverId) !== '0') {
+              await adminAPI.assignDriver(bookingId, {
+                id: Number(existingDriverId),
+                name: String(booking?.driverName ?? booking?.driver_name ?? ''),
+                phone: String(booking?.driverPhone ?? booking?.driver_phone ?? ''),
+                vehicleNumber: plate,
+              });
+            }
             Alert.alert('Assigned', 'Vehicle assigned to booking', [
               { text: 'OK', onPress: () => navigation.goBack() },
             ]);

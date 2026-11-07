@@ -42,6 +42,7 @@ const MENU_ITEMS: MenuItem[] = [
     isFullNative: true,
   },
   { id: 'create-booking', label: 'Create Booking', icon: 'add-circle-outline', screen: 'AdminCreateBooking', isFullNative: true },
+  { id: 'ai-assistant', label: 'AI Assistant', icon: 'sparkles-outline', screen: 'AdminAiAssistant', isFullNative: true },
   { id: 'group-tours', label: 'Group Tours', icon: 'bus-outline', screen: 'AdminGroupTours', isFullNative: true },
   { id: 'events', label: 'Events', icon: 'calendar-outline', screen: 'AdminEvents', isFullNative: true },
   { id: 'vehicles', label: 'Vehicles', icon: 'car-outline', screen: 'AdminVehiclesList', isFullNative: true },

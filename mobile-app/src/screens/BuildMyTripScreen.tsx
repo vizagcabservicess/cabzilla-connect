@@ -18,7 +18,8 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { format } from 'date-fns';
 import { tourAPI, type TourInfo } from '../services/tourAPI';
-import { loadVehicles, type Vehicle } from '../services/vehiclesAPI';
+import { loadFleetUnits, loadVehicles, type Vehicle } from '../services/vehiclesAPI';
+import { filterAvailableVehicles, hideInactiveFleetTypes } from '../lib/vehicleAvailability';
 import { fonts } from '../theme/colors';
 import { useAuth } from '../providers/AuthProvider';
 import { useTripCart, type TripTour } from '../lib/tripCart';
@@ -178,7 +179,9 @@ export function BuildMyTripScreen() {
 
   useEffect(() => {
     void tourAPI.getAvailableTours().then(setCatalog).catch(() => setCatalog([]));
-    void loadVehicles().then(setVehicles).catch(() => setVehicles([]));
+    void Promise.all([loadVehicles(), loadFleetUnits()])
+      .then(([list, fleet]) => setVehicles(hideInactiveFleetTypes(list, fleet)))
+      .catch(() => setVehicles([]));
     void getAirportFares()
       .then(setAirportFares)
       .catch(() => setAirportFares(null))
@@ -218,14 +221,27 @@ export function BuildMyTripScreen() {
 
   const vehicleOptions = useMemo(() => {
     if (rows.length === 0) return [];
-    return vehicles
+    const tripDays = rows.reduce((sum, row) => sum + Math.max(1, Number(row.days) || 1), 0);
+    const tripEnd = new Date(when);
+    if (tripDays > 1) tripEnd.setDate(tripEnd.getDate() + tripDays - 1);
+    return filterAvailableVehicles(vehicles, when, tripEnd)
       .map((vehicle) => ({
         ...vehicle,
         packagePrice: rows.reduce((sum, row) => sum + priceForVehicle(row.pricing, vehicle.id), 0),
       }))
       .filter((vehicle) => vehicle.packagePrice > 0)
       .sort((a, b) => a.packagePrice - b.packagePrice);
-  }, [rows, vehicles]);
+  }, [rows, vehicles, when]);
+
+  useEffect(() => {
+    if (vehicleOptions.length === 0) {
+      if (vehicleId) setVehicleId('');
+      return;
+    }
+    if (!vehicleOptions.some((vehicle) => vehicle.id === vehicleId)) {
+      setVehicleId(vehicleOptions[0].id);
+    }
+  }, [vehicleOptions, vehicleId]);
 
   const selectedVehicle = vehicleOptions.find((vehicle) => vehicle.id === vehicleId) || vehicleOptions[0];
   const packageValue = selectedVehicle?.packagePrice

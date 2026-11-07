@@ -1,6 +1,39 @@
 import { API_BASE_URL } from '@/config';
+import { getStoredGclid } from '@/lib/gclid';
 import type { Location } from '@/types/location';
 import type { TripMode, TripType } from '@/lib/tripTypes';
+
+/** GA4 lead split. These four labels are the only values sent as trip_type. */
+export type FareLeadTripType = 'Outstation' | 'Airport' | 'Tour' | 'Local';
+
+export function fareLeadTripTypeFromService(tripType: TripType): FareLeadTripType | null {
+  switch (tripType) {
+    case 'outstation':
+      return 'Outstation';
+    case 'airport':
+      return 'Airport';
+    case 'tour':
+      return 'Tour';
+    case 'local':
+      return 'Local';
+    case 'admin':
+    case 'custom':
+      return null;
+    default: {
+      const unreachable: never = tripType;
+      return unreachable;
+    }
+  }
+}
+
+function reportFareSearchLead(tripType: FareLeadTripType): void {
+  if (typeof window === 'undefined' || typeof window.gtag !== 'function') return;
+  window.gtag('event', 'fare_search_lead', {
+    trip_type: tripType,
+    value: 1,
+    currency: 'INR',
+  });
+}
 
 export type TrackVehicleFareLine = { name: string; fareText: string };
 
@@ -27,6 +60,10 @@ export type TrackSearchPayload = {
   vehicleFares?: TrackVehicleFareLine[];
   /** Website URL that reopens this search (pickup, drop, date). */
   searchSummaryUrl?: string;
+  /** Set only for a visitor-submitted fare search. Not sent to the server. */
+  fareLeadTripType?: FareLeadTripType;
+  /** Google Ads click ID. Never a phone number. */
+  gclid?: string;
 };
 
 function publicSiteOrigin(): string {
@@ -290,14 +327,20 @@ export function trackGuestSearch(payload: TrackSearchPayload): void {
       ? `${window.location.origin.replace(/\/$/, '')}/api/track-search.php`
       : `${String(API_BASE_URL).replace(/\/$/, '')}/api/track-search.php`;
 
+  const fareLeadTripType = payload.fareLeadTripType;
+  const { fareLeadTripType: _fareLeadTripType, ...requestPayload } = payload;
+  const gclid = requestPayload.gclid?.trim() || getStoredGclid();
+  const body = gclid ? { ...requestPayload, gclid } : requestPayload;
+
   void fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
     mode: 'cors',
     cache: 'no-store',
   })
     .then(async (r) => {
+      let data: { success?: boolean; logged?: boolean } | null = null;
       if (!r.ok) {
         let detail = '';
         try {
@@ -307,6 +350,16 @@ export function trackGuestSearch(payload: TrackSearchPayload): void {
         }
         console.warn('[track-search] request failed', url, r.status, detail);
         return;
+      }
+      try {
+        data = (await r.json()) as { success?: boolean; logged?: boolean };
+      } catch {
+        data = null;
+      }
+      const rowSaved =
+        data?.logged === true || (data?.success === true && data.logged === undefined);
+      if (rowSaved && fareLeadTripType) {
+        reportFareSearchLead(fareLeadTripType);
       }
       if (import.meta.env.DEV) {
         console.info('[track-search] ok', url);

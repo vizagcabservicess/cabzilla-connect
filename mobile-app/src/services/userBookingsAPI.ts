@@ -103,4 +103,39 @@ export const userBookingsAPI = {
     else if (Array.isArray(data)) raw = data;
     return raw.map((b) => normalizeBooking(typeof b === 'object' && b ? b : {}));
   },
+
+  /** Driver GPS for this booking. Coordinates are present only while the trip is running. */
+  getLiveLocation: async (bookingId: number): Promise<BookingLiveLocation> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Sign in to see this trip.');
+    const base = getBase();
+    const response = await axios.get(`${base}/api/user/booking-live-location.php`, {
+      params: { bookingId },
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 12000,
+    });
+    const data = response.data ?? {};
+    const lat = Number(data.lat);
+    const lng = Number(data.lng);
+    const hasPoint = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+    return {
+      active: data.active === true,
+      bookingStatus: typeof data.bookingStatus === 'string' ? data.bookingStatus : '',
+      driverName: typeof data.driverName === 'string' ? data.driverName : '',
+      vehicleNumber: typeof data.vehicleNumber === 'string' ? data.vehicleNumber : '',
+      lat: hasPoint ? lat : null,
+      lng: hasPoint ? lng : null,
+      trackedAt: typeof data.trackedAt === 'string' ? data.trackedAt : null,
+    };
+  },
 };
+
+export interface BookingLiveLocation {
+  active: boolean;
+  bookingStatus: string;
+  driverName: string;
+  vehicleNumber: string;
+  lat: number | null;
+  lng: number | null;
+  trackedAt: string | null;
+}

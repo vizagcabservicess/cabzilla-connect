@@ -118,6 +118,7 @@ import { resolveOfferCampaignCategory, toOfferTravelDateYmd, toOfferTravelTimeHm
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
 import {
   trackGuestSearch,
+  fareLeadTripTypeFromService,
   formatDepartureForTrack,
   buildTripTypeLabelForTrack,
   buildGuestTrackRouteKey,
@@ -2371,6 +2372,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       viaStops: filledStops,
     });
     /** PHP `search_alerts_format_route_summary` reads distance/duration fields — keep trip type label only. */
+    const fareLeadTripType = fareLeadTripTypeFromService(tripType);
     trackGuestSearch({
       guestPhone,
       pickup,
@@ -2384,6 +2386,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       carsShown,
       vehicleFares,
       searchSummaryUrl,
+      ...(fareLeadTripType ? { fareLeadTripType } : {}),
     });
 
     try {

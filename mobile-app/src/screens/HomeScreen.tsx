@@ -22,8 +22,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/core';
-import { useFocusEffect } from '@react-navigation/native';
+import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import { LocationInput } from '../components/LocationInput';
+import { LocationLaunchField, LocationSearchSheet } from '../components/LocationSearchSheet';
 import { DateTimePickerComponent } from '../components/DateTimePicker';
 import { colors, fonts } from '../theme/colors';
 
@@ -120,6 +121,7 @@ export function HomeScreen() {
   const [airportDirection, setAirportDirection] = useState<'from-airport' | 'to-airport'>('from-airport');
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
   const [dropLocation, setDropLocation] = useState<Location | null>(null);
+  const [placeSheet, setPlaceSheet] = useState<'pickup' | 'drop' | null>(null);
   const [pickupDate, setPickupDate] = useState<Date>(getMinimumDate());
   const [returnDate, setReturnDate] = useState<Date | null>(null);
   const pickupDateRef = useRef(pickupDate);
@@ -448,24 +450,12 @@ export function HomeScreen() {
   const dropHelper =
     tripType === 'airport' ? 'Please select a location within 35km of Visakhapatnam' : '';
 
-  const goToLogin = () => {
+  const openProfileAuth = (screen: 'Login' | 'Signup') => {
     setAuthSheetVisible(false);
-    const tabNav = navigation.getParent();
-    if (tabNav) {
-      tabNav.navigate('Profile', { screen: 'Login' });
-    } else {
-      navigation.navigate('Profile', { screen: 'Login' });
-    }
+    navigation.dispatch(CommonActions.navigate({ name: 'Profile', params: { screen } }));
   };
-  const goToSignup = () => {
-    setAuthSheetVisible(false);
-    const tabNav = navigation.getParent();
-    if (tabNav) {
-      tabNav.navigate('Profile', { screen: 'Signup' });
-    } else {
-      navigation.navigate('Profile', { screen: 'Signup' });
-    }
-  };
+  const goToLogin = () => openProfileAuth('Login');
+  const goToSignup = () => openProfileAuth('Signup');
 
   return (
     <>
@@ -585,14 +575,12 @@ export function HomeScreen() {
               <View style={styles.railDot} />
             </View>
             <View style={styles.flex}>
-              <LocationInput
+              <LocationLaunchField
                 label="From"
-                placeholder={tripType === 'local' ? 'Enter pickup location' : 'Enter pickup location'}
+                placeholder="Enter pickup location"
                 value={pickupLocation}
-                onLocationChange={(loc) => setPickupLocation(loc)}
-                isPickupLocation={true}
-                tripType={tripType}
                 helperText={tripType === 'airport' && airportDirection === 'from-airport' ? '' : pickupHelper}
+                onPress={() => setPlaceSheet('pickup')}
               />
               {tripType === 'outstation' ? (
                 <>
@@ -620,15 +608,12 @@ export function HomeScreen() {
                 </>
               ) : null}
               {tripType !== 'tour' ? (
-                <LocationInput
-                  key={`drop-${tripType}`}
-                  label={tripType === 'local' ? 'Last drop at' : tripType === 'airport' && airportDirection === 'to-airport' ? 'To' : 'To'}
+                <LocationLaunchField
+                  label={tripType === 'local' ? 'Last drop at' : 'To'}
                   placeholder={tripType === 'local' ? 'Enter last drop location' : 'Enter destination location'}
                   value={dropLocation}
-                  onLocationChange={(loc) => setDropLocation(loc)}
-                  isPickupLocation={false}
-                  tripType={tripType}
                   helperText={dropHelper}
+                  onPress={() => setPlaceSheet('drop')}
                 />
               ) : null}
             </View>
@@ -907,6 +892,17 @@ export function HomeScreen() {
         </Animated.View>
       </Pressable>
     </Modal>
+    <LocationSearchSheet
+      visible={placeSheet !== null}
+      initialFocus={placeSheet ?? 'pickup'}
+      onClose={() => setPlaceSheet(null)}
+      tripType={tripType}
+      showDrop={tripType !== 'tour'}
+      pickup={pickupLocation}
+      drop={dropLocation}
+      onPickupChange={setPickupLocation}
+      onDropChange={setDropLocation}
+    />
     </>
   );
 }

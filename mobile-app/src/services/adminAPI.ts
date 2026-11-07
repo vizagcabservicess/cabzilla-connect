@@ -561,20 +561,13 @@ export const adminAPI = {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
-    const url = `${base}/api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}&includeInactive=true`;
-    const response = await axios.get(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'X-Force-Refresh': 'true',
-      },
-      timeout: 15000,
-    });
-    const data = response.data;
-    const vehicles = data?.vehicles ?? data?.data ?? [];
-    const v = Array.isArray(vehicles) ? vehicles[0] : vehicles;
-    if (!v) throw new Error('Vehicle not found');
-    return normalizeVehicleType(v);
+    const list = await loadAdminVehicleCatalog(base, token);
+    const wanted = vehicleTypeLookupIds(vehicleId);
+    const match = wanted
+      .map((id) => list.find((raw) => vehicleRecordMatchesId(raw, id)))
+      .find((raw) => raw != null);
+    if (!match) throw new Error('Vehicle not found');
+    return normalizeVehicleType(match);
   },
 
   /** Update vehicle type (amenities, inactive dates, inclusions, exclusions) - matches web update-vehicle.php */
@@ -594,10 +587,15 @@ export const adminAPI = {
       pricePerKm: Number(vehicle.pricePerKm ?? 14),
       nightHaltCharge: Number(vehicle.nightHaltCharge ?? 700),
       driverAllowance: Number(vehicle.driverAllowance ?? 250),
+      image: vehicle.image ?? '',
+      description: vehicle.description ?? '',
+      ac: vehicle.ac !== false,
+      fuelType: vehicle.fuelType ?? '',
       isActive: vehicle.isActive !== false,
       amenities: vehicle.amenities ?? [],
       inactiveDates: (vehicle.inactiveDates ?? []).map((r) => ({
-        ...r,
+        id: r.id,
+        reason: r.reason ?? '',
         from: r.from instanceof Date ? r.from.toISOString() : r.from,
         to: r.to instanceof Date ? r.to.toISOString() : r.to,
       })),
@@ -614,31 +612,53 @@ export const adminAPI = {
         'X-Admin-Mode': 'true',
       },
       timeout: 15000,
+      validateStatus: () => true,
     });
     const data = response.data;
-    if (data?.status === 'error') throw new Error(data?.message ?? 'Update failed');
+    if (typeof data === 'string') {
+      const text = data.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      throw new Error(text.slice(0, 180) || 'Update failed');
+    }
+    if (response.status >= 400 || data?.status === 'error' || data?.success === false) {
+      throw new Error(data?.message || data?.error || `Update failed (${response.status})`);
+    }
   },
 
-  /** Assign driver to booking */
-  assignDriver: async (bookingId: number | string, driverId: number | string): Promise<void> => {
+  /**
+   * Assign a driver the same way the website does: name, phone, and the fleet plate
+   * are written onto the booking together.
+   */
+  assignDriver: async (
+    bookingId: number | string,
+    driver: { id: number | string; name: string; phone: string; vehicleNumber?: string }
+  ): Promise<void> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
     const url = `${base}/api/admin/assign-driver.php`;
+    const vehicleNumber = (driver.vehicleNumber ?? '').trim();
     try {
       const response = await axios.post(
         url,
-        { bookingId: Number(bookingId), driverId: Number(driverId) },
+        {
+          bookingId: Number(bookingId),
+          driverId: Number(driver.id),
+          driverName: driver.name,
+          driverPhone: driver.phone,
+          vehicleNumber,
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           timeout: 15000,
+          validateStatus: () => true,
         }
       );
-      if (response.data?.status === 'error') {
-        throw new Error(response.data?.message || 'Failed to assign driver');
+      const data = response.data;
+      if (response.status >= 400 || data?.status === 'error') {
+        throw new Error(data?.message || 'Failed to assign driver');
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -649,6 +669,19 @@ export const adminAPI = {
       }
       throw error;
     }
+  },
+
+  /** Fleet vehicle first, then the driver, so the website keeps both on the booking. */
+  assignDriverAndVehicle: async (
+    bookingId: number | string,
+    driver: { id: number | string; name: string; phone: string },
+    vehicle?: { id: string | number; vehicleNumber: string }
+  ): Promise<void> => {
+    const plate = (vehicle?.vehicleNumber ?? '').trim();
+    if (vehicle?.id != null && String(vehicle.id) !== '') {
+      await adminAPI.assignVehicle(bookingId, vehicle.id, driver.id);
+    }
+    await adminAPI.assignDriver(bookingId, { ...driver, vehicleNumber: plate });
   },
 
   getDutyAssignment: async (bookingId: number): Promise<{
@@ -1031,6 +1064,10 @@ export interface AdminVehicleType {
   pricePerKm?: number;
   driverAllowance?: number;
   nightHaltCharge?: number;
+  image?: string;
+  description?: string;
+  ac?: boolean;
+  fuelType?: string;
   amenities?: string[];
   inactiveDates?: Array<{ id?: string; from: Date | string; to: Date | string; reason?: string }>;
   inclusions?: string[];
@@ -1039,35 +1076,140 @@ export interface AdminVehicleType {
   isActive?: boolean;
 }
 
+function normalizeVehicleKey(id: string): string {
+  return id.toLowerCase().replace(/[\s-]+/g, '_').trim();
+}
+
+function vehicleTypeLookupIds(id: string): string[] {
+  const key = normalizeVehicleKey(id);
+  const groups = [
+    ['bus', 'urbania'],
+    ['toyota_glanza', 'glanza', 'toyota'],
+    ['sedan', 'swift_dzire', 'dzire'],
+    ['amaze', 'aura', 'hyundai_aura'],
+    ['mpv', 'hycross', 'innova_hycross'],
+    ['innova_crysta', 'innova', 'crysta'],
+    ['tempo_traveller', 'tempo'],
+    ['ertiga'],
+  ];
+  const group = groups.find((entry) => entry.includes(key));
+  if (!group) return key ? [key] : [];
+  return [...new Set([group[0], key, ...group])];
+}
+
+function vehicleRecordMatchesId(raw: Record<string, unknown>, id: string): boolean {
+  const wanted = normalizeVehicleKey(id);
+  if (!wanted) return false;
+  const ids = [raw.id, raw.vehicleId, raw.vehicle_id].map((value) => normalizeVehicleKey(String(value ?? '')));
+  return ids.includes(wanted);
+}
+
+function readVehicleIsActive(raw: Record<string, unknown>): boolean {
+  const value = raw.isActive !== undefined ? raw.isActive : raw.is_active;
+  if (value === false || value === 0 || value === '0' || value === 'false') return false;
+  return true;
+}
+
+function readVehicleInactiveDates(raw: Record<string, unknown>): AdminVehicleType['inactiveDates'] {
+  let value: unknown = raw.inactiveDates ?? raw.inactive_dates;
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((row, index) => {
+    if (!row || typeof row !== 'object') return [];
+    const range = row as { id?: unknown; from?: unknown; to?: unknown; reason?: unknown };
+    const from = range.from instanceof Date ? range.from : new Date(String(range.from ?? ''));
+    const to = range.to instanceof Date ? range.to : new Date(String(range.to ?? ''));
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return [];
+    return [{
+      id: range.id == null ? `range-${index}` : String(range.id),
+      from,
+      to,
+      reason: range.reason == null ? undefined : String(range.reason),
+    }];
+  });
+}
+
+function readStringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value !== 'string' || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+  } catch {
+    // comma-separated text
+  }
+  return value.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
 function normalizeVehicleType(raw: Record<string, unknown>): AdminVehicleType {
   const id = String(raw.id ?? raw.vehicleId ?? raw.vehicle_id ?? '');
-  const inactiveDates = (raw.inactiveDates as Array<Record<string, unknown>> ?? []).map((r, i) => ({
-    id: (r.id as string) ?? `range-${i}`,
-    from: r.from instanceof Date ? r.from : new Date(String(r.from ?? '')),
-    to: r.to instanceof Date ? r.to : new Date(String(r.to ?? '')),
-    reason: r.reason as string | undefined,
-  }));
-  const amenities = Array.isArray(raw.amenities) ? raw.amenities.map(String) : [];
-  const inclusions = Array.isArray(raw.inclusions) ? raw.inclusions.map(String) : [];
-  const exclusions = Array.isArray(raw.exclusions) ? raw.exclusions.map(String) : [];
+  const inactiveDates = readVehicleInactiveDates(raw) ?? [];
   return {
     id,
     vehicleId: id,
     name: String(raw.name ?? ''),
     capacity: Number(raw.capacity ?? 4),
-    luggageCapacity: Number(raw.luggageCapacity ?? 2),
-    basePrice: Number(raw.basePrice ?? raw.price ?? 0),
-    price: Number(raw.price ?? raw.basePrice ?? 0),
-    pricePerKm: Number(raw.pricePerKm ?? 14),
-    driverAllowance: Number(raw.driverAllowance ?? 250),
-    nightHaltCharge: Number(raw.nightHaltCharge ?? 700),
-    amenities,
+    luggageCapacity: Number(raw.luggageCapacity ?? raw.luggage_capacity ?? 2),
+    basePrice: Number(raw.basePrice ?? raw.base_price ?? raw.price ?? 0),
+    price: Number(raw.price ?? raw.basePrice ?? raw.base_price ?? 0),
+    pricePerKm: Number(raw.pricePerKm ?? raw.price_per_km ?? 14),
+    driverAllowance: Number(raw.driverAllowance ?? raw.driver_allowance ?? 250),
+    nightHaltCharge: Number(raw.nightHaltCharge ?? raw.night_halt_charge ?? 700),
+    image: raw.image == null ? undefined : String(raw.image),
+    description: raw.description == null ? undefined : String(raw.description),
+    ac: raw.ac === false || raw.ac === 0 || raw.ac === '0' ? false : true,
+    fuelType: raw.fuelType == null && raw.fuel_type == null ? undefined : String(raw.fuelType ?? raw.fuel_type),
+    amenities: readStringList(raw.amenities),
     inactiveDates,
-    inclusions,
-    exclusions,
-    cancellationPolicy: String(raw.cancellationPolicy ?? ''),
-    isActive: raw.isActive !== false,
+    inclusions: readStringList(raw.inclusions),
+    exclusions: readStringList(raw.exclusions),
+    cancellationPolicy: String(raw.cancellationPolicy ?? raw.cancellation_policy ?? ''),
+    isActive: readVehicleIsActive(raw),
   };
+}
+
+async function loadAdminVehicleCatalog(base: string, token: string): Promise<Record<string, unknown>[]> {
+  const urls = [
+    `${base}/api/admin/direct-vehicle-modify.php?action=load&includeInactive=true&_t=${Date.now()}`,
+    `${base}/api/admin/vehicles-data.php?includeInactive=true&_t=${Date.now()}`,
+  ];
+  const merged: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  for (const url of urls) {
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+        },
+        timeout: 15000,
+        validateStatus: () => true,
+      });
+      const data = response.data;
+      if (!data || typeof data === 'string') continue;
+      const vehicles = data.vehicles ?? data.data ?? [];
+      const list = Array.isArray(vehicles) ? vehicles : [];
+      for (const row of list) {
+        if (!row || typeof row !== 'object') continue;
+        const raw = row as Record<string, unknown>;
+        const id = normalizeVehicleKey(String(raw.id ?? raw.vehicleId ?? raw.vehicle_id ?? ''));
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        merged.push(raw);
+      }
+    } catch {
+      continue;
+    }
+  }
+  return merged;
 }
 
 export interface AdminInvoice {

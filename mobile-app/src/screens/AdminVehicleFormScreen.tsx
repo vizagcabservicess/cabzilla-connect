@@ -21,23 +21,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { adminAPI, AdminFleetVehicle } from '../services/adminAPI';
 import { EditVehicleTypeModal } from '../components/EditVehicleTypeModal';
+import { catalogVehicleKey } from '../lib/vehicleAvailability';
 import type { RootStackParamList } from '../navigation/types';
-
-/** Map fleet vehicle type to API vehicle type ID (matches web vehicles-data) */
-function toVehicleTypeId(vehicleType: string, name?: string): string {
-  const v = (vehicleType || '').toLowerCase().replace(/\s+/g, '_');
-  const n = (name || '').toLowerCase();
-  if (n.includes('amaze')) return 'amaze';
-  if (n.includes('ertiga')) return 'ertiga';
-  if (n.includes('innova') || n.includes('crysta')) return 'innova_crysta';
-  if (n.includes('glanza')) return 'toyota_glanza';
-  if (n.includes('tempo') || n.includes('traveller')) return 'tempo_traveller';
-  if (v === 'tempo') return 'tempo_traveller';
-  if (v === 'sedan' || v === 'swift' || v === 'dzire') return 'sedan';
-  if (v === 'suv' || v === 'innova') return 'innova_crysta';
-  if (v === 'minivan' || v === 'mpv') return 'ertiga';
-  return v || 'sedan';
-}
 
 type Route = RouteProp<RootStackParamList, 'AdminVehicleAdd' | 'AdminVehicleEdit'>;
 
@@ -138,6 +123,7 @@ export function AdminVehicleFormScreen() {
         model: modelVal,
         year: parseInt(year, 10) || new Date().getFullYear(),
         status,
+        isActive: status === 'Active',
         fuelType,
         vehicleType,
         cabTypeId: vehicleType,
@@ -342,7 +328,7 @@ export function AdminVehicleFormScreen() {
 
       <EditVehicleTypeModal
         visible={showVehicleTypeModal}
-        vehicleId={toVehicleTypeId(vehicleType, name)}
+        vehicleId={catalogVehicleKey(vehicleType, [name, model].filter(Boolean).join(' '))}
         vehicleName={name || vehicleType}
         onClose={() => setShowVehicleTypeModal(false)}
       />

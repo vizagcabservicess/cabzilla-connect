@@ -37,6 +37,12 @@ import { enrichTourBookingFromCatalog } from '../utils/enrichTourBookingForConfi
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AdminUpcomingTrips'>;
 
+function countryCodeText(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
 const TRIP_CHIPS: { label: string; value: string }[] = [
   { label: 'All types', value: 'all' },
   { label: 'Airport', value: 'airport' },
@@ -450,8 +456,10 @@ export function AdminUpcomingTripsScreen({ navigation }: Props) {
                     <Text style={styles.phone}>
                       {formatPassengerPhoneForDisplay(
                         String(booking.passengerPhone ?? booking.passenger_phone ?? booking.guest_phone ?? ''),
-                        (booking as Record<string, unknown>).passengerCountryCode ??
-                          (booking as Record<string, unknown>).passenger_country_code
+                        countryCodeText(
+                          (booking as Record<string, unknown>).passengerCountryCode ??
+                            (booking as Record<string, unknown>).passenger_country_code
+                        )
                       ) ||
                         String(booking.passengerPhone ?? booking.passenger_phone ?? booking.guest_phone ?? '—')}
                     </Text>

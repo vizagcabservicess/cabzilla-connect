@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/core';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
-import { adminAPI, AdminDriver } from '../services/adminAPI';
+import { adminAPI, AdminDriver, AdminFleetVehicle } from '../services/adminAPI';
 import type { RootStackParamList } from '../navigation/types';
 
 type Route = RouteProp<RootStackParamList, 'AssignDriver'>;
@@ -29,14 +29,28 @@ export function AssignDriverScreen() {
     (typeof booking?.id === 'number' ? booking.id : parseInt(String(booking?.id ?? 0), 10));
 
   const [drivers, setDrivers] = useState<AdminDriver[]>([]);
+  const [vehicles, setVehicles] = useState<AdminFleetVehicle[]>([]);
+  const [vehicleId, setVehicleId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const list = await adminAPI.getDrivers();
-        setDrivers(list);
+        const [driverList, vehicleList] = await Promise.all([
+          adminAPI.getDrivers(),
+          adminAPI.getFleetVehicles(true),
+        ]);
+        setDrivers(driverList);
+        const active = vehicleList.filter((item) => String(item.status ?? 'Active').toLowerCase() === 'active');
+        setVehicles(active.length > 0 ? active : vehicleList);
+        const currentPlate = String(booking?.vehicleNumber ?? booking?.vehicle_number ?? '').replace(/\s+/g, '').toUpperCase();
+        const currentFleet = String(booking?.fleetVehicleId ?? booking?.fleet_vehicle_id ?? booking?.vehicleId ?? '');
+        const match = vehicleList.find((item) => {
+          const plate = String(item.vehicleNumber ?? item.vehicle_number ?? '').replace(/\s+/g, '').toUpperCase();
+          return (currentPlate !== '' && plate === currentPlate) || (currentFleet !== '' && String(item.id) === currentFleet);
+        });
+        if (match) setVehicleId(String(match.id));
       } catch {
         Alert.alert('Error', 'Failed to load drivers');
       } finally {
@@ -44,19 +58,29 @@ export function AssignDriverScreen() {
       }
     };
     load();
-  }, []);
+  }, [booking]);
 
   const handleAssign = async (driver: AdminDriver) => {
     if (!bookingId) return;
-    Alert.alert('Assign Driver', `Assign ${driver.name} to this booking?`, [
+    const vehicle = vehicles.find((item) => String(item.id) === vehicleId);
+    if (!vehicle) {
+      Alert.alert('Select a vehicle', 'Choose the fleet vehicle first. The website saves the driver and vehicle together.');
+      return;
+    }
+    const plate = String(vehicle.vehicleNumber ?? vehicle.vehicle_number ?? '').trim();
+    Alert.alert('Assign Driver', `Assign ${driver.name} with ${plate || 'this vehicle'}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Assign',
         onPress: async () => {
           setSubmitting(true);
           try {
-            await adminAPI.assignDriver(bookingId, driver.id);
-            Alert.alert('Assigned', `${driver.name} assigned to booking`, [
+            await adminAPI.assignDriverAndVehicle(
+              bookingId,
+              { id: driver.id, name: driver.name, phone: driver.phone },
+              { id: vehicle.id, vehicleNumber: plate }
+            );
+            Alert.alert('Assigned', `${driver.name} and ${plate} are saved on this booking`, [
               { text: 'OK', onPress: () => navigation.goBack() },
             ]);
           } catch (e) {
@@ -114,7 +138,26 @@ export function AssignDriverScreen() {
           renderItem={renderDriver}
           contentContainerStyle={styles.list}
           ListHeaderComponent={
-            <Text style={styles.hint}>Tap a driver to assign to this booking</Text>
+            <View>
+              <Text style={styles.hint}>Select the fleet vehicle, then tap the driver. Both are saved together, the same way as the website.</Text>
+              {vehicles.map((item) => {
+                const id = String(item.id);
+                const plate = String(item.vehicleNumber ?? item.vehicle_number ?? 'Vehicle');
+                const selected = id === vehicleId;
+                return (
+                  <TouchableOpacity
+                    key={id}
+                    style={[styles.vehicleChip, selected && styles.vehicleChipSelected]}
+                    onPress={() => setVehicleId(id)}
+                  >
+                    <Text style={[styles.vehicleChipText, selected && styles.vehicleChipTextSelected]}>
+                      {plate} · {item.name || item.model || 'Fleet'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <Text style={styles.hint}>Drivers</Text>
+            </View>
           }
         />
       )}
@@ -144,6 +187,18 @@ const styles = StyleSheet.create({
     color: colors.gray600,
     marginBottom: 16,
   },
+  vehicleChip: {
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    backgroundColor: '#fff',
+  },
+  vehicleChipSelected: { borderColor: colors.primary, backgroundColor: '#eff6ff' },
+  vehicleChipText: { fontSize: 14, color: colors.foreground },
+  vehicleChipTextSelected: { color: colors.primary, fontWeight: '700' },
   driverCard: {
     flexDirection: 'row',
     alignItems: 'center',

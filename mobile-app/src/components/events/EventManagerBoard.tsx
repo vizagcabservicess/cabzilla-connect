@@ -33,6 +33,8 @@ import {
 import { fonts } from '../../theme/colors';
 import { resolveVehicleImageUrl } from '../../utils/mediaUrl';
 
+type PlaceTap = { place: 'trip' | 'parking'; at: number };
+
 type Tab = 'dashboard' | 'vehicles' | 'map' | 'more';
 type Chip = 'all' | 'trip' | 'parking' | 'completed';
 type StatusFilter = 'all' | 'trip' | 'parking' | 'completed' | 'pending';
@@ -482,16 +484,16 @@ export function EventManagerBoard({
 
   const setPlace = async (row: ShareVehicle) => {
     if (!row.dutyId) return;
-    const next = placeOf(row) === 'parking' ? 'trip' : 'parking';
+    const next: 'trip' | 'parking' = placeOf(row) === 'parking' ? 'trip' : 'parking';
     const opened = parseServer(row.openingAt)?.getTime() ?? 0;
     const since = parseServer(row.placeSince)?.getTime() ?? 0;
     const existing = placeAdjustRef.current[row.dutyId] ?? [];
-    const base = existing.length === 0 && since > opened + 1000 ? [{ place: placeOf(row), at: since }] : existing;
+    const base: PlaceTap[] = existing.length === 0 && since > opened + 1000 ? [{ place: placeOf(row), at: since }] : existing;
     const previous = base.length ? [...base].sort((a, b) => a.at - b.at)[base.length - 1] : undefined;
     const previousPlace = previous?.place ?? 'trip';
     const recorded = previousPlace !== next;
     if (recorded) {
-      const taps = [...base, { place: next, at: Date.now() }];
+      const taps: PlaceTap[] = [...base, { place: next, at: Date.now() }];
       placeAdjustRef.current[row.dutyId] = taps;
       void AsyncStorage.setItem(PLACE_MEMORY_KEY, JSON.stringify(placeAdjustRef.current)).catch(() => undefined);
     }
@@ -508,10 +510,13 @@ export function EventManagerBoard({
       };
     });
     setSelected((current) => {
-      if (current?.dutyId !== row.dutyId) return current;
-      return recorded
-        ? { ...current, dutyPlace: next, placeSince: localStamp(Date.now()) }
-        : { ...current, dutyPlace: next };
+      if (!current || current.dutyId !== row.dutyId) return current;
+      const updated: ShareVehicle = {
+        ...current,
+        dutyPlace: next,
+        placeSince: recorded ? localStamp(Date.now()) : current.placeSince,
+      };
+      return updated;
     });
     setBusyId(row.dutyId);
     skipDutyRef.current = row.dutyId;
@@ -1007,8 +1012,6 @@ function parseServer(value?: string | null): Date | null {
 }
 
 const PLACE_MEMORY_KEY = 'vth.duty.place.taps.v2';
-
-type PlaceTap = { place: 'trip' | 'parking'; at: number };
 
 function placeClockEnd(row: ShareVehicle, nowMs: number): number {
   const asked = parseServer(row.endRequestedAt)?.getTime() ?? 0;

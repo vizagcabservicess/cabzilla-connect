@@ -18,7 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { tourAPI, type TourDetail } from '../services/tourAPI';
 import { useTripCart } from '../lib/tripCart';
-import { loadVehicles } from '../services/vehiclesAPI';
+import { loadFleetUnits, loadVehicles } from '../services/vehiclesAPI';
+import { filterAvailableVehicles, hideInactiveFleetTypes } from '../lib/vehicleAvailability';
 import { DateTimePickerComponent } from '../components/DateTimePicker';
 import { LocationInput } from '../components/LocationInput';
 import { colors, fonts } from '../theme/colors';
@@ -120,8 +121,11 @@ export function TourDetailScreen({ route, navigation }: Props) {
     if (!tour?.pricing || Object.keys(tour.pricing).length === 0) return;
     (async () => {
       try {
-        const vList = await loadVehicles();
-        const withPricing = vList
+        const [vList, fleet] = await Promise.all([loadVehicles(), loadFleetUnits()]);
+        const tourEnd = new Date(pickupDate);
+        const tourDays = Math.max(1, Number(tour?.days) || 1);
+        if (tourDays > 1) tourEnd.setDate(tourEnd.getDate() + tourDays - 1);
+        const withPricing = hideInactiveFleetTypes(filterAvailableVehicles(vList, pickupDate, tourEnd), fleet)
           .map((v) => {
             const id = String(v.id || (v as { vehicleId?: string }).vehicleId || '').toLowerCase().replace(/-/g, '_').trim();
             const name = String(v.name || '').toLowerCase();
@@ -161,11 +165,16 @@ export function TourDetailScreen({ route, navigation }: Props) {
           })
           .filter((v) => v.price > 0);
         setVehicles(withPricing);
+        setSelectedVehicle((current) => {
+          if (!current) return current;
+          if (withPricing.some((vehicle) => vehicle.id === current.id)) return current;
+          return null;
+        });
       } catch {
         setVehicles([]);
       }
     })();
-  }, [tour?.pricing]);
+  }, [tour?.pricing, tour?.days, pickupDate]);
 
   const minDate = (() => {
     const d = new Date();

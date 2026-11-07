@@ -20,7 +20,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/core';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
-import type { UserBooking } from '../services/userBookingsAPI';
+import { userBookingsAPI, type BookingLiveLocation, type UserBooking } from '../services/userBookingsAPI';
+import { CustomerTripMap } from '../components/CustomerTripMap';
 import type { RootStackParamList } from '../navigation/types';
 import { adminAPI } from '../services/adminAPI';
 import { tourAPI } from '../services/tourAPI';
@@ -212,6 +213,40 @@ export function BookingDetailScreen() {
         ? paramBookingId
         : parseInt(String(b?.id ?? 0), 10);
   const bookingForNav = (b ?? booking) as Record<string, unknown>;
+  const tripClosed = ['completed', 'cancelled'].includes(effectiveStatus.toLowerCase());
+  const [liveTrip, setLiveTrip] = useState<BookingLiveLocation | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!bookingId || tripClosed) {
+        setLiveTrip(null);
+        return undefined;
+      }
+      let stopped = false;
+      let timer: ReturnType<typeof setInterval> | null = null;
+      const tick = async () => {
+        try {
+          const next = await userBookingsAPI.getLiveLocation(bookingId);
+          if (stopped) return;
+          setLiveTrip(next);
+          if (['completed', 'cancelled'].includes(next.bookingStatus.toLowerCase()) && timer) {
+            clearInterval(timer);
+            timer = null;
+          }
+        } catch {
+          /* keep the last position until the next successful read */
+        }
+      };
+      void tick();
+      timer = setInterval(() => {
+        void tick();
+      }, 10000);
+      return () => {
+        stopped = true;
+        if (timer) clearInterval(timer);
+      };
+    }, [bookingId, tripClosed]),
+  );
   const bookingNumber = (b?.bookingNumber ?? b?.booking_number) as string | undefined;
   const passengerName = (b?.passengerName ?? b?.passenger_name) as string | undefined;
   const passengerPhone = (b?.passengerPhone ?? b?.passenger_phone) as string | undefined;
@@ -543,6 +578,26 @@ export function BookingDetailScreen() {
           </View>
         )}
 
+        {liveTrip?.active ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Live cab</Text>
+            <Text style={styles.liveHint}>
+              {liveTrip.driverName || liveTrip.vehicleNumber
+                ? `${liveTrip.driverName || 'Driver'}${liveTrip.vehicleNumber ? ` · ${liveTrip.vehicleNumber}` : ''}`
+                : 'Your driver is on this trip. The map stops when the trip ends.'}
+            </Text>
+            {liveTrip.lat != null && liveTrip.lng != null ? (
+              <CustomerTripMap
+                lat={liveTrip.lat}
+                lng={liveTrip.lng}
+                label={liveTrip.vehicleNumber || 'Your cab'}
+              />
+            ) : (
+              <Text style={styles.liveWait}>Waiting for the driver's GPS.</Text>
+            )}
+          </View>
+        ) : null}
+
         {/* Progress tracker - admin only, hide when cancelled */}
         {isAdmin && (effectiveStatus || '').toLowerCase() !== 'cancelled' && (
           <View style={styles.card}>
@@ -866,6 +921,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textTransform: 'uppercase',
   },
+  liveHint: { fontSize: 14, color: colors.gray700, marginBottom: 10, textTransform: 'none' },
+  liveWait: { fontSize: 14, color: colors.gray600, textTransform: 'none' },
   stepsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   stepItem: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   stepDot: {

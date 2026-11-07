@@ -34,7 +34,7 @@ export function AdminVehiclesListScreen() {
 
   const load = async () => {
     try {
-      const list = await adminAPI.getFleetVehicles();
+      const list = await adminAPI.getFleetVehicles(true);
       setVehicles(list);
     } catch {
       setVehicles([]);

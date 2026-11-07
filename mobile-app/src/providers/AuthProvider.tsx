@@ -31,6 +31,14 @@ async function withAppAccess(user: User): Promise<User> {
   }
 }
 
+function openAdminScreen(screen: string, params?: Record<string, unknown>): void {
+  const nav = navigationRef as unknown as {
+    navigate: (name: string, nextParams?: Record<string, unknown>) => void;
+  };
+  if (params) nav.navigate(screen, params);
+  else nav.navigate(screen);
+}
+
 function navigateAdminFromNotificationData(data: Record<string, unknown> | undefined): void {
   const t = data?.type;
   if (t !== 'driver_fuel_refill' && t !== 'new_booking' && t !== 'duty_update' && t !== 'event_duty_update' && t !== 'vendor_trip_update') return;
@@ -42,19 +50,19 @@ function navigateAdminFromNotificationData(data: Record<string, unknown> | undef
       return;
     }
     if (t === 'driver_fuel_refill') {
-      navigationRef.navigate('AdminFuel' as never);
+      openAdminScreen('AdminFuel');
     } else if (t === 'duty_update' || t === 'vendor_trip_update') {
       const bookingNumber = String(data?.bookingNumber ?? '').trim();
-      navigationRef.navigate('AdminDriverOpsDashboard' as never, { bookingNumber } as never);
+      openAdminScreen('AdminDriverOpsDashboard', bookingNumber ? { bookingNumber } : undefined);
     } else if (t === 'event_duty_update') {
       const eventId = Number(data?.eventId);
       if (eventId > 0) {
-        navigationRef.navigate('AdminEventDetail' as never, { eventId } as never);
+        openAdminScreen('AdminEventDetail', { eventId });
       } else {
-        navigationRef.navigate('AdminEvents' as never);
+        openAdminScreen('AdminEvents');
       }
     } else if (t === 'new_booking') {
-      navigationRef.navigate('AdminBookingsList' as never);
+      openAdminScreen('AdminBookingsList');
     }
   };
   go();

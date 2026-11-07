@@ -158,6 +158,19 @@ export function AdminDriverOpsTripEditModal({ visible, trip, onClose, onSaved }:
         totalAmount: parseFloat(totalAmount) || 0,
         paymentType: paymentType.trim(),
       };
+      const plateKey = vehicleNumber.trim().replace(/\s+/g, '').toUpperCase();
+      if (plateKey) {
+        try {
+          const fleet = await adminAPI.getFleetVehicles(true);
+          const match = fleet.find((item) => {
+            const plate = String(item.vehicleNumber ?? item.vehicle_number ?? '').replace(/\s+/g, '').toUpperCase();
+            return plate === plateKey;
+          });
+          if (match) payload.vehicleId = match.id;
+        } catch {
+          // The plate is still saved. The fleet link is added when the vehicle list is available.
+        }
+      }
       const savedCompleted = parseIsoToDate(trip.completedAt || trip.endTime);
       const comp = completedTouched
         ? toMysqlDateTime(completedDate)

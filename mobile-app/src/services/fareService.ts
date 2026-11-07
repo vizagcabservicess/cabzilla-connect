@@ -88,6 +88,8 @@ export interface OutstationFare {
   tier2Price?: number;
   tier3Price?: number;
   tier4Price?: number;
+  /** Name from the fare API, such as Urbania or Hyundai Aura. */
+  displayName?: string;
 }
 
 // Native: try primary URL first, then www/non-www fallback (API may live on different subdomain).
@@ -113,8 +115,17 @@ const OUTSTATION_PATHS = [
 ];
 
 // Web app Outstation Fare Management: Swift Dzire, Ertiga, Toyota Glanza, Innova Crysta, Tempo Traveller, Honda Amaze
-const WEBAPP_VEHICLES = ['sedan', 'ertiga', 'toyota_glanza', 'innova_crysta', 'tempo_traveller', 'amaze'] as const;
-const WEBAPP_VEHICLES_SET = new Set(WEBAPP_VEHICLES);
+const WEBAPP_VEHICLES = [
+  'sedan',
+  'ertiga',
+  'toyota_glanza',
+  'amaze',
+  'innova_crysta',
+  'mpv',
+  'tempo_traveller',
+  'urbania',
+] as const;
+const WEBAPP_VEHICLES_SET = new Set<string>(WEBAPP_VEHICLES);
 const VEHICLE_ALIAS_TO_CANONICAL: Record<string, string> = {
   swift_dzire: 'sedan',
   swiftdzire: 'sedan',
@@ -122,16 +133,49 @@ const VEHICLE_ALIAS_TO_CANONICAL: Record<string, string> = {
   glanza: 'toyota_glanza',
   innova: 'innova_crysta',
   tempo: 'tempo_traveller',
+  bus: 'urbania',
+  hycross: 'mpv',
+  innova_hycross: 'mpv',
+};
+
+/** The booking site stores Urbania fares on `bus`. Saving `urbania` would leave the website price unchanged. */
+const FARE_STORAGE_ID: Record<string, string> = {
+  urbania: 'bus',
+};
+
+export function fareStorageId(vehicleId: string): string {
+  const key = vehicleId.toLowerCase().replace(/[\s-]+/g, '_').trim();
+  return FARE_STORAGE_ID[key] ?? key;
+}
+
+export const FARE_VEHICLE_LABELS: Record<string, string> = {
+  sedan: 'Swift Dzire',
+  ertiga: 'Ertiga',
+  toyota_glanza: 'Toyota Glanza',
+  amaze: 'Hyundai Aura',
+  innova_crysta: 'Innova Crysta',
+  mpv: 'Innova Hycross',
+  tempo_traveller: 'Tempo Traveller',
+  urbania: 'Urbania',
 };
 
 function filterToWebappVehicles<T>(obj: Record<string, T>): Record<string, T> {
   const result: Record<string, T> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    const norm = k.toLowerCase().replace(/-/g, '_').trim();
-    const canon = VEHICLE_ALIAS_TO_CANONICAL[norm] ?? (WEBAPP_VEHICLES_SET.has(norm as any) ? norm : null);
-    // Prefer exact-key value over alias: if both "tempo" and "tempo_traveller" exist,
-    // tempo_traveller's value should win (fixes local fare revert when DB has both rows)
-    if (canon && (!(canon in result) || norm === canon)) result[canon] = v;
+  const entries = Object.entries(obj).map(([k, v]) => [
+    k.toLowerCase().replace(/-/g, '_').replace(/\s+/g, '_').trim(),
+    v,
+  ] as const);
+  // Urbania is saved under `bus`. A second key named Urbania must not replace that row.
+  const busRow = entries.find(([norm]) => norm === 'bus')?.[1];
+  for (const [norm, v] of entries) {
+    if (norm === 'urbania' && busRow) continue;
+    if (WEBAPP_VEHICLES_SET.has(norm)) result[norm] = v;
+  }
+  if (busRow) result.urbania = busRow;
+  for (const [norm, v] of entries) {
+    if (norm === 'bus' || norm === 'urbania') continue;
+    const canon = VEHICLE_ALIAS_TO_CANONICAL[norm];
+    if (canon && !(canon in result)) result[canon] = v;
   }
   return result;
 }
@@ -439,6 +483,8 @@ function parseFares(raw: any): Record<string, OutstationFare> {
       if (tier2 != null && tier2 > 0) parsed.tier2Price = tier2;
       if (tier3 != null && tier3 > 0) parsed.tier3Price = tier3;
       if (tier4 != null && tier4 > 0) parsed.tier4Price = tier4;
+      const displayName = String(v.name ?? v.displayName ?? v.vehicleName ?? '').trim();
+      if (displayName) parsed.displayName = displayName;
       // Merge with fallback so missing tier prices use web app defaults
       return [key, { ...fallback, ...parsed }];
     })
@@ -446,10 +492,14 @@ function parseFares(raw: any): Record<string, OutstationFare> {
 }
 
 // Vehicle ID aliases: API may key by "sedan" or "swift_dzire" - ensure both find the same fare
-const SEDAN_ALIASES = ['sedan', 'swift_dzire', 'swift', 'dzire', 'glanza', 'toyota_glanza', 'amaze', 'etios'];
+const SEDAN_ALIASES = ['sedan', 'swift_dzire', 'swift', 'dzire'];
+const GLANZA_ALIASES = ['toyota_glanza', 'glanza', 'toyota'];
+const AMAZE_ALIASES = ['amaze'];
 const ERTIGA_ALIASES = ['ertiga'];
 const INNOVA_ALIASES = ['innova_crysta', 'innova'];
+const MPV_ALIASES = ['mpv', 'hycross', 'innova_hycross'];
 const TEMPO_ALIASES = ['tempo_traveller', 'tempo'];
+const URBANIA_ALIASES = ['urbania', 'bus'];
 
 function expandVehicleAliases(
   fares: Record<string, OutstationFare>,
@@ -457,17 +507,19 @@ function expandVehicleAliases(
 ): Record<string, OutstationFare> {
   const result = { ...fares };
   const apiKeys = fromApi ?? new Set<string>();
-  for (const group of [SEDAN_ALIASES, ERTIGA_ALIASES, INNOVA_ALIASES, TEMPO_ALIASES]) {
-    // Prefer API-sourced fare (has tier prices from DB) over FALLBACK
+  for (const group of [
+    SEDAN_ALIASES,
+    GLANZA_ALIASES,
+    AMAZE_ALIASES,
+    ERTIGA_ALIASES,
+    INNOVA_ALIASES,
+    MPV_ALIASES,
+    TEMPO_ALIASES,
+    URBANIA_ALIASES,
+  ]) {
+    // Keep each vehicle's own API row. Only fill an alias that has no saved fare.
     const withData = group.filter((k) => result[k] && (result[k].tier2Price != null || result[k].basePrice > 0));
-    const sedanHasData =
-      group === SEDAN_ALIASES &&
-      result['sedan'] &&
-      (result['sedan'].tier2Price != null || result['sedan'].basePrice > 0);
-    const best =
-      (sedanHasData ? 'sedan' : undefined) ??
-      withData.find((k) => apiKeys.has(k)) ?? // Prefer API key
-      withData[0]; // Else use first with data
+    const best = withData.find((k) => apiKeys.has(k)) ?? withData[0];
     if (best && result[best]) {
       for (const alias of group) {
         const aliasFare = result[alias];
@@ -476,11 +528,6 @@ function expandVehicleAliases(
         if (!aliasFare || missingTier || (apiOverridesFallback && aliasFare.basePrice === result[best].basePrice)) {
           result[alias] = result[best];
         }
-      }
-      // DB often has mis-tiered toyota_glanza while sedan/swift_dzire are correct — always align Glanza to sedan tier.
-      if (group === SEDAN_ALIASES && best === 'sedan') {
-        result['glanza'] = result['sedan'];
-        result['toyota_glanza'] = result['sedan'];
       }
     }
   }
@@ -541,7 +588,50 @@ export async function getOutstationFares(): Promise<Record<string, OutstationFar
  * - Beyond tier4: oneWayBasePrice + max(0, distance - 300) * extraKmCharge
  * - Below tier1: oneWayBasePrice + max(0, distance - tier1Min) * extraKmCharge
  */
-export function calculateOutstationFare(fare: OutstationFare, distanceKm: number): number {
+/** Pick the saved fare for this vehicle. Glanza, Aura, and Urbania keep their own rows. */
+export function resolveOutstationFare(
+  fares: Record<string, OutstationFare>,
+  vehicleId?: string,
+  vehicleName?: string
+): OutstationFare | null {
+  const id = String(vehicleId ?? '').toLowerCase().replace(/-/g, '_').trim();
+  const name = String(vehicleName ?? '').toLowerCase();
+  const nameKey = name.replace(/\s+/g, '_');
+  const keys: string[] = [];
+  if (id && !isNumericFleetIdOnly(id)) keys.push(id);
+  if (nameKey) keys.push(nameKey);
+  if (name.includes('urbania') || id === 'bus' || id === 'urbania') keys.push('urbania', 'bus');
+  if (name.includes('hycross') || id === 'mpv') keys.push('mpv');
+  if (name.includes('aura') || name.includes('amaze') || id === 'amaze') keys.push('amaze');
+  if (name.includes('glanza') || id === 'glanza' || id === 'toyota' || id === 'toyota_glanza') {
+    keys.push('toyota_glanza', 'glanza', 'toyota');
+  }
+  if (name.includes('swift') || name.includes('dzire') || id === 'sedan') keys.push('sedan', 'swift_dzire');
+  if (name.includes('ertiga')) keys.push('ertiga');
+  if ((name.includes('innova') || name.includes('crysta') || id === 'innova_crysta') && !name.includes('hycross')) {
+    keys.push('innova_crysta', 'innova');
+  }
+  if (name.includes('tempo') || name.includes('traveller')) keys.push('tempo_traveller', 'tempo');
+  for (const key of keys) {
+    const fare = fares[key];
+    if (fare && ((fare.basePrice ?? 0) > 0 || (fare.pricePerKm ?? 0) > 0)) return fare;
+  }
+  return null;
+}
+
+/** 10% of the base fare when pickup is from 10:00 pm through 5:59 am. Matches the website. */
+export function outstationNightAllowance(basePrice: number, pickupDate?: Date | null): number {
+  if (!pickupDate || Number.isNaN(pickupDate.getTime())) return 0;
+  const hour = pickupDate.getHours();
+  if (hour >= 22 || hour <= 5) return Math.round(basePrice * 0.1);
+  return 0;
+}
+
+export function calculateOutstationFare(
+  fare: OutstationFare,
+  distanceKm: number,
+  pickupDate?: Date | null
+): number {
   const driverAllowance = fare.driverAllowance ?? 250;
   const extraKmCharge = fare.extraKmCharge ?? fare.pricePerKm ?? 0;
   const tier1Min = fare.tier1MinKm ?? 35;
@@ -575,7 +665,7 @@ export function calculateOutstationFare(fare: OutstationFare, distanceKm: number
     extraDistanceFare = extraKm * extraKmCharge;
   }
 
-  return Math.round(totalBase + extraDistanceFare + driverAllowance);
+  return Math.round(totalBase + extraDistanceFare + driverAllowance + outstationNightAllowance(totalBase, pickupDate));
 }
 
 /**
@@ -653,6 +743,7 @@ export function calculateOutstationRoundTripBreakdown(
 export interface OutstationFareBreakdown {
   basePrice: number;
   driverAllowance: number;
+  nightAllowance: number;
   extraDistanceFare: number;
   extraKmDisplay: number; // km shown in "Extra distance charges (X KM)"
   total: number;
@@ -848,7 +939,7 @@ export async function getLocalPackageFares(): Promise<LocalFaresResult> {
           for (const [pkg, cabMap] of Object.entries(mergedMatrix)) {
             filtered[pkg] = filterToWebappVehicles(cabMap);
           }
-          return { matrix: filtered, extras: parsed.extras };
+          return { matrix: filtered, extras: filterToWebappVehicles(parsed.extras) };
         }
       } catch {
         continue;
@@ -861,11 +952,15 @@ export async function getLocalPackageFares(): Promise<LocalFaresResult> {
 function normalizeCabForLocal(cabName: string): string[] {
   const n = cabName.toLowerCase().replace(/-/g, '_').replace(/\s+/g, '_').trim();
   const keys: string[] = [n];
-  if (n.includes('swift') || n.includes('dzire') || n.includes('amaze') || n.includes('glanza') || n.includes('etios')) keys.push('sedan', 'toyota_glanza', 'glanza');
+  if (n.includes('urbania') || n === 'bus') keys.push('urbania', 'bus');
+  if (n.includes('hycross') || n === 'mpv') keys.push('mpv');
+  if (n.includes('aura') || n.includes('amaze')) keys.push('amaze');
+  if (n.includes('glanza')) keys.push('toyota_glanza', 'glanza');
+  if (n.includes('swift') || n.includes('dzire') || n.includes('etios')) keys.push('sedan');
   if (n.includes('ertiga')) keys.push('ertiga');
-  if (n.includes('innova')) keys.push('innova_crysta', 'innova');
-  if (n.includes('tempo')) keys.push('tempo_traveller', 'tempo');
-  if (n.includes('luxury')) keys.push('luxury');
+  if (n.includes('hycross')) keys.push('mpv');
+  else if (n.includes('innova')) keys.push('innova_crysta', 'innova');
+  if (n.includes('tempo') || n.includes('traveller')) keys.push('tempo_traveller', 'tempo');
   return keys;
 }
 
@@ -886,6 +981,10 @@ const LOCAL_VEHICLE_ID_ALIASES: Record<string, string[]> = {
   toyota_glanza: ['toyota_glanza', 'glanza'],
   swift_dzire: ['sedan', 'swift_dzire'],
   sedan: ['sedan', 'swift_dzire'],
+  bus: ['urbania', 'bus'],
+  urbania: ['urbania', 'bus'],
+  mpv: ['mpv'],
+  amaze: ['amaze'],
 };
 
 export function calculateLocalFare(
@@ -929,6 +1028,7 @@ export interface AirportFare {
   tier3Price?: number;
   tier4Price?: number;
   extraKmCharge?: number;
+  displayName?: string;
 }
 
 const AIRPORT_FARE_PATHS = [
@@ -944,10 +1044,13 @@ const AIRPORT_HEADERS: Record<string, string> = {
 
 // Vehicle alias groups for airport fares - ensure Glanza/Ertiga/Innova etc. resolve correctly
 const AIRPORT_ALIAS_GROUPS: Record<string, string[]> = {
-  swift_dzire: ['sedan', 'swift', 'dzire', 'amaze', 'etios'],
+  swift_dzire: ['sedan', 'swift', 'dzire'],
   toyota_glanza: ['glanza', 'toyota'],
+  amaze: [],
   innova_crysta: ['innova'],
+  mpv: ['hycross', 'innova_hycross'],
   tempo_traveller: ['tempo'],
+  urbania: ['bus'],
 };
 
 function expandAirportFareAliases(map: Record<string, AirportFare>): Record<string, AirportFare> {
@@ -969,6 +1072,7 @@ function parseAirportFaresFromApi(data: unknown): Record<string, AirportFare> | 
   const result: Record<string, AirportFare> = {};
   const toFare = (row: unknown): AirportFare => {
     const r = row as Record<string, unknown>;
+    const displayName = String(r?.name ?? r?.displayName ?? '').trim();
     return {
       basePrice: Number(r?.basePrice ?? r?.base_price ?? 0),
       pricePerKm: Number(r?.pricePerKm ?? r?.price_per_km ?? 0),
@@ -979,6 +1083,7 @@ function parseAirportFaresFromApi(data: unknown): Record<string, AirportFare> | 
       tier3Price: Number(r?.tier3Price ?? r?.tier3_price ?? 0),
       tier4Price: Number(r?.tier4Price ?? r?.tier4_price ?? 0),
       extraKmCharge: Number(r?.extraKmCharge ?? r?.extra_km_charge ?? 0),
+      ...(displayName ? { displayName } : {}),
     };
   };
   if (Array.isArray(raw)) {
@@ -1074,17 +1179,20 @@ export function calculateAirportFare(
   const vid = vehicleId ? String(vehicleId).toLowerCase().replace(/-/g, '_').replace(/\s+/g, '_').trim() : '';
   // Numeric fleet IDs collide with array-index keys ("0","1","2") in some API responses — resolve by cab name first.
   const keysToTry = [
-    ...(cab.includes('glanza') ? (['sedan', 'swift_dzire'] as string[]) : []),
     ...(vid && !isNumericFleetIdOnly(vid) ? [vid] : []),
     cab,
     cab.replace(/\s+/g, '_'),
-    cab.includes('swift') || cab.includes('dzire') ? 'swift_dzire' : null,
-    cab.includes('swift') || cab.includes('dzire') ? 'sedan' : null,
+    cab.includes('urbania') || vid === 'bus' ? 'urbania' : null,
+    cab.includes('urbania') || vid === 'bus' ? 'bus' : null,
+    cab.includes('hycross') || vid === 'mpv' ? 'mpv' : null,
+    cab.includes('aura') || cab.includes('amaze') ? 'amaze' : null,
     cab.includes('glanza') ? 'toyota_glanza' : null,
     cab.includes('glanza') ? 'glanza' : null,
+    cab.includes('swift') || cab.includes('dzire') ? 'swift_dzire' : null,
+    cab.includes('swift') || cab.includes('dzire') ? 'sedan' : null,
     cab.includes('ertiga') ? 'ertiga' : null,
-    cab.includes('innova') ? 'innova_crysta' : null,
-    cab.includes('innova') ? 'innova' : null,
+    cab.includes('hycross') ? null : cab.includes('innova') ? 'innova_crysta' : null,
+    cab.includes('hycross') ? null : cab.includes('innova') ? 'innova' : null,
     cab.includes('tempo') ? 'tempo_traveller' : null,
     cab.includes('tempo') ? 'tempo' : null,
   ].filter(Boolean) as string[];
@@ -1115,7 +1223,8 @@ export function calculateAirportFare(
  */
 export function calculateOutstationFareBreakdown(
   fare: OutstationFare,
-  distanceKm: number
+  distanceKm: number,
+  pickupDate?: Date | null
 ): OutstationFareBreakdown {
   const driverAllowance = fare.driverAllowance ?? 250;
   const extraKmCharge = fare.extraKmCharge ?? fare.pricePerKm ?? 0;
@@ -1154,11 +1263,13 @@ export function calculateOutstationFareBreakdown(
     extraDistanceFare = extraKm * extraKmCharge;
   }
 
-  const total = Math.round(totalBase + extraDistanceFare + driverAllowance);
+  const nightAllowance = outstationNightAllowance(totalBase, pickupDate);
+  const total = Math.round(totalBase + extraDistanceFare + driverAllowance + nightAllowance);
 
   return {
     basePrice: totalBase,
     driverAllowance,
+    nightAllowance,
     extraDistanceFare: Math.round(extraDistanceFare),
     extraKmDisplay,
     total,
@@ -1174,10 +1285,11 @@ export async function updateOutstationFare(
 ): Promise<{ success: boolean; message?: string }> {
   const base = resolveBase();
   const headers = await getFareUpdateHeaders();
+  const storedId = fareStorageId(vehicleId);
   // Include both basePrice and oneWayBasePrice for API compatibility
   const body: Record<string, unknown> = {
-    vehicleId,
-    vehicle_id: vehicleId,
+    vehicleId: storedId,
+    vehicle_id: storedId,
     basePrice: data.basePrice ?? 0,
     oneWayBasePrice: data.basePrice ?? 0,
     pricePerKm: data.pricePerKm ?? 0,
@@ -1222,8 +1334,10 @@ export async function updateAirportFare(
 ): Promise<{ success: boolean; message?: string }> {
   const base = resolveBase();
   const headers = await getFareUpdateHeaders();
+  const storedId = fareStorageId(vehicleId);
   const body: Record<string, unknown> = {
-    vehicleId,
+    vehicleId: storedId,
+    vehicle_id: storedId,
     basePrice: data.basePrice ?? 0,
     pricePerKm: data.pricePerKm ?? 0,
     pickupPrice: data.pickupPrice ?? 0,
@@ -1272,10 +1386,11 @@ export async function updateLocalFare(
   const defaultExtraHour = v.includes('tempo') ? 400 : v.includes('innova') ? 350 : 250;
   const extraKm = data.priceExtraKm ?? defaultExtraKm;
   const extraHour = data.priceExtraHour ?? defaultExtraHour;
+  const storedId = fareStorageId(vehicleId);
 
   const jsonBody: Record<string, unknown> = {
-    vehicleId,
-    vehicle_id: vehicleId,
+    vehicleId: storedId,
+    vehicle_id: storedId,
     tripType: 'local',
     price4hrs40km: p4,
     price8hrs80km: p8,

@@ -10,18 +10,18 @@ import {
   TouchableOpacity,
   StyleSheet,
   Pressable,
-  Platform,
   Linking,
   ScrollView,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/core';
 import { resetTabsAfterLogout, type TabParentForReset } from '../navigation/resetTabsAfterLogout';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from './AuthProvider';
 import { WEB_APP_BASE_URL } from '../config';
-import { openVthAi } from '../lib/vthAi';
 
 const PHONE = '+919966363662';
 
@@ -43,6 +43,7 @@ export function useMenu() {
 }
 
 type ExpandableKey = 'services' | 'company' | 'support';
+type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
 const SERVICES_LINKS = [
   { label: 'Local Taxi', path: '/local-taxi' },
@@ -79,6 +80,69 @@ function navigateToNative(navigation: any, screen: string, params?: object) {
   navigation.navigate('Profile', { screen, params });
 }
 
+function MenuTile({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: IonName;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.75}>
+      <Ionicons name={icon} size={22} color={colors.foreground} />
+      <Text style={styles.tileLabel} numberOfLines={2}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function MenuRow({
+  icon,
+  label,
+  onPress,
+  expanded,
+  danger,
+  last,
+}: {
+  icon: IonName;
+  label: string;
+  onPress: () => void;
+  expanded?: boolean;
+  danger?: boolean;
+  last?: boolean;
+}) {
+  const color = danger ? '#dc2626' : colors.foreground;
+  const chevron: IonName =
+    expanded === undefined ? 'chevron-forward' : expanded ? 'chevron-down' : 'chevron-forward';
+  return (
+    <TouchableOpacity
+      style={[styles.row, !last && styles.rowDivider]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Ionicons name={icon} size={22} color={color} />
+      <Text style={[styles.rowLabel, danger && styles.rowLabelDanger]}>{label}</Text>
+      {!danger && <Ionicons name={chevron} size={18} color="#9ca3af" />}
+    </TouchableOpacity>
+  );
+}
+
+function SubRow({ label, onPress, last }: { label: string; onPress: () => void; last?: boolean }) {
+  return (
+    <TouchableOpacity
+      style={[styles.subRow, !last && styles.rowDivider]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text style={styles.subLabel}>{label}</Text>
+      <Ionicons name="chevron-forward" size={16} color="#c5cad3" />
+    </TouchableOpacity>
+  );
+}
+
 export function MenuProvider({ children }: { children: React.ReactNode }) {
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState<Record<ExpandableKey, boolean>>({
@@ -89,6 +153,9 @@ export function MenuProvider({ children }: { children: React.ReactNode }) {
   const navigation = useNavigation<any>();
   const { user, isAuthenticated, logout } = useAuth();
   const isAdmin = !!(user?.role === 'admin' || user?.role === 'super_admin');
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const drawerWidth = Math.min(Math.round(width * 0.86), 420);
 
   const openMenu = useCallback(() => setVisible(true), []);
   const closeMenu = useCallback(() => {
@@ -126,6 +193,11 @@ export function MenuProvider({ children }: { children: React.ReactNode }) {
     ]);
   };
 
+  const accountTitle = isAuthenticated ? user?.name || 'Account' : 'Login / Sign-up now';
+  const accountSubtitle = isAuthenticated
+    ? user?.phone || user?.email || 'View your profile'
+    : 'Login to book and manage trips';
+
   return (
     <MenuContext.Provider value={{ openMenu, closeMenu }}>
       {children}
@@ -137,184 +209,140 @@ export function MenuProvider({ children }: { children: React.ReactNode }) {
       >
         <View style={styles.overlay}>
           <Pressable style={styles.backdrop} onPress={closeMenu} />
-          <View style={styles.drawer}>
-            <View style={styles.drawerHeader}>
-              <Text style={styles.drawerTitle}>Menu</Text>
-              <TouchableOpacity onPress={closeMenu} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color={colors.foreground} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-              {/* Home */}
+          <View style={[styles.drawer, { width: drawerWidth, paddingTop: insets.top + 8 }]}>
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+              showsVerticalScrollIndicator={false}
+            >
               <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => navAndClose(() => navigation.navigate('Main', { screen: 'Home' }))}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="home" size={20} color={colors.foreground} />
-                <Text style={styles.menuLabel}>Home</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.gray600} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => navAndClose(() => navigation.navigate('BuildMyTrip'))}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="map" size={20} color={colors.foreground} />
-                <Text style={styles.menuLabel}>Build Your Trip</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.gray600} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => navAndClose(() => openVthAi())}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="sparkles" size={20} color={colors.foreground} />
-                <Text style={styles.menuLabel}>VTH AI</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.gray600} />
-              </TouchableOpacity>
-
-              {/* Hire Driver */}
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => navAndClose(() => navigateToWeb(navigation, '/hire-driver', 'Hire Driver'))}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="person" size={20} color={colors.foreground} />
-                <Text style={styles.menuLabel}>Hire Driver</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.gray600} />
-              </TouchableOpacity>
-
-              {/* Services */}
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => toggleExpand('services')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="car" size={20} color={colors.foreground} />
-                <Text style={styles.menuLabel}>Services</Text>
-                <Ionicons
-                  name={expanded.services ? 'chevron-down' : 'chevron-forward'}
-                  size={18}
-                  color={colors.gray600}
-                />
-              </TouchableOpacity>
-              {expanded.services &&
-                SERVICES_LINKS.map((item) => (
-                  <TouchableOpacity
-                    key={item.path}
-                    style={styles.subItem}
-                    onPress={() => navAndClose(() => navigateToWeb(navigation, item.path, item.label))}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.subLabel}>{item.label}</Text>
-                  </TouchableOpacity>
-                ))}
-
-              {/* Company */}
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => toggleExpand('company')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="information-circle" size={20} color={colors.foreground} />
-                <Text style={styles.menuLabel}>Company</Text>
-                <Ionicons
-                  name={expanded.company ? 'chevron-down' : 'chevron-forward'}
-                  size={18}
-                  color={colors.gray600}
-                />
-              </TouchableOpacity>
-              {expanded.company &&
-                COMPANY_LINKS.map((item) => (
-                  <TouchableOpacity
-                    key={item.path}
-                    style={styles.subItem}
-                    onPress={() => navAndClose(() => navigateToWeb(navigation, item.path, item.label))}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.subLabel}>{item.label}</Text>
-                  </TouchableOpacity>
-                ))}
-
-              {/* Support */}
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => toggleExpand('support')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="call" size={20} color={colors.foreground} />
-                <Text style={styles.menuLabel}>Support</Text>
-                <Ionicons
-                  name={expanded.support ? 'chevron-down' : 'chevron-forward'}
-                  size={18}
-                  color={colors.gray600}
-                />
-              </TouchableOpacity>
-              {expanded.support &&
-                SUPPORT_LINKS.map((item) => (
-                  <TouchableOpacity
-                    key={item.label}
-                    style={styles.subItem}
-                    onPress={() => navAndClose(() => navigateToNative(navigation, item.nativeScreen, item.params))}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.subLabel}>{item.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              {expanded.support && (
-                <TouchableOpacity
-                  style={styles.callButton}
-                  onPress={() => navAndClose(handleCall)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="call" size={20} color="#fff" />
-                  <Text style={styles.callButtonText}>9966363662</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Admin Dashboard - only for admin/super_admin */}
-              {isAdmin && (
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() =>
-                    navAndClose(() => navigation.navigate('Profile', { screen: 'AdminDashboard' }))
-                  }
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="settings" size={20} color={colors.foreground} />
-                  <Text style={styles.menuLabel}>Admin Dashboard</Text>
-                  <Ionicons name="chevron-forward" size={18} color={colors.gray600} />
-                </TouchableOpacity>
-              )}
-
-              {/* Dashboard */}
-              <TouchableOpacity
-                style={styles.menuItem}
+                style={styles.accountCard}
                 onPress={() =>
                   navAndClose(() =>
-                    navigation.navigate('Profile', { screen: 'Dashboard' })
+                    navigation.navigate('Profile', {
+                      screen: isAuthenticated ? 'ProfileHome' : 'Login',
+                    })
                   )
                 }
-                activeOpacity={0.7}
+                activeOpacity={0.8}
               >
-                <Ionicons name="calendar" size={20} color={colors.foreground} />
-                <Text style={styles.menuLabel}>Dashboard</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.gray600} />
+                <View style={styles.accountText}>
+                  <Text style={styles.accountTitle} numberOfLines={1}>
+                    {accountTitle}
+                  </Text>
+                  <Text style={styles.accountSubtitle} numberOfLines={1}>
+                    {accountSubtitle}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
               </TouchableOpacity>
 
-              {/* Logout */}
+              <View style={styles.tileRow}>
+                <MenuTile
+                  icon="home-outline"
+                  label="Home"
+                  onPress={() => navAndClose(() => navigation.navigate('Main', { screen: 'Home' }))}
+                />
+                <MenuTile
+                  icon="map-outline"
+                  label="Build Your Trip"
+                  onPress={() => navAndClose(() => navigation.navigate('BuildMyTrip'))}
+                />
+                <MenuTile
+                  icon="calendar-outline"
+                  label="Dashboard"
+                  onPress={() =>
+                    navAndClose(() => navigation.navigate('Profile', { screen: 'Dashboard' }))
+                  }
+                />
+              </View>
+
+              <View style={styles.card}>
+                <MenuRow
+                  icon="person-outline"
+                  label="Hire Driver"
+                  onPress={() => navAndClose(() => navigateToWeb(navigation, '/hire-driver', 'Hire Driver'))}
+                />
+                <MenuRow
+                  icon="car-outline"
+                  label="Services"
+                  expanded={expanded.services}
+                  onPress={() => toggleExpand('services')}
+                />
+                {expanded.services &&
+                  SERVICES_LINKS.map((item) => (
+                    <SubRow
+                      key={item.path}
+                      label={item.label}
+                      onPress={() => navAndClose(() => navigateToWeb(navigation, item.path, item.label))}
+                    />
+                  ))}
+                <MenuRow
+                  icon="information-circle-outline"
+                  label="Company"
+                  expanded={expanded.company}
+                  onPress={() => toggleExpand('company')}
+                />
+                {expanded.company &&
+                  COMPANY_LINKS.map((item) => (
+                    <SubRow
+                      key={item.path}
+                      label={item.label}
+                      onPress={() => navAndClose(() => navigateToWeb(navigation, item.path, item.label))}
+                    />
+                  ))}
+                <MenuRow
+                  icon="call-outline"
+                  label="Support"
+                  expanded={expanded.support}
+                  last={!expanded.support}
+                  onPress={() => toggleExpand('support')}
+                />
+                {expanded.support &&
+                  SUPPORT_LINKS.map((item) => (
+                    <SubRow
+                      key={item.label}
+                      label={item.label}
+                      onPress={() =>
+                        navAndClose(() => navigateToNative(navigation, item.nativeScreen, item.params))
+                      }
+                    />
+                  ))}
+                {expanded.support && (
+                  <TouchableOpacity
+                    style={styles.callRow}
+                    onPress={() => navAndClose(handleCall)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="call" size={18} color={colors.primary} />
+                    <Text style={styles.callLabel}>9966363662</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {isAdmin && (
+                <View style={styles.card}>
+                  <MenuRow
+                    icon="settings-outline"
+                    label="Admin Dashboard"
+                    last
+                    onPress={() =>
+                      navAndClose(() => navigation.navigate('Profile', { screen: 'AdminDashboard' }))
+                    }
+                  />
+                </View>
+              )}
+
               {isAuthenticated && (
-                <TouchableOpacity
-                  style={[styles.menuItem, styles.logoutItem]}
-                  onPress={handleLogout}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="log-out-outline" size={20} color="#dc2626" />
-                  <Text style={styles.logoutLabel}>Logout</Text>
-                </TouchableOpacity>
+                <View style={styles.card}>
+                  <MenuRow
+                    icon="log-out-outline"
+                    label="Logout"
+                    danger
+                    last
+                    onPress={handleLogout}
+                  />
+                </View>
               )}
             </ScrollView>
           </View>
@@ -327,7 +355,7 @@ export function MenuProvider({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
@@ -335,74 +363,114 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   drawer: {
-    width: 280,
-    backgroundColor: '#fff',
-    paddingTop: Platform.OS === 'ios' ? 50 : 24,
-    paddingBottom: 24,
+    backgroundColor: '#F3F4F6',
   },
-  drawerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  drawerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.foreground,
-  },
-  closeBtn: { padding: 4 },
   scroll: {
-    maxHeight: '85%',
+    flex: 1,
   },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
+  scrollContent: {
     paddingHorizontal: 16,
+    paddingTop: 8,
     gap: 12,
   },
-  menuLabel: {
+  accountCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F2FF',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  accountText: {
     flex: 1,
+    gap: 2,
+  },
+  accountTitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  accountSubtitle: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  tileRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  tile: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    minHeight: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#EEF0F3',
+  },
+  tileLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.foreground,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EEF0F3',
+    overflow: 'hidden',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  rowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E8EAEE',
+  },
+  rowLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
     color: colors.foreground,
   },
-  subItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    paddingLeft: 48,
+  rowLabelDanger: {
+    color: '#dc2626',
+  },
+  subRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingRight: 16,
+    paddingLeft: 52,
+    backgroundColor: '#F8FAFC',
+    gap: 8,
   },
   subLabel: {
-    fontSize: 15,
-    color: colors.gray600,
+    flex: 1,
+    fontSize: 14,
+    color: colors.gray700,
   },
-  callButton: {
+  callRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.primary,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    backgroundColor: '#F8FAFC',
   },
-  callButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  logoutItem: {
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray200,
-  },
-  logoutLabel: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#dc2626',
+  callLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });

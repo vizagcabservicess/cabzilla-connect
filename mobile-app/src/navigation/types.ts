@@ -95,6 +95,7 @@ export type RootStackParamList = {
   AdminVehicleAdd: undefined;
   AdminVehicleEdit: { vehicle: import('../services/adminAPI').AdminFleetVehicle };
   AdminCreateBooking: undefined;
+  AdminAiAssistant: undefined;
   AdminGroupTours: undefined;
   AdminEvents: undefined;
   AdminEventDetail: { eventId: number; name?: string };
@@ -161,7 +162,6 @@ export type RootStackParamList = {
 export type ServicesStackParamList = {
   ServicesList: undefined;
   HireDriver: undefined;
-  Chat: undefined;
   BuildMyTrip: undefined;
   Quotation: QuotationRouteParams;
 };

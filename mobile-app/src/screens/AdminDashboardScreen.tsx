@@ -21,6 +21,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors } from '../theme/colors';
 import { adminAPI, AdminMetrics, MetricsPeriod } from '../services/adminAPI';
 import { authAPI } from '../services/authAPI';
+import { useAuth } from '../providers/AuthProvider';
 import type { UserBooking } from '../services/userBookingsAPI';
 import {
   formatBookingStatus,
@@ -114,6 +115,8 @@ export function AdminDashboardScreen({ navigation }: Props) {
     load();
   };
 
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
   const openAllBookings = () => navigation.navigate('AdminBookingsList');
   const openUpcomingTrips = () => navigation.navigate('AdminUpcomingTrips');
   const openAdminMenu = () => navigation.navigate('AdminMenu');
@@ -166,6 +169,17 @@ export function AdminDashboardScreen({ navigation }: Props) {
           <Text style={styles.welcomeTitle}>Dashboard</Text>
           <Text style={styles.welcomeSub}>Welcome back, {userName}</Text>
         </View>
+
+        {isSuperAdmin ? (
+          <TouchableOpacity style={styles.aiButton} onPress={() => navigation.navigate('AdminAiAssistant')} activeOpacity={0.8}>
+            <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
+            <View style={styles.aiText}>
+              <Text style={styles.aiTitle}>AI Assistant</Text>
+              <Text style={styles.aiSub}>Paste a WhatsApp booking and sync it to Sheets</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
+          </TouchableOpacity>
+        ) : null}
 
         {error && (
           <View style={styles.errorBanner}>
@@ -397,6 +411,20 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
   welcomeRow: { marginBottom: 16 },
+  aiButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    padding: 14,
+    marginBottom: 16,
+  },
+  aiText: { flex: 1 },
+  aiTitle: { fontSize: 16, fontWeight: '700', color: colors.foreground },
+  aiSub: { fontSize: 12, color: colors.gray600, marginTop: 2 },
   welcomeTitle: { fontSize: 22, fontWeight: '700', color: colors.foreground },
   welcomeSub: { fontSize: 14, color: colors.gray600, marginTop: 4 },
   errorBanner: {

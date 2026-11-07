@@ -23,7 +23,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/core';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { adminExtendedAPI } from '../services/adminExtendedAPI';
-import { loadVehicles } from '../services/vehiclesAPI';
+import { loadFleetUnits, loadVehicles } from '../services/vehiclesAPI';
+import { filterAvailableVehicles, hideInactiveFleetTypes } from '../lib/vehicleAvailability';
 import {
   getOutstationFares,
   getLocalPackageFares,
@@ -32,6 +33,7 @@ import {
   calculateOutstationRoundTripFare,
   calculateLocalFare,
   calculateAirportFare,
+  resolveOutstationFare,
   type LocalPackageMatrix,
   type OutstationFare,
 } from '../services/fareService';
@@ -101,7 +103,8 @@ export function AdminCreateBookingScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const list = await loadVehicles();
+        const [loaded, fleet] = await Promise.all([loadVehicles(), loadFleetUnits()]);
+        const list = hideInactiveFleetTypes(loaded, fleet);
         if (!cancelled) {
           setVehicles(list);
           if (list.length > 0 && !selectedVehicle) setSelectedVehicle(list[0]);
@@ -245,19 +248,7 @@ export function AdminCreateBookingScreen() {
         return selectedTour.pricing[vehicleId] ?? selectedTour.pricing[vehicleName] ?? selectedTour.pricing[name.toLowerCase()] ?? 0;
       }
 
-      const id = String(vehicle.id || '').toLowerCase().replace(/-/g, '_').trim();
-      const nameKey = name.toLowerCase().replace(/\s+/g, '_');
-      const fare =
-        outstationFares[id] ||
-        outstationFares[nameKey] ||
-        outstationFares[name.toLowerCase()] ||
-        (name.toLowerCase().includes('swift') || name.toLowerCase().includes('dzire') ? outstationFares['sedan'] : null) ||
-        (name.toLowerCase().includes('glanza') ? outstationFares['glanza'] || outstationFares['toyota_glanza'] || outstationFares['sedan'] : null) ||
-        (name.toLowerCase().includes('amaze') ? outstationFares['amaze'] || outstationFares['sedan'] : null) ||
-        (name.toLowerCase().includes('ertiga') ? outstationFares['ertiga'] : null) ||
-        (name.toLowerCase().includes('innova') || name.toLowerCase().includes('crysta') ? outstationFares['innova_crysta'] || outstationFares['innova'] : null) ||
-        (name.toLowerCase().includes('tempo') ? outstationFares['tempo_traveller'] || outstationFares['tempo'] : null) ||
-        outstationFares['sedan'];
+      const fare = resolveOutstationFare(outstationFares, vehicle.id, name);
 
       if (!fare) return 0;
       if ((fare.basePrice ?? 0) <= 0 && (fare.pricePerKm ?? 0) <= 0) return 0;
@@ -265,7 +256,7 @@ export function AdminCreateBookingScreen() {
       if (tripMode === 'round-trip' && returnDate && dist > 0) {
         return calculateOutstationRoundTripFare(outFare, dist, pickupDate, returnDate);
       }
-      return calculateOutstationFare(outFare, dist);
+      return calculateOutstationFare(outFare, dist, pickupDate);
     },
     [tripType, tripMode, returnDate, pickupDate, distance, hourlyPackage, localMatrix, airportFares, outstationFares, selectedTour]
   );
@@ -317,9 +308,24 @@ export function AdminCreateBookingScreen() {
     if (fare > 0) setTotalAmount(String(fare));
   }, [selectedVehicle, distance, tripType, tripMode, returnDate, localMatrix, airportFares, outstationFares, selectedTour, getFareForVehicle]);
 
+  const tripEnd = tripMode === 'round-trip' && returnDate ? returnDate : undefined;
+  const availableVehicles = filterAvailableVehicles(vehicles, pickupDate, tripEnd);
   const displayVehicles = tripType === 'tour' && tourVehicles.some((v) => v.tourPrice && v.tourPrice > 0)
-    ? tourVehicles.filter((v) => v.tourPrice && v.tourPrice > 0)
-    : vehicles;
+    ? filterAvailableVehicles(
+        tourVehicles.filter((v) => v.tourPrice && v.tourPrice > 0),
+        pickupDate,
+        tripEnd
+      )
+    : availableVehicles;
+
+  useEffect(() => {
+    setSelectedVehicle((current) => {
+      if (current && availableVehicles.some((vehicle) => String(vehicle.id) === String(current.id))) {
+        return current;
+      }
+      return availableVehicles[0] ?? null;
+    });
+  }, [availableVehicles, pickupDate, returnDate, tripMode]);
 
   const handleSubmit = async () => {
     const pickupStr = pickupLocation?.address || pickupLocation?.name || '';
