@@ -225,14 +225,20 @@ export function getVehicleImageUrl(
 ): string | null {
   const slug = generateVehicleUrl(vehicle);
 
-  // 1. Use API/dashboard image when it is a real remote or non-placeholder relative path
+  // 1. Use API/dashboard image when it is a real remote or non-placeholder relative path.
+  // `/cars/ertiga.png` is not a file on the site (the response is the app page), so skip it.
   const rawImage = vehicle?.image;
   if (typeof rawImage === 'string' && rawImage.trim() !== '') {
     const trimmed = rawImage.trim();
+    let placeholder = isNonProductionImagePlaceholder(trimmed);
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      return trimmed;
-    }
-    if (!isNonProductionImagePlaceholder(trimmed)) {
+      try {
+        placeholder = isNonProductionImagePlaceholder(new URL(trimmed).pathname);
+      } catch {
+        placeholder = false;
+      }
+      if (!placeholder) return trimmed;
+    } else if (!placeholder) {
       const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
       return `${baseUrl.replace(/\/$/, '')}${path}`;
     }

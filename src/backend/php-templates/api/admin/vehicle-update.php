@@ -205,6 +205,69 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                 if (!empty($resolvedIds)) {
                     // Update existing vehicle
                     logUpdateDebug("Updating existing vehicle in database");
+
+                    // A phone save for inactive dates posts the whole vehicle. Blank
+                    // image, fuel, policy, and lists must not wipe what is already stored.
+                    $image = $vehicleData['image'] ?? null;
+                    $description = $vehicleData['description'] ?? null;
+                    $keepStored = function ($incoming, $stored) {
+                        $storedText = is_string($stored) ? trim($stored) : '';
+                        if ($storedText === '' || $storedText === '[]' || $storedText === 'null') {
+                            return $incoming;
+                        }
+                        if ($incoming === null) {
+                            return $stored;
+                        }
+                        if (is_string($incoming)) {
+                            $text = trim($incoming);
+                            if ($text === '' || $text === '[]' || $text === 'null') {
+                                return $stored;
+                            }
+                        }
+                        return $incoming;
+                    };
+                    $readStmt = $conn->prepare('SELECT image, description, inclusions, exclusions, cancellation_policy, fuel_type FROM vehicles WHERE vehicle_id = ? LIMIT 1');
+                    if ($readStmt) {
+                        $readStmt->bind_param('s', $vehicleId);
+                        $readStmt->execute();
+                        $existingRow = $readStmt->get_result()->fetch_assoc();
+                        $readStmt->close();
+                        if ($existingRow) {
+                            $image = $keepStored($image, $existingRow['image'] ?? '');
+                            $description = $keepStored($description, $existingRow['description'] ?? '');
+                            $inclusions = $keepStored($inclusions, $existingRow['inclusions'] ?? '');
+                            $exclusions = $keepStored($exclusions, $existingRow['exclusions'] ?? '');
+                            $cancellationPolicy = $keepStored($cancellationPolicy, $existingRow['cancellation_policy'] ?? '');
+                            $fuelType = $keepStored($fuelType, $existingRow['fuel_type'] ?? '');
+                        }
+                    }
+                    if (vehicleUpdateAliasKey($vehicleId) === 'ertiga') {
+                        if (trim((string)$image) === '') {
+                            $image = 'https://vizagtaxihub.com/uploads/ertiga-taxi-services-in-visakhapatnam-vizagtaxihub.png';
+                        }
+                        if (trim((string)$fuelType) === '') {
+                            $fuelType = 'Petrol';
+                        }
+                        if (trim((string)$cancellationPolicy) === '') {
+                            $cancellationPolicy = 'Cancellations and refunds are subject to Vizag Taxi Hub’s Cancellation & Refund Policy. Please refer to the full policy page for detailed terms.';
+                        }
+                    }
+                    $vehicleData['image'] = $image;
+                    $vehicleData['description'] = $description;
+                    $vehicleData['fuelType'] = $fuelType;
+                    $vehicleData['cancellationPolicy'] = $cancellationPolicy;
+                    if (is_string($inclusions) && $inclusions !== '') {
+                        $decodedInclusions = json_decode($inclusions, true);
+                        if (is_array($decodedInclusions)) {
+                            $vehicleData['inclusions'] = $decodedInclusions;
+                        }
+                    }
+                    if (is_string($exclusions) && $exclusions !== '') {
+                        $decodedExclusions = json_decode($exclusions, true);
+                        if (is_array($decodedExclusions)) {
+                            $vehicleData['exclusions'] = $decodedExclusions;
+                        }
+                    }
                     
                     $sql = "UPDATE vehicles SET 
                         name = ?, 
@@ -404,7 +467,7 @@ if (isset($vehicleData['ac'])) {
     $normalizedVehicle['ac'] = (bool)$vehicleData['ac'];
 }
 
-if (isset($vehicleData['image'])) {
+if (isset($vehicleData['image']) && trim((string)$vehicleData['image']) !== '') {
     $normalizedVehicle['image'] = $vehicleData['image'];
 }
 
@@ -428,7 +491,7 @@ if (isset($vehicleData['amenities'])) {
     }
 }
 
-if (isset($vehicleData['description'])) {
+if (isset($vehicleData['description']) && trim((string)$vehicleData['description']) !== '') {
     $normalizedVehicle['description'] = $vehicleData['description'];
 }
 
@@ -474,22 +537,28 @@ if (isset($vehicleData['driverAllowance'])) {
 }
 
 if (isset($vehicleData['inclusions'])) {
-    $normalizedVehicle['inclusions'] = is_string($vehicleData['inclusions'])
-        ? array_map('trim', explode(',', $vehicleData['inclusions']))
+    $incomingInclusions = is_string($vehicleData['inclusions'])
+        ? array_values(array_filter(array_map('trim', explode(',', $vehicleData['inclusions']))))
         : $vehicleData['inclusions'];
+    if (is_array($incomingInclusions) && count($incomingInclusions) > 0) {
+        $normalizedVehicle['inclusions'] = $incomingInclusions;
+    }
 }
 
 if (isset($vehicleData['exclusions'])) {
-    $normalizedVehicle['exclusions'] = is_string($vehicleData['exclusions'])
-        ? array_map('trim', explode(',', $vehicleData['exclusions']))
+    $incomingExclusions = is_string($vehicleData['exclusions'])
+        ? array_values(array_filter(array_map('trim', explode(',', $vehicleData['exclusions']))))
         : $vehicleData['exclusions'];
+    if (is_array($incomingExclusions) && count($incomingExclusions) > 0) {
+        $normalizedVehicle['exclusions'] = $incomingExclusions;
+    }
 }
 
-if (isset($vehicleData['cancellationPolicy'])) {
+if (isset($vehicleData['cancellationPolicy']) && trim((string)$vehicleData['cancellationPolicy']) !== '') {
     $normalizedVehicle['cancellationPolicy'] = $vehicleData['cancellationPolicy'];
 }
 
-if (isset($vehicleData['fuelType'])) {
+if (isset($vehicleData['fuelType']) && trim((string)$vehicleData['fuelType']) !== '') {
     $normalizedVehicle['fuelType'] = $vehicleData['fuelType'];
 }
 

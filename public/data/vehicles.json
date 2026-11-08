@@ -63,7 +63,7 @@
     "price": 3200,
     "basePrice": 3200,
     "pricePerKm": 18,
-    "image": "/cars/ertiga.png",
+    "image": "https://vizagtaxihub.com/uploads/ertiga-taxi-services-in-visakhapatnam-vizagtaxihub.png",
     "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom"],
     "description": "Spacious SUV suitable for 6 passengers.",
     "ac": true,

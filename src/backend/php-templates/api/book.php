@@ -184,6 +184,23 @@ try {
         if (!ensureBookingsTableExists($conn)) {
             throw new Exception("Failed to ensure bookings table exists");
         }
+
+        $fareGuard = __DIR__ . '/common/booking_fare_guard.php';
+        if (is_readable($fareGuard)) {
+            require_once $fareGuard;
+            $staleFareMessage = booking_fare_guard_reject_message($conn, $data);
+            if ($staleFareMessage !== null) {
+                logBooking('Rejected stale mobile fare', [
+                    'message' => $staleFareMessage,
+                    'tripType' => $data['tripType'] ?? '',
+                    'cabType' => $data['cabType'] ?? '',
+                    'distance' => $data['distance'] ?? null,
+                    'totalAmount' => $data['totalAmount'] ?? null,
+                ]);
+                $conn->close();
+                sendJsonResponse(['status' => 'error', 'message' => $staleFareMessage], 409);
+            }
+        }
         
         // Prepare the SQL query
         $sql = "INSERT INTO bookings (

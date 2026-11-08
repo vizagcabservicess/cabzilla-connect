@@ -146,17 +146,22 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     };
   }, [useMobileSheet, open]);
 
-  useEffect(() => {
-    if (!date && !selectedTime) {
-      setSelectedTime(format(atMinutePrecision(new Date()), 'HH:mm'));
-    }
-  }, []);
+  const dateMinuteKey = isValidTripDate(date) ? format(atMinutePrecision(date), "yyyy-MM-dd'T'HH:mm") : '';
+  const selectedTimeRef = useRef<string | null>(null);
+  selectedTimeRef.current = selectedTime;
 
   useEffect(() => {
-    if (isValidTripDate(date)) {
-      setSelectedTime(format(atMinutePrecision(date), 'HH:mm'));
-    }
-  }, [date]);
+    if (dateMinuteKey || selectedTimeRef.current) return;
+    setSelectedTime(format(atMinutePrecision(new Date()), 'HH:mm'));
+  }, [dateMinuteKey]);
+
+  // Sync from the saved trip time only while the picker is closed.
+  // Parent re-renders pass a new Date for the same minute; copying that back
+  // while the sheet is open wipes the time the user just chose.
+  useEffect(() => {
+    if (open || !dateMinuteKey) return;
+    setSelectedTime(dateMinuteKey.slice(11));
+  }, [dateMinuteKey, open]);
 
   const ensureSelectableInstant = (candidate: Date): Date => {
     const normalized = atMinutePrecision(candidate);
@@ -180,11 +185,6 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     setOpen(true);
   };
 
-  const dismissSheet = () => {
-    if (Date.now() - openedAtRef.current < 500) return;
-    setOpen(false);
-  };
-
   useImperativeHandle(ref, () => ({
     focus: () => {
       if (disabled) return;
@@ -201,34 +201,47 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
   }), [disabled, date, selectedTime, minDate]);
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedTime(e.target.value);
+    const next = e.target.value;
+    if (!/^\d{2}:\d{2}/.test(next)) return;
+    setSelectedTime(next.slice(0, 5));
   };
 
-  const handleApply = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!selectedTime) return;
-
-    const combined = combineDateAndTime(date, selectedTime);
+  const commitTime = (timeHm: string | null) => {
+    if (!timeHm) return false;
+    const combined = combineDateAndTime(isValidTripDate(date) ? date : undefined, timeHm);
     if (!combined) {
       toast({
         title: 'Invalid time format',
         description: 'Please use HH:mm (24-hour format).',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
     // Stale "now+1h" from page load often falls behind live minDate — bump instead of blocking Apply.
     const applied = ensureSelectableInstant(combined);
-    if (applied.getTime() !== combined.getTime()) {
-      setSelectedTime(format(applied, 'HH:mm'));
-    }
+    setSelectedTime(format(applied, 'HH:mm'));
+    const currentMs = isValidTripDate(date) ? atMinutePrecision(date).getTime() : Number.NaN;
+    if (applied.getTime() !== currentMs) onDateChange(applied);
+    return true;
+  };
 
-    onDateChange(applied);
+  const handleApply = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!commitTime(selectedTimeRef.current)) return;
     setOpen(false);
     window.setTimeout(() => onDateAppliedRef.current?.(), 50);
+  };
+
+  const closePicker = () => {
+    commitTime(selectedTimeRef.current);
+    setOpen(false);
+  };
+
+  const dismissSheet = () => {
+    if (Date.now() - openedAtRef.current < 500) return;
+    closePicker();
   };
 
   const handleCalendarSelect = (selectedDate: Date | undefined) => {
@@ -241,7 +254,9 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     } else {
       selectedDate.setHours(0, 0, 0, 0);
     }
-    onDateChange(ensureSelectableInstant(selectedDate));
+    const applied = ensureSelectableInstant(selectedDate);
+    setSelectedTime(format(applied, 'HH:mm'));
+    onDateChange(applied);
   };
 
   const dateIsValid = isValidTripDate(date);
@@ -446,7 +461,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
                     type="button"
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200/80 transition-colors hover:bg-white hover:text-slate-800"
                     aria-label="Close"
-                    onClick={() => setOpen(false)}
+                    onClick={closePicker}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -568,7 +583,18 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
           {mobileSheet}
         </>
       ) : (
-        <Popover open={open} onOpenChange={setOpen} modal={false}>
+        <Popover
+          open={open}
+          onOpenChange={(next) => {
+            if (!next) {
+              commitTime(selectedTimeRef.current);
+              setOpen(false);
+              return;
+            }
+            setOpen(true);
+          }}
+          modal={false}
+        >
           <PopoverTrigger asChild>
             <Button
               ref={triggerRef}

@@ -576,7 +576,7 @@ export const adminAPI = {
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
     const url = `${base}/api/admin/update-vehicle.php?_t=${Date.now()}`;
-    const payload = {
+    const payload: Record<string, unknown> = {
       id: vehicle.id || vehicle.vehicleId,
       vehicleId: vehicle.vehicleId || vehicle.id,
       name: vehicle.name,
@@ -587,10 +587,7 @@ export const adminAPI = {
       pricePerKm: Number(vehicle.pricePerKm ?? 14),
       nightHaltCharge: Number(vehicle.nightHaltCharge ?? 700),
       driverAllowance: Number(vehicle.driverAllowance ?? 250),
-      image: vehicle.image ?? '',
-      description: vehicle.description ?? '',
       ac: vehicle.ac !== false,
-      fuelType: vehicle.fuelType ?? '',
       isActive: vehicle.isActive !== false,
       amenities: vehicle.amenities ?? [],
       inactiveDates: (vehicle.inactiveDates ?? []).map((r) => ({
@@ -599,10 +596,18 @@ export const adminAPI = {
         from: r.from instanceof Date ? r.from.toISOString() : r.from,
         to: r.to instanceof Date ? r.to.toISOString() : r.to,
       })),
-      inclusions: vehicle.inclusions ?? [],
-      exclusions: vehicle.exclusions ?? [],
-      cancellationPolicy: vehicle.cancellationPolicy ?? '',
     };
+    // Blank strings used to replace the stored photo, fuel type, and policy.
+    const image = vehicle.image?.trim();
+    const description = vehicle.description?.trim();
+    const fuelType = vehicle.fuelType?.trim();
+    const cancellationPolicy = vehicle.cancellationPolicy?.trim();
+    if (image) payload.image = image;
+    if (description) payload.description = description;
+    if (fuelType) payload.fuelType = fuelType;
+    if (cancellationPolicy) payload.cancellationPolicy = cancellationPolicy;
+    if ((vehicle.inclusions ?? []).length > 0) payload.inclusions = vehicle.inclusions;
+    if ((vehicle.exclusions ?? []).length > 0) payload.exclusions = vehicle.exclusions;
     const response = await axios.post(url, payload, {
       headers: {
         Authorization: `Bearer ${token}`,

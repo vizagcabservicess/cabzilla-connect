@@ -3,6 +3,7 @@ import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/co
 import { API_BASE_URL } from '@/config';
 import { toast } from 'sonner';
 import { forceRefreshVehicles } from '@/utils/apiHelper';
+import { getVehicleImageUrl } from '@/utils/vehicleUrlUtils';
 
 // Shorter cache durations to ensure fresher data
 const JSON_CACHE_DURATION = 10 * 1000; // 10 seconds
@@ -24,7 +25,15 @@ let pendingRefreshPromise: Promise<CabType[]> | null = null;
 export function normalizeVehicles(vehicles: CabType[]): CabType[] {
   return vehicles.map((v) => {
     const pricePerKm = v.pricePerKm ?? (v as { price_per_km?: number }).price_per_km;
-    return { ...v, pricePerKm };
+    const image = getVehicleImageUrl(v) || v.image;
+    const key = catalogKey(v);
+    const fuelType = v.fuelType?.trim()
+      || (key === 'ertiga' ? 'Petrol' : v.fuelType);
+    const cancellationPolicy = v.cancellationPolicy?.trim()
+      || (key === 'ertiga'
+        ? 'Cancellations and refunds are subject to Vizag Taxi Hub’s Cancellation & Refund Policy. Please refer to the full policy page for detailed terms.'
+        : v.cancellationPolicy);
+    return { ...v, pricePerKm, image, fuelType, cancellationPolicy };
   });
 }
 
@@ -110,7 +119,7 @@ const DEFAULT_VEHICLES: CabType[] = [
     luggageCapacity: 3,
     price: 3200,
     pricePerKm: 18,
-    image: '/cars/ertiga.png',
+    image: 'https://vizagtaxihub.com/uploads/ertiga-taxi-services-in-visakhapatnam-vizagtaxihub.png',
     amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
     description: 'Spacious SUV suitable for 6 passengers.',
     ac: true,

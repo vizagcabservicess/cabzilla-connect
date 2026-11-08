@@ -42,6 +42,7 @@ import {
 } from '@/lib/addTourToBookingWidget';
 import { combinedTourPriceForVehicle, startingTourPrice, tourPriceForVehicle } from '@/lib/tourVehiclePrice';
 import { resolveSmartBudgetMediaUrl } from '@/lib/smartBudgetUpload';
+import { getVehicleImageUrl } from '@/utils/vehicleUrlUtils';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import { cn } from '@/lib/utils';
 import {
@@ -481,7 +482,7 @@ export function MyTourListPanel() {
       .map((vehicle) => ({
         id: vehicle.id || vehicle.vehicleId || vehicle.name,
         name: vehicle.name,
-        image: vehicle.image,
+        image: getVehicleImageUrl(vehicle) || vehicle.image,
         price: combinedTourPriceForVehicle(rows, vehicle),
       }))
       .filter((option) => option.price > 0)

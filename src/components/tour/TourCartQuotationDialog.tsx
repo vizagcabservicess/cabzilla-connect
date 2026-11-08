@@ -454,7 +454,10 @@ export function TripPlanFields({
           popularityScore: 50,
         }
       : undefined;
-  const travelDate = dateFromPlan(plan);
+  const travelDate = useMemo(
+    () => dateFromPlan(plan),
+    [plan.pickupDate, plan.pickupTime]
+  );
   const pickupOk = !pickupPlace || isWithinTourPickupRadius(pickupPlace);
   const pickerRef = useRef<DateTimePickerHandle>(null);
   const { toast } = useToast();
@@ -893,6 +896,7 @@ export function buildTripSchedule(
 }
 
 function isOutsideTripSheet(target: EventTarget | null): boolean {
+  if (typeof document !== 'undefined' && document.querySelector('.datetime-picker-sheet')) return true;
   const node = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
   return Boolean(
     node?.closest(

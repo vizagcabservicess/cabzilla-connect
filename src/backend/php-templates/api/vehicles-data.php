@@ -283,8 +283,8 @@ if (file_exists(__DIR__ . '/../../config.php')) {
             if ($conn) {
                 file_put_contents($logFile, "[$timestamp] *** UPDATED FILE IS RUNNING *** Loading inactive dates from database\n", FILE_APPEND);
                 
-                // Get active flag and inactive dates for all vehicles
-                $sql = "SELECT vehicle_id, inactive_dates, is_active FROM vehicles";
+                // Database row wins over the default catalog for fields that are actually set.
+                $sql = "SELECT vehicle_id, base_price, price_per_km, image, amenities, description, inclusions, exclusions, cancellation_policy, fuel_type, inactive_dates, is_active FROM vehicles";
                 $result = $conn->query($sql);
                 
                 if ($result && $result->num_rows > 0) {
@@ -294,6 +294,23 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         if ($key === '') continue;
                         $rowsByKey[$key] = $row;
                     }
+
+                    $decodeList = function ($val) {
+                        if (!is_string($val)) return [];
+                        $text = trim($val);
+                        if ($text === '' || $text === '[]' || $text === 'null') return [];
+                        $decoded = json_decode($text, true);
+                        if (is_array($decoded)) {
+                            $items = [];
+                            foreach ($decoded as $item) {
+                                if (is_string($item) && trim($item) !== '') $items[] = trim($item);
+                            }
+                            return $items;
+                        }
+                        if (is_string($decoded) && trim($decoded) !== '') return [trim($decoded)];
+                        if ($text[0] === '[' || $text[0] === '{') return [];
+                        return array_values(array_filter(array_map('trim', explode(',', $text))));
+                    };
 
                     foreach ($vehicles as &$vehicle) {
                         $vehicleKey = vehicleDataAliasKey($vehicle['id'] ?? $vehicle['vehicleId'] ?? '');
@@ -309,6 +326,35 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         if ($row['is_active'] !== null && $row['is_active'] !== '') {
                             $vehicle['isActive'] = ((int)$row['is_active']) === 1;
                         }
+
+                        $basePrice = isset($row['base_price']) ? (float)$row['base_price'] : 0;
+                        if ($basePrice > 0) {
+                            $vehicle['price'] = $basePrice;
+                            $vehicle['basePrice'] = $basePrice;
+                        }
+                        if (isset($row['price_per_km']) && (float)$row['price_per_km'] > 0) {
+                            $vehicle['pricePerKm'] = (float)$row['price_per_km'];
+                        }
+
+                        $dbImage = trim((string)($row['image'] ?? ''));
+                        if ($dbImage !== '') {
+                            $vehicle['image'] = $dbImage;
+                        } elseif ($vehicleKey === 'ertiga' && strpos((string)($vehicle['image'] ?? ''), '/cars/') !== false) {
+                            $vehicle['image'] = 'https://vizagtaxihub.com/uploads/ertiga-taxi-services-in-visakhapatnam-vizagtaxihub.png';
+                        }
+
+                        $amenities = $decodeList($row['amenities'] ?? '');
+                        if (count($amenities) > 0) $vehicle['amenities'] = $amenities;
+                        $description = trim((string)($row['description'] ?? ''));
+                        if ($description !== '') $vehicle['description'] = $description;
+                        $inclusions = $decodeList($row['inclusions'] ?? '');
+                        if (count($inclusions) > 0) $vehicle['inclusions'] = $inclusions;
+                        $exclusions = $decodeList($row['exclusions'] ?? '');
+                        if (count($exclusions) > 0) $vehicle['exclusions'] = $exclusions;
+                        $policy = trim((string)($row['cancellation_policy'] ?? ''));
+                        if ($policy !== '') $vehicle['cancellationPolicy'] = $policy;
+                        $fuel = trim((string)($row['fuel_type'] ?? ''));
+                        if ($fuel !== '') $vehicle['fuelType'] = $fuel;
 
                         $inactiveDatesJson = $row['inactive_dates'] ?? '';
                         if ($inactiveDatesJson) {
