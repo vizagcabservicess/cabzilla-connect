@@ -200,6 +200,51 @@ export interface DriverTripTerms {
   vehicle_note?: string | null;
 }
 
+function parseDriverTripPickupMillis(trip: DriverTrip): number | null {
+  const raw = `${trip.pickupDate ?? ''} ${trip.pickupTime ?? ''}`.trim();
+  if (!raw) {
+    const duty = trip.tripTerms?.duty_dates?.[0];
+    if (!duty) return null;
+    const dutyMs = Date.parse(duty);
+    return Number.isNaN(dutyMs) ? null : dutyMs;
+  }
+  const ymd = raw.match(/(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2}))?/);
+  if (ymd) {
+    const ms = new Date(
+      Number(ymd[1]),
+      Number(ymd[2]) - 1,
+      Number(ymd[3]),
+      ymd[4] != null ? Number(ymd[4]) : 0,
+      ymd[5] != null ? Number(ymd[5]) : 0
+    ).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+  const dmy = raw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (dmy) {
+    const ms = new Date(
+      Number(dmy[3]),
+      Number(dmy[2]) - 1,
+      Number(dmy[1]),
+      dmy[4] != null ? Number(dmy[4]) : 0,
+      dmy[5] != null ? Number(dmy[5]) : 0
+    ).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+  const native = Date.parse(raw);
+  return Number.isNaN(native) ? null : native;
+}
+
+/** Soonest pickup first — keeps assignment lists chronological by date. */
+export function compareDriverTripsByPickupAsc(a: DriverTrip, b: DriverTrip): number {
+  const aTime = parseDriverTripPickupMillis(a);
+  const bTime = parseDriverTripPickupMillis(b);
+  if (aTime == null && bTime == null) return a.id - b.id;
+  if (aTime == null) return 1;
+  if (bTime == null) return -1;
+  if (aTime !== bTime) return aTime - bTime;
+  return a.id - b.id;
+}
+
 /** Map dashboard trip row to `DriverTrip` — same scope as Trips tab (dashboard.php). */
 export function dashboardTripToDriverTrip(d: DriverDashboardTrip): DriverTrip {
   const pickupDateStr = d.startTime ? String(d.startTime) : '';
@@ -335,6 +380,45 @@ export function mapApiTripToDriverTrip(raw: Record<string, unknown>): DriverTrip
 }
 
 export const driverTripsAPI = {
+  /** PhonePe-style Accept / Decline for a newly assigned trip. */
+  respondToTripAssignment: async (params: {
+    bookingId?: number | null;
+    bookingNumber?: string;
+    action: 'accept' | 'decline';
+  }): Promise<{ action: 'accept' | 'decline'; bookingId: number; bookingNumber: string }> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    const response = await axios.post(
+      `${base}/api/driver/trip-assignment-response.php`,
+      {
+        bookingId: params.bookingId ?? undefined,
+        bookingNumber: params.bookingNumber ?? undefined,
+        action: params.action,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      }
+    );
+    const data = response.data as {
+      status?: string;
+      message?: string;
+      data?: { action?: string; bookingId?: number; bookingNumber?: string };
+    };
+    if (data?.status !== 'success') {
+      throw new Error(data?.message || 'Failed to respond to trip');
+    }
+    return {
+      action: params.action,
+      bookingId: Number(data?.data?.bookingId ?? params.bookingId ?? 0),
+      bookingNumber: String(data?.data?.bookingNumber ?? params.bookingNumber ?? ''),
+    };
+  },
+
   updateTripStatus: async (
     bookingId: number,
     status: 'in_progress' | 'completed',
@@ -420,6 +504,25 @@ export const driverTripsAPI = {
       throw new Error(response.data?.message || 'Could not close this day');
     }
     return { tripCompleted: response.data?.tripCompleted === true };
+  },
+
+  cancelDutyDay: async (bookingId: number, dayId: number): Promise<void> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    let response;
+    try {
+      response = await axios.post(
+        `${base}/api/driver/duty-segment.php`,
+        { bookingId, action: 'cancel-day', dayId },
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, timeout: 15000 },
+      );
+    } catch (error) {
+      throw new Error(apiErrorMessage(error, 'Could not cancel this day'));
+    }
+    if (response.data?.status !== 'success') {
+      throw new Error(response.data?.message || 'Could not cancel this day');
+    }
   },
 
   submitLocation: async (bookingId: number, lat: number, lng: number, accuracy?: number | null): Promise<void> => {
@@ -741,7 +844,9 @@ export const driverTripsAPI = {
       const filtered = params?.status
         ? items.filter((t) => t.status === params.status)
         : items.filter((t) => t.status === 'assigned' || t.status === 'in_progress');
-      return filtered.map(dashboardTripToDriverTrip);
+      return filtered
+        .map(dashboardTripToDriverTrip)
+        .sort((a, b) => compareDriverTripsByPickupAsc(a, b));
     };
 
     try {
@@ -760,7 +865,9 @@ export const driverTripsAPI = {
       const rec = data as { status?: string; trips?: unknown; message?: string } | null;
       if (rec?.status === 'success') {
         const rawTrips = Array.isArray(rec.trips) ? rec.trips : [];
-        return rawTrips.map((t: Record<string, unknown>) => mapApiTripToDriverTrip(t));
+        return rawTrips
+          .map((t: Record<string, unknown>) => mapApiTripToDriverTrip(t))
+          .sort(compareDriverTripsByPickupAsc);
       }
       if (rec?.status === 'error' && rec.message) {
         console.warn('[driverTrips] trips.php:', rec.message, '— using dashboard.php');

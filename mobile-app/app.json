@@ -20,7 +20,8 @@
         "NSLocationAlwaysUsageDescription": "Vizag Taxi Hub collects location data to enable pickup and live trip tracking even when the app is closed or not in use, and shares driver location with the Vizag Taxi Hub office during an active trip or duty.",
         "UIBackgroundModes": ["location"],
         "NSCameraUsageDescription": "Vizag Taxi Hub uses the camera to photograph odometer readings and fuel receipts.",
-        "NSPhotoLibraryUsageDescription": "Vizag Taxi Hub may access photos you select for receipts."
+        "NSPhotoLibraryUsageDescription": "Vizag Taxi Hub saves fuel and odometer photos to your gallery so you can share them with the office if needed, and may access photos you select.",
+        "NSPhotoLibraryAddUsageDescription": "Vizag Taxi Hub saves fuel and odometer photos to your gallery so you can share them with the office if needed."
       }
     },
     "android": {
@@ -42,6 +43,9 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK"
@@ -80,6 +84,14 @@
         {
           "cameraPermission": "Vizag Taxi Hub uses the camera to capture fuel pump displays, receipts, and odometer readings with on-screen guides.",
           "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Vizag Taxi Hub saves fuel and odometer photos to your gallery so you can share them with the office if needed.",
+          "savePhotosPermission": "Vizag Taxi Hub saves fuel and odometer photos to your gallery so you can share them with the office if needed.",
+          "isAccessMediaLocationEnabled": false
         }
       ],
       "@react-native-community/datetimepicker",

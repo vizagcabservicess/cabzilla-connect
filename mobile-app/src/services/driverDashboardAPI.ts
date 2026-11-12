@@ -98,12 +98,15 @@ function mapDashboardTripItem(raw: Record<string, unknown>): DriverDashboardTrip
   const endTime = (t.endTime ?? t.end_time ?? null) as string | null;
   const completedAt = (t.completedAt ?? t.completed_at ?? null) as string | null;
   const serverH = toNum(t.totalDurationHours ?? t.total_duration_hours ?? t.duration_hours);
-  const totalDurationHours = deriveTripDurationHours({
-    startTime,
-    endTime,
-    completedAt,
-    serverHours: serverH,
-  });
+  const dutyDayScoped = t.dutyDayScoped === true || t.duty_day_scoped === true || t.duty_day_scoped === 1;
+  const totalDurationHours = dutyDayScoped
+    ? (serverH > 0 && serverH <= 24 ? Math.round(serverH * 100) / 100 : 0)
+    : deriveTripDurationHours({
+      startTime,
+      endTime,
+      completedAt,
+      serverHours: serverH,
+    });
   const dc = t.driverCollectedAmount ?? t.driver_collected_amount;
   let driverCollectedAmount: number | null = null;
   if (dc != null && dc !== '') {

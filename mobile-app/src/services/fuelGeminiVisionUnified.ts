@@ -11,6 +11,8 @@ export type FuelVisionUnifiedResult = {
   volume: number | null;
   rate: number | null;
   odometer_reading: number | null;
+  /** Detected from pump color/branding (green dispenser → cng). */
+  fuel_type: 'petrol' | 'diesel' | 'cng' | null;
   confidence: 'high' | 'medium' | 'low';
   source: FuelCapturePhase;
   should_retake: boolean;
@@ -43,11 +45,17 @@ function parseUnified(body: unknown): FuelVisionUnifiedResult | null {
     }
     return null;
   };
+  const ftRaw = String(r.fuel_type ?? '').trim().toLowerCase();
+  let fuelType: FuelVisionUnifiedResult['fuel_type'] = null;
+  if (ftRaw === 'cng' || ftRaw.includes('cng')) fuelType = 'cng';
+  else if (ftRaw === 'diesel') fuelType = 'diesel';
+  else if (ftRaw === 'petrol') fuelType = 'petrol';
   return {
     fuel_amount: num(r.fuel_amount),
     volume: num(r.volume),
     rate: num(r.rate),
     odometer_reading: intish(r.odometer_reading),
+    fuel_type: fuelType,
     confidence: conf,
     source: src,
     should_retake: r.should_retake === true,

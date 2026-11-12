@@ -107,14 +107,15 @@ export function EditFleetVehicleDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Edit Vehicle</DialogTitle>
+        <DialogContent className="max-h-[calc(100vh-2rem)] w-[calc(100%-1.5rem)] max-w-lg gap-3 overflow-y-auto p-4 sm:max-w-[680px]">
+          <DialogHeader className="space-y-0">
+            <DialogTitle className="text-base">Edit Vehicle</DialogTitle>
           </DialogHeader>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-2">
+              <div className="space-y-2 [&_.space-y-2]:space-y-1 [&_label]:text-xs [&_label]:leading-tight [&_input]:h-8 [&_textarea]:min-h-10 [&_textarea]:py-1.5 [&_textarea]:text-sm [&_[role=combobox]]:h-8">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                 <FormField
                   control={form.control}
                   name="vehicleNumber"
@@ -144,7 +145,7 @@ export function EditFleetVehicleDialog({
                 />
               </div>
                 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                 <FormField
                   control={form.control}
                   name="model"
@@ -174,7 +175,7 @@ export function EditFleetVehicleDialog({
                 />
               </div>
                 
-              <div className="grid grid-cols-2 gap-4">  
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">  
                 <FormField
                   control={form.control}
                   name="status"
@@ -224,7 +225,7 @@ export function EditFleetVehicleDialog({
                 />
               </div>
                 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                 <FormField
                   control={form.control}
                   name="capacity"
@@ -275,10 +276,10 @@ export function EditFleetVehicleDialog({
               </div>
               
               {/* Service Information Section */}
-              <div className="border-t pt-4 mt-4">
-                <h3 className="font-medium mb-3">Service Information</h3>
+              <div className="border-t pt-2">
+                <h3 className="mb-2 text-sm font-medium">Service Information</h3>
                 
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="mb-2 grid grid-cols-2 gap-x-3 gap-y-2">
                   <FormField
                     control={form.control}
                     name="lastService"
@@ -308,7 +309,7 @@ export function EditFleetVehicleDialog({
                   />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                   <FormField
                     control={form.control}
                     name="nextServiceDue"
@@ -339,6 +340,7 @@ export function EditFleetVehicleDialog({
                 </div>
               </div>
               
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <FormField
                 control={form.control}
                 name="inclusions"
@@ -346,7 +348,7 @@ export function EditFleetVehicleDialog({
                   <FormItem>
                     <FormLabel>Inclusions</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="e.g., AC, Bottle Water, Music System" {...field} />
+                      <Textarea rows={2} placeholder="e.g., AC, Bottle Water, Music System" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -359,7 +361,7 @@ export function EditFleetVehicleDialog({
                   <FormItem>
                     <FormLabel>Exclusions</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="e.g., Toll, Parking, State Tax" {...field} />
+                      <Textarea rows={2} placeholder="e.g., Toll, Parking, State Tax" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -372,13 +374,15 @@ export function EditFleetVehicleDialog({
                   <FormItem>
                     <FormLabel>Cancellation Policy</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="e.g., Free cancellation up to 1 hour before pickup." {...field} />
+                      <Textarea rows={2} placeholder="e.g., Free cancellation up to 1 hour before pickup." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <DialogFooter className="gap-2 sm:gap-0">
+              </div>
+              </div>
+              <DialogFooter className="gap-2 border-t pt-2 sm:gap-0">
                 <Button variant="destructive" type="button" onClick={handleDeleteClick}>
                   Delete Vehicle
                 </Button>

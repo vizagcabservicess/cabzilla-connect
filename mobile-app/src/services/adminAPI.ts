@@ -423,7 +423,7 @@ export const adminAPI = {
     if (data?.status === 'error') throw new Error(data?.message || 'Failed to delete driver');
   },
 
-  /** Get drivers list (matches web GET /api/admin/drivers.php - same endpoint and headers) */
+  /** Full fleet driver list (Driver Management). Includes offline. */
   getDrivers: async (): Promise<AdminDriver[]> => {
     const base = getBase();
     const url = `${base}/api/admin/drivers.php?t=${Date.now()}`;
@@ -440,6 +440,33 @@ export const adminAPI = {
     const list = data?.data ?? data?.drivers ?? [];
     const raw = Array.isArray(list) ? list : [];
     return dedupeDriversByPhoneOrEmail(raw as AdminDriver[]);
+  },
+
+  /**
+   * Same list the website assign-driver modal uses (`get-drivers.php`):
+   * hides offline/inactive/blocked and users marked inactive in User Management.
+   */
+  getAssignableDrivers: async (): Promise<AdminDriver[]> => {
+    const base = getBase();
+    const url = `${base}/api/admin/get-drivers.php?t=${Date.now()}`;
+    const response = await axios.get(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Force-Refresh': 'true',
+      },
+      timeout: 15000,
+    });
+    const data = response.data;
+    if (data?.status === 'error') throw new Error(data?.message || 'Failed to load drivers');
+    const list = data?.data ?? data?.drivers ?? [];
+    const raw = Array.isArray(list) ? list : [];
+    const assignable = (raw as AdminDriver[]).filter((driver) => {
+      const status = String(driver.status ?? '').toLowerCase();
+      return status !== 'offline' && status !== 'inactive' && status !== 'blocked';
+    });
+    return dedupeDriversByPhoneOrEmail(assignable).sort((a, b) =>
+      String(a.name ?? '').localeCompare(String(b.name ?? ''), undefined, { sensitivity: 'base' })
+    );
   },
 
   /** Get fleet vehicles (matches web fleet_vehicles.php) */

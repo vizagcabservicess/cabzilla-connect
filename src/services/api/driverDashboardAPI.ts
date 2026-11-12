@@ -109,13 +109,16 @@ function normalizeDashboardData(raw: any): DriverDashboardData {
           endingOdometer: firstPositive(trip?.endingOdometer, trip?.ending_odometer, trip?.endOdometer, trip?.end_odometer, trip?.closingOdometer, trip?.closingKm, trip?.endKm),
           startedAt: firstText(trip?.startedAt, trip?.tripStartedAt, trip?.trip_started_at, trip?.startOdometerAt, trip?.start_odometer_at) || null,
           endedAt: firstText(trip?.endedAt, trip?.endOdometerAt, trip?.end_odometer_at) || null,
+          dutyDayScoped: trip?.dutyDayScoped === true || trip?.duty_day_scoped === true || trip?.duty_day_scoped === 1,
           totalKilometers: toNumber(trip?.totalKilometers ?? trip?.total_kilometers ?? trip?.total_km ?? trip?.distance_km),
-          totalDurationHours: deriveTripDurationHours({
-            startTime,
-            endTime,
-            completedAt,
-            serverHours: serverH,
-          }),
+          totalDurationHours: (trip?.dutyDayScoped === true || trip?.duty_day_scoped === true || trip?.duty_day_scoped === 1)
+            ? (serverH > 0 && serverH <= 24 ? Math.round(serverH * 100) / 100 : 0)
+            : deriveTripDurationHours({
+              startTime,
+              endTime,
+              completedAt,
+              serverHours: serverH,
+            }),
           fuelSpend: toNumber(trip?.fuelSpend ?? trip?.fuel_spend),
           fuelLitres: toNumber(trip?.fuelLitres ?? trip?.fuel_litres ?? trip?.fuel_quantity),
           fuelTiming: (() => {
@@ -241,7 +244,7 @@ async function attachOdometerReadings(data: DriverDashboardData): Promise<Driver
         ...data.trips,
         items: data.trips.items.map((trip) => {
           const row = byId.get(trip.tripId);
-          if (!row) return trip;
+          if (!row || trip.dutyDayScoped) return trip;
           const startingOdometer = row.startCleared
             ? 0
             : (row.startKm != null && row.startKm > 0 ? row.startKm : trip.startingOdometer);

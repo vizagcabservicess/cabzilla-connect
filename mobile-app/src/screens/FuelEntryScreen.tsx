@@ -28,9 +28,13 @@ import { driverTripsAPI } from '../services/driverTripsAPI';
 import type { DriverTrip } from '../services/driverTripsAPI';
 import { formatPlaceFromGeocode } from '../utils/formatReverseGeocode';
 import { extractTextFromImage } from '../services/ocrService';
-import { parseOdometerFromText } from '../utils/parseOdometerFromOcr';
+import {
+  chooseOdometerReading,
+  isOdometerPrefixTruncation,
+  parseOdometerFromText,
+} from '../utils/parseOdometerFromOcr';
 import { compressImageForUpload } from '../utils/compressImageForUpload';
-import { FuelCaptureCameraModal } from '../components/FuelCaptureCameraModal';
+import { saveCaptureToGallery } from '../utils/saveCaptureToGallery';
 import {
   analyzeFuelCaptureUnified,
   fuelUnifiedVisionFromUploadPayload,
@@ -556,13 +560,7 @@ export function FuelEntryScreen() {
   const ocrPumpAmountRef = useRef<number | null>(null);
   const ocrReceiptQuantityRef = useRef<number | null>(null);
   const ocrPumpQuantityRef = useRef<number | null>(null);
-  const guidedCaptureRef = useRef<{ resolve: (uri: string) => void; reject: (e: Error) => void } | null>(
-    null
-  );
   const captureGenerationRef = useRef({ receipt: 0, pump: 0, odometer: 0 });
-  const cameraOpenRef = useRef(false);
-  const [guidedCameraVisible, setGuidedCameraVisible] = useState(false);
-  const [guidedCameraPhase, setGuidedCameraPhase] = useState<'receipt' | 'pump' | 'odometer'>('pump');
   /** Server-side fuel OCR debug pairs receipt Vision text with pump text on the next pump upload. */
   const receiptPairedOcrTextRef = useRef<string | null>(null);
   useEffect(() => {
@@ -701,7 +699,7 @@ export function FuelEntryScreen() {
   useEffect(() => {
     const meta = receiptPhoto?.meta ?? pumpPhoto?.meta ?? odometerPhoto?.meta;
     const label = receiptPhoto
-      ? 'Fuel receipt (primary for submit)'
+      ? 'Fuel receipt'
       : pumpPhoto
         ? 'Pump photo'
         : odometerPhoto
@@ -753,36 +751,23 @@ export function FuelEntryScreen() {
         return;
       }
 
-      let localUri: string;
-      if (Platform.OS === 'web') {
-        const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
-        if (camStatus !== 'granted') {
-          gpsWatchStarted.stop();
-          Alert.alert('Validation', 'Camera permission is required');
-          return;
-        }
-        const pickerResult = await ImagePicker.launchCameraAsync({
-          allowsEditing: false,
-          quality: 0.85,
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        });
-        if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) {
-          gpsWatchStarted.stop();
-          return;
-        }
-        localUri = pickerResult.assets[0].uri;
-      } else {
-        cameraOpenRef.current = true;
-        try {
-          localUri = await new Promise<string>((resolve, reject) => {
-            guidedCaptureRef.current = { resolve, reject };
-            setGuidedCameraPhase(phase);
-            setGuidedCameraVisible(true);
-          });
-        } finally {
-          cameraOpenRef.current = false;
-        }
+      const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
+      if (camStatus !== 'granted') {
+        gpsWatchStarted.stop();
+        Alert.alert('Validation', 'Camera permission is required');
+        return;
       }
+      const pickerResult = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 1,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
+      if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) {
+        gpsWatchStarted.stop();
+        return;
+      }
+      const localUri = pickerResult.assets[0].uri;
+      void saveCaptureToGallery(localUri);
       const capturedAt = new Date().toISOString();
       const previewMeta: CaptureMeta = { latitude: null, longitude: null, accuracy: null, capturedAt };
       if (phase === 'receipt') setReceiptPhoto({ localUri, imageUrl: '', meta: previewMeta });
@@ -914,10 +899,15 @@ export function FuelEntryScreen() {
             odoVal = Math.floor(odo);
           }
         }
+        let fromText: number | null = null;
         if (typeof uploaded.rawText === 'string' && uploaded.rawText.trim() !== '') {
-          const fromText = parseOdometerFromText(uploaded.rawText);
+          fromText = parseOdometerFromText(uploaded.rawText);
           if (fromText != null && fromText > 0) {
             if (odoVal == null) {
+              odoVal = fromText;
+            } else if (isOdometerPrefixTruncation(fromText, odoVal)) {
+              // Keep the longer total (109631) when text OCR dropped a trailing digit (10963).
+            } else if (isOdometerPrefixTruncation(odoVal, fromText)) {
               odoVal = fromText;
             } else if (
               odoVal !== fromText &&
@@ -925,25 +915,25 @@ export function FuelEntryScreen() {
               odoVal <= 999_999 &&
               fromText >= 10_000 &&
               fromText <= 99_999 &&
-              fromText * 3 < odoVal
+              fromText * 3 < odoVal &&
+              !String(odoVal).startsWith(String(fromText))
             ) {
-              // Server often returns a 6-digit OCR glue (e.g. 403351) while on-device parse finds real 5-digit km.
+              // Unrelated 6-digit glue (e.g. 403351) vs a real 5-digit total — keep the 5-digit.
               odoVal = fromText;
             }
           }
         }
         const visionKm = unifiedVision?.odometer_reading ?? null;
-        if (visionKm != null && visionKm >= 10000 && visionKm <= 9_999_999) {
-          // Total ODO (e.g. 54556) beats a cautious retake when RANGE km is also on the cluster.
-          odoVal = visionKm;
-        } else if (
-          unifiedVision &&
-          (unifiedVision.confidence === 'high' || unifiedVision.confidence === 'medium') &&
-          !unifiedVision.should_retake &&
+        const visionOk =
           visionKm != null &&
-          visionKm > 0
-        ) {
-          odoVal = visionKm;
+          visionKm > 0 &&
+          (visionKm >= 10000 ||
+            (unifiedVision != null &&
+              (unifiedVision.confidence === 'high' || unifiedVision.confidence === 'medium') &&
+              !unifiedVision.should_retake));
+        if (visionOk) {
+          // Prefer the complete km total when vision truncates a trailing digit (109631 → 10963).
+          odoVal = chooseOdometerReading(fromText ?? odoVal, visionKm, odoVal);
         }
         if (
           odoVal != null &&
@@ -1142,12 +1132,12 @@ export function FuelEntryScreen() {
 
         if (ocrRetake && retakeAlert && !pumpDisplayRecovered) {
           Alert.alert(retakeAlert.title, retakeAlert.message);
-        } else if (!cameraOpenRef.current && phase === 'receipt' && amountVal == null) {
+        } else if (phase === 'receipt' && amountVal == null) {
           Alert.alert(
             'Could not read receipt total',
             'We could not detect the bill amount on this photo. Retake the receipt with the total in clear view, less glare, and good lighting. You can still enter the amount manually.'
           );
-        } else if (!cameraOpenRef.current && phase === 'pump') {
+        } else if (phase === 'pump') {
           if (extracted.pump_reading_rejected !== true && amountVal == null) {
             Alert.alert(
               'Could not read pump amount',
@@ -1171,12 +1161,17 @@ export function FuelEntryScreen() {
           if (phase === 'pump' && fuelStation.trim() === '') setFuelStation(station);
         }
 
-        const ft = normalizeFuelTypeFromBackend(extracted.fuel_type ?? extracted.fuelType);
+        // Green CNG pump / ₹/kg → default fuel type to CNG (vision wins over Petrol default).
+        const fromVision =
+          phase === 'pump' && unifiedVision?.fuel_type != null
+            ? normalizeFuelTypeFromBackend(unifiedVision.fuel_type)
+            : null;
+        const fromExtracted = normalizeFuelTypeFromBackend(extracted.fuel_type ?? extracted.fuelType);
+        const ft = fromVision ?? fromExtracted;
         if (ft) setFuelType(ft);
       }
 
       if (
-        !cameraOpenRef.current &&
         !odometerAccepted &&
         !pumpDisplayRecovered &&
         unifiedVision?.should_retake === true &&
@@ -1205,9 +1200,6 @@ export function FuelEntryScreen() {
       })();
     } catch (e) {
       gpsWatch?.stop();
-      if (e instanceof Error && e.message === 'cancelled') {
-        return;
-      }
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to process photos');
     } finally {
       setCapturingPhase(null);
@@ -1227,20 +1219,28 @@ export function FuelEntryScreen() {
       );
       return;
     }
-    if (!receiptPhoto || !pumpPhoto || !odometerPhoto) {
-      Alert.alert('Validation', 'Capture Fuel receipt, Pump photo, and Odometer photo before submitting');
+    if (!pumpPhoto || !odometerPhoto) {
+      Alert.alert('Validation', 'Capture Pump photo and Odometer photo before submitting');
       return;
     }
-    if (!receiptPhoto.imageUrl || !pumpPhoto.imageUrl || !odometerPhoto.imageUrl) {
+    if ((receiptPhoto && !receiptPhoto.imageUrl) || !pumpPhoto.imageUrl || !odometerPhoto.imageUrl) {
       Alert.alert('Photos still sending', 'The photos are still uploading. Wait a few seconds, then save.');
       return;
     }
-    if (![receiptPhoto.meta.capturedAt, pumpPhoto.meta.capturedAt, odometerPhoto.meta.capturedAt].every((at) => isCapturedWithinWindow(at))) {
+    const captureAts = [
+      ...(receiptPhoto ? [receiptPhoto.meta.capturedAt] : []),
+      pumpPhoto.meta.capturedAt,
+      odometerPhoto.meta.capturedAt,
+    ];
+    if (!captureAts.every((at) => isCapturedWithinWindow(at))) {
       Alert.alert('Validation', 'Please capture photos again: each photo must have been taken within the last 30 minutes');
       return;
     }
 
-    if (entryFlags.includes('FUEL_AMOUNT_MISMATCH') || entryFlags.includes('PUMP_RECEIPT_MISMATCH_HOLD')) {
+    if (
+      receiptPhoto &&
+      (entryFlags.includes('FUEL_AMOUNT_MISMATCH') || entryFlags.includes('PUMP_RECEIPT_MISMATCH_HOLD'))
+    ) {
       Alert.alert(
         'Validation',
         'Pump display total and receipt total differ beyond the allowed tolerance for the same fill. Retake the pump or receipt photo.'
@@ -1248,7 +1248,7 @@ export function FuelEntryScreen() {
       return;
     }
 
-    if (ocrPumpAndReceiptTotalsDangerouslyMismatch(ocrReceiptAmount, ocrPumpAmount)) {
+    if (receiptPhoto && ocrPumpAndReceiptTotalsDangerouslyMismatch(ocrReceiptAmount, ocrPumpAmount)) {
       Alert.alert(
         'Validation',
         'Pump and receipt OCR totals differ by more than about 15% (₹120+). Retake photos for the same fill or correct the amounts before saving.',
@@ -1308,6 +1308,7 @@ export function FuelEntryScreen() {
           void (async () => {
             setSubmitting(true);
             try {
+              const geoMeta = receiptPhoto?.meta ?? pumpPhoto.meta;
               await driverTripsAPI.submitFuelEntry({
                 vehicleId,
                 bookingId: bookingId || undefined,
@@ -1321,13 +1322,13 @@ export function FuelEntryScreen() {
                 fuelStation: fuelStation || undefined,
                 paymentMethod,
                 cardLastFour: paymentMethod === 'card' ? cardLastFour.replace(/\D/g, '').slice(-4) : undefined,
-                receiptImageUrl: receiptPhoto.imageUrl,
+                receiptImageUrl: receiptPhoto?.imageUrl,
                 pumpImageUrl: pumpPhoto.imageUrl,
                 odometerImageUrl: odometerPhoto.imageUrl,
-                latitude: receiptPhoto.meta.latitude ?? undefined,
-                longitude: receiptPhoto.meta.longitude ?? undefined,
-                locationAccuracy: receiptPhoto.meta.accuracy ?? undefined,
-                captureTimestamp: receiptPhoto.meta.capturedAt,
+                latitude: geoMeta.latitude ?? undefined,
+                longitude: geoMeta.longitude ?? undefined,
+                locationAccuracy: geoMeta.accuracy ?? undefined,
+                captureTimestamp: geoMeta.capturedAt,
                 flags: entryFlags,
               });
 
@@ -1352,10 +1353,14 @@ export function FuelEntryScreen() {
 
   const ocrPumpReceiptMismatch = ocrPumpAndReceiptTotalsDangerouslyMismatch(ocrReceiptAmount, ocrPumpAmount);
 
-  const photosCaptured = Boolean(receiptPhoto && pumpPhoto && odometerPhoto);
+  const photosCaptured = Boolean(pumpPhoto && odometerPhoto);
   const captureTimesValid =
-    receiptPhoto && pumpPhoto && odometerPhoto
-      ? [receiptPhoto.meta.capturedAt, pumpPhoto.meta.capturedAt, odometerPhoto.meta.capturedAt].every((at) => isCapturedWithinWindow(at))
+    pumpPhoto && odometerPhoto
+      ? [
+          ...(receiptPhoto ? [receiptPhoto.meta.capturedAt] : []),
+          pumpPhoto.meta.capturedAt,
+          odometerPhoto.meta.capturedAt,
+        ].every((at) => isCapturedWithinWindow(at))
       : false;
   const numericValid = !Number.isNaN(qNum) && qNum > 0 && !Number.isNaN(tNum) && tNum > 0 && !Number.isNaN(odoNum) && odoNum > 0;
   const manualAmountsReady = !Number.isNaN(qNum) && qNum > 0 && !Number.isNaN(tNum) && tNum > 0;
@@ -1366,8 +1371,8 @@ export function FuelEntryScreen() {
     !captureTimesValid ||
     !numericValid ||
     (pumpOcrGateBlocked && !manualAmountsReady) ||
-    entryFlags.includes('FUEL_AMOUNT_MISMATCH') ||
-    entryFlags.includes('PUMP_RECEIPT_MISMATCH_HOLD');
+    (Boolean(receiptPhoto) && entryFlags.includes('FUEL_AMOUNT_MISMATCH')) ||
+    (Boolean(receiptPhoto) && entryFlags.includes('PUMP_RECEIPT_MISMATCH_HOLD'));
 
   if (loading) {
     return (
@@ -1418,7 +1423,7 @@ export function FuelEntryScreen() {
             }}
           >
             <Text style={styles.captureCardTitle} numberOfLines={2}>
-              Receipt *
+              Receipt
             </Text>
             {receiptPhoto ? (
               <>
@@ -1774,20 +1779,6 @@ export function FuelEntryScreen() {
         </Pressable>
       </Modal>
 
-      <FuelCaptureCameraModal
-        visible={guidedCameraVisible}
-        phase={guidedCameraPhase}
-        onDismiss={() => {
-          setGuidedCameraVisible(false);
-          guidedCaptureRef.current?.reject(new Error('cancelled'));
-          guidedCaptureRef.current = null;
-        }}
-        onCaptured={(uri) => {
-          setGuidedCameraVisible(false);
-          guidedCaptureRef.current?.resolve(uri);
-          guidedCaptureRef.current = null;
-        }}
-      />
     </SafeAreaView>
   );
 }

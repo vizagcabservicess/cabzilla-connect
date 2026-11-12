@@ -10,8 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, Eye, RefreshCw, Save, Search, User, UserPlus, UserX } from "lucide-react";
+import { AlertCircle, Eye, Pencil, RefreshCw, Save, Search, User, UserPlus, UserX } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { userAPI } from '@/services/api/userAPI';
 import { User as UserType } from '@/types/api';
 import { reloadUsers } from '@/lib/userData';
@@ -78,6 +80,15 @@ function matchesUserSearch(user: UserType, query: string): boolean {
   );
 }
 
+function apiErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'object' && error && 'response' in error) {
+    const message = (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return fallback;
+}
+
 function RoleChoices() {
   return (
     <>
@@ -113,6 +124,11 @@ export function UserManagement() {
   const [appAccess, setAppAccess] = useState<Record<string, AppAccess>>({});
   const [listFilter, setListFilter] = useState<UserListFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -213,6 +229,50 @@ export function UserManagement() {
       toast.error("Failed to delete user. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openEditUser = (user: UserType) => {
+    setEditingUser(user);
+    setEditName(user.name || '');
+    setEditEmail(user.email || '');
+    setEditPhone(user.phone || '');
+  };
+
+  const handleUserProfileSave = async () => {
+    if (!editingUser) return;
+    const name = editName.trim();
+    const email = editEmail.trim();
+    const phone = editPhone.trim();
+    if (name.length < 2) {
+      toast.error('Name must be at least 2 characters.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Enter a valid email address.');
+      return;
+    }
+    if (phone && (phone.length > 20 || !/^[0-9+\-().\s]+$/.test(phone))) {
+      toast.error('Enter a valid phone number.');
+      return;
+    }
+
+    try {
+      setIsSavingProfile(true);
+      const numericId = typeof editingUser.id === 'string' && !isNaN(Number(editingUser.id))
+        ? Number(editingUser.id)
+        : editingUser.id;
+      await userAPI.updateUserProfile(numericId, { name, email, phone });
+      setUsers((prev) => prev.map((user) => (
+        user.id === editingUser.id ? { ...user, name, email, phone } : user
+      )));
+      toast.success('User details updated');
+      setEditingUser(null);
+    } catch (error) {
+      console.error('Error updating user details:', error);
+      toast.error(apiErrorMessage(error, 'Failed to update user details'));
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -518,6 +578,15 @@ export function UserManagement() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => openEditUser(user)}
+                          title={`Edit ${user.name}`}
+                          className="text-slate-700 hover:text-slate-900"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => navigate(`/dashboard?viewAs=${user.id}`, { state: { viewAsName: user.name } })}
                           title={`View ${user.name}'s dashboard`}
                           className="text-blue-600 hover:text-blue-800"
@@ -548,6 +617,64 @@ export function UserManagement() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={editingUser !== null} onOpenChange={(open) => { if (!open && !isSavingProfile) setEditingUser(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit user</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-user-name">Name</Label>
+              <Input
+                id="edit-user-name"
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                autoComplete="name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-user-email">Email</Label>
+              <Input
+                id="edit-user-email"
+                type="email"
+                value={editEmail}
+                onChange={(event) => setEditEmail(event.target.value)}
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-user-phone">Phone</Label>
+              <Input
+                id="edit-user-phone"
+                type="tel"
+                value={editPhone}
+                onChange={(event) => setEditPhone(event.target.value)}
+                placeholder="Optional"
+                autoComplete="tel"
+              />
+            </div>
+            {editingUser?.authProvider === 'google' ? (
+              <p className="text-xs text-amber-700">
+                This account signs in with Google. Changing the email can stop that Google sign-in from matching this user.
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditingUser(null)}
+              disabled={isSavingProfile}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => { void handleUserProfileSave(); }} disabled={isSavingProfile}>
+              {isSavingProfile ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

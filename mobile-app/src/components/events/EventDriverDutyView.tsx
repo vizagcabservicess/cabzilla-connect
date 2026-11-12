@@ -22,8 +22,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import * as ImagePicker from 'expo-image-picker';
 import { compressImageForUpload } from '../../utils/compressImageForUpload';
-import { FuelCaptureCameraModal } from '../FuelCaptureCameraModal';
+import { saveCaptureToGallery } from '../../utils/saveCaptureToGallery';
 import {
   billableDutyEnd,
   canCloseOdometer,
@@ -611,7 +612,6 @@ function DutyCapture({
   const [ocrState, setOcrState] = useState<'idle' | 'reading' | 'found' | 'missed'>('idle');
   const [gps, setGps] = useState<GpsFix | null>(null);
   const [busy, setBusy] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
   const missing = CHECKS.filter((item) => !checks[item.id]);
   const ready = Boolean(photo) && (starting ? missing.length === 0 : true);
 
@@ -644,6 +644,29 @@ function DutyCapture({
       }
     } catch {
       setOcrState('missed');
+    }
+  };
+
+  const openSystemCamera = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('Camera', 'Camera permission is required to take the odometer photo.');
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 1,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      void saveCaptureToGallery(result.assets[0].uri);
+      await applyOdometerPhoto(result.assets[0].uri);
+    } catch (error) {
+      Alert.alert(
+        'Camera',
+        error instanceof Error ? error.message : 'Could not open the camera.',
+      );
     }
   };
 
@@ -767,7 +790,7 @@ function DutyCapture({
         )}
         <Text style={styles.section}>{starting ? 'Opening kilometres' : 'Closing kilometres'}</Text>
         <Text style={styles.captureSub}>Move back until the kilometres look sharp, then hold still. A soft photo cannot be read.</Text>
-        <TouchableOpacity style={styles.shutter} onPress={() => setCameraOpen(true)}>
+        <TouchableOpacity style={styles.shutter} onPress={() => void openSystemCamera()}>
           {photo ? (
             <Image source={{ uri: photo.uri }} style={styles.odoPreview} />
           ) : (
@@ -778,7 +801,7 @@ function DutyCapture({
           )}
         </TouchableOpacity>
         {photo ? (
-          <TouchableOpacity onPress={() => setCameraOpen(true)}>
+          <TouchableOpacity onPress={() => void openSystemCamera()}>
             <Text style={styles.retake}>Retake photo</Text>
           </TouchableOpacity>
         ) : null}
@@ -808,15 +831,6 @@ function DutyCapture({
           )}
         </TouchableOpacity>
       </View>
-      <FuelCaptureCameraModal
-        visible={cameraOpen}
-        phase="odometer"
-        onDismiss={() => setCameraOpen(false)}
-        onCaptured={(uri) => {
-          setCameraOpen(false);
-          void applyOdometerPhoto(uri);
-        }}
-      />
     </View>
   );
 }

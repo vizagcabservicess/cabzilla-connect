@@ -132,28 +132,62 @@ function money(amount: number): string {
   return `₹${Math.round(amount).toLocaleString('en-IN')}`;
 }
 
-function pickupMillis(trip: DriverDashboardTrip): number | null {
-  const match = (trip.startTime ?? '').match(/(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2}))?/);
-  if (!match) return null;
-  const time = new Date(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3]),
-    match[4] != null ? Number(match[4]) : 0,
-    match[5] != null ? Number(match[5]) : 0
-  ).getTime();
-  return Number.isNaN(time) ? null : time;
+function parseTripMillis(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  let match = s.match(/(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2}))?/);
+  if (match) {
+    const time = new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      match[4] != null ? Number(match[4]) : 0,
+      match[5] != null ? Number(match[5]) : 0
+    ).getTime();
+    return Number.isNaN(time) ? null : time;
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY (common on Indian duty slips)
+  match = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (match) {
+    const time = new Date(
+      Number(match[3]),
+      Number(match[2]) - 1,
+      Number(match[1]),
+      match[4] != null ? Number(match[4]) : 0,
+      match[5] != null ? Number(match[5]) : 0
+    ).getTime();
+    return Number.isNaN(time) ? null : time;
+  }
+
+  const native = Date.parse(s);
+  return Number.isNaN(native) ? null : native;
 }
 
-/** Latest pickup date first. A trip with no date stays at the bottom. */
-function compareTrips(a: DriverDashboardTrip, b: DriverDashboardTrip): number {
+function pickupMillis(trip: DriverDashboardTrip): number | null {
+  return (
+    parseTripMillis(trip.startTime) ??
+    parseTripMillis(trip.tripTerms?.duty_dates?.[0]) ??
+    parseTripMillis(trip.returnDate)
+  );
+}
+
+/** Chronological by pickup (soonest first). Trips with no date stay at the bottom. */
+function compareTripsByDateAsc(a: DriverDashboardTrip, b: DriverDashboardTrip): number {
   const aTime = pickupMillis(a);
   const bTime = pickupMillis(b);
-  if (aTime == null && bTime == null) return b.tripId - a.tripId;
+  if (aTime == null && bTime == null) return a.tripId - b.tripId;
   if (aTime == null) return 1;
   if (bTime == null) return -1;
-  if (aTime !== bTime) return bTime - aTime;
-  return b.tripId - a.tripId;
+  if (aTime !== bTime) return aTime - bTime;
+  return a.tripId - b.tripId;
+}
+
+/** Completed history: newest first. */
+function compareTripsByDateDesc(a: DriverDashboardTrip, b: DriverDashboardTrip): number {
+  return compareTripsByDateAsc(b, a);
 }
 
 export function DriverTripsDashboardScreen() {
@@ -172,7 +206,9 @@ export function DriverTripsDashboardScreen() {
         tripLimit: 100,
         fuelLimit: 100,
       });
-      const visible = data.trips.items.filter((trip) => trip.status === 'assigned' || trip.status === 'in_progress' || trip.status === 'completed');
+      const visible = data.trips.items
+        .filter((trip) => trip.status === 'assigned' || trip.status === 'in_progress' || trip.status === 'completed')
+        .sort(compareTripsByDateAsc);
       setTrips(visible);
       setFuelByTrip(fuelTotalsByTrip(data.fuelRecords.items));
       const live = visible.find((trip) => trip.status === 'in_progress');
@@ -228,7 +264,11 @@ export function DriverTripsDashboardScreen() {
         const rankDiff = rank(a) - rank(b);
         if (rankDiff !== 0) return rankDiff;
       }
-      return compareTrips(a, b);
+      // Assigned / live: soonest pickup first. Completed: newest first.
+      if (status === 'completed' || (a.status === 'completed' && b.status === 'completed')) {
+        return compareTripsByDateDesc(a, b);
+      }
+      return compareTripsByDateAsc(a, b);
     });
   }, [searched, status]);
 

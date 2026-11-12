@@ -272,9 +272,13 @@ try {
         
         $hasRole = isset($requestData['role']) && $requestData['role'] !== '';
         $hasActive = array_key_exists('isActive', $requestData) || array_key_exists('is_active', $requestData);
-        if (!isset($requestData['userId']) || (!$hasRole && !$hasActive)) {
+        $hasName = array_key_exists('name', $requestData);
+        $hasEmail = array_key_exists('email', $requestData);
+        $hasPhone = array_key_exists('phone', $requestData);
+        $hasProfile = $hasName || $hasEmail || $hasPhone;
+        if (!isset($requestData['userId']) || (!$hasRole && !$hasActive && !$hasProfile)) {
             secureLog("Invalid request data - missing userId or role", "WARNING");
-            sendJsonResponse(['status' => 'error', 'message' => 'User ID and role or active status are required'], 400);
+            sendJsonResponse(['status' => 'error', 'message' => 'User ID and a role, status, or profile field are required'], 400);
             exit;
         }
         
@@ -316,6 +320,78 @@ try {
             sendJsonResponse(['status' => 'error', 'message' => 'User not found'], 404);
             exit;
         }
+        $stmt->close();
+
+        if ($hasProfile) {
+            $currentStmt = $conn->prepare("SELECT name, email, phone FROM users WHERE id = ?");
+            if (!$currentStmt) {
+                throw new Exception("Failed to prepare profile lookup: " . $conn->error);
+            }
+            $currentStmt->bind_param("i", $targetUserId);
+            $currentStmt->execute();
+            $current = $currentStmt->get_result()->fetch_assoc();
+            $currentStmt->close();
+            if (!$current) {
+                sendJsonResponse(['status' => 'error', 'message' => 'User not found'], 404);
+                exit;
+            }
+
+            $profileName = $hasName ? trim((string) $requestData['name']) : (string) $current['name'];
+            $profileEmail = $hasEmail ? trim((string) $requestData['email']) : (string) $current['email'];
+            $profilePhone = $hasPhone ? trim((string) $requestData['phone']) : trim((string) ($current['phone'] ?? ''));
+
+            if (strlen($profileName) < 2 || strlen($profileName) > 100) {
+                sendJsonResponse(['status' => 'error', 'message' => 'Name must be between 2 and 100 characters'], 400);
+                exit;
+            }
+            if (!filter_var($profileEmail, FILTER_VALIDATE_EMAIL) || strlen($profileEmail) > 190) {
+                sendJsonResponse(['status' => 'error', 'message' => 'Enter a valid email address'], 400);
+                exit;
+            }
+            if ($profilePhone !== '' && (strlen($profilePhone) > 20 || !preg_match('/^[0-9+\-().\s]+$/', $profilePhone))) {
+                sendJsonResponse(['status' => 'error', 'message' => 'Enter a valid phone number (up to 20 characters)'], 400);
+                exit;
+            }
+
+            if (strcasecmp($profileEmail, (string) $current['email']) !== 0) {
+                $dupStmt = $conn->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id <> ? LIMIT 1");
+                if (!$dupStmt) {
+                    throw new Exception("Failed to prepare email check: " . $conn->error);
+                }
+                $dupStmt->bind_param("si", $profileEmail, $targetUserId);
+                $dupStmt->execute();
+                $duplicate = $dupStmt->get_result()->fetch_assoc();
+                $dupStmt->close();
+                if ($duplicate) {
+                    sendJsonResponse(['status' => 'error', 'message' => 'Another user already uses this email'], 409);
+                    exit;
+                }
+            }
+
+            if ($profilePhone === '') {
+                $profileStmt = $conn->prepare("UPDATE users SET name = ?, email = ?, phone = NULL, updated_at = NOW() WHERE id = ?");
+                if (!$profileStmt) {
+                    throw new Exception("Failed to prepare profile update: " . $conn->error);
+                }
+                $profileStmt->bind_param("ssi", $profileName, $profileEmail, $targetUserId);
+            } else {
+                $profileStmt = $conn->prepare("UPDATE users SET name = ?, email = ?, phone = ?, updated_at = NOW() WHERE id = ?");
+                if (!$profileStmt) {
+                    throw new Exception("Failed to prepare profile update: " . $conn->error);
+                }
+                $profileStmt->bind_param("sssi", $profileName, $profileEmail, $profilePhone, $targetUserId);
+            }
+            if (!$profileStmt->execute()) {
+                $errno = $profileStmt->errno;
+                $profileStmt->close();
+                if ($errno === 1062) {
+                    sendJsonResponse(['status' => 'error', 'message' => 'Another user already uses this email'], 409);
+                    exit;
+                }
+                throw new Exception("Failed to update user details");
+            }
+            $profileStmt->close();
+        }
         
         if ($hasRole) {
             $stmt = $conn->prepare("UPDATE users SET role = ?, updated_at = NOW() WHERE id = ?");
@@ -336,6 +412,51 @@ try {
             $stmt->bind_param("ii", $activeInt, $targetUserId);
             if (!$stmt->execute()) {
                 throw new Exception("Failed to update active status: " . $stmt->error);
+            }
+
+            // Keep assign-driver lists in sync: inactive logins must not stay "available/busy" in fleet.
+            $driversTable = @$conn->query("SHOW TABLES LIKE 'drivers'");
+            if ($driversTable && $driversTable->num_rows > 0) {
+                $userIdCol = @$conn->query("SHOW COLUMNS FROM drivers LIKE 'user_id'");
+                if ($userIdCol && $userIdCol->num_rows > 0) {
+                    if ((int) $activeInt === 0) {
+                        $sync = $conn->prepare("UPDATE drivers SET status = 'offline' WHERE user_id = ?");
+                        if ($sync) {
+                            $sync->bind_param('i', $targetUserId);
+                            $sync->execute();
+                            $sync->close();
+                        }
+                    } else {
+                        $sync = $conn->prepare("UPDATE drivers SET status = 'available' WHERE user_id = ? AND status = 'offline'");
+                        if ($sync) {
+                            $sync->bind_param('i', $targetUserId);
+                            $sync->execute();
+                            $sync->close();
+                        }
+                    }
+                }
+                $phoneStmt = $conn->prepare('SELECT phone FROM users WHERE id = ? LIMIT 1');
+                if ($phoneStmt) {
+                    $phoneStmt->bind_param('i', $targetUserId);
+                    $phoneStmt->execute();
+                    $phoneRow = $phoneStmt->get_result()->fetch_assoc();
+                    $phoneStmt->close();
+                    $digits = preg_replace('/\D/', '', (string) ($phoneRow['phone'] ?? ''));
+                    $phoneKey = strlen($digits) >= 10 ? substr($digits, -10) : '';
+                    if (strlen($phoneKey) === 10) {
+                        if ((int) $activeInt === 0) {
+                            $byPhone = $conn->prepare(
+                                "UPDATE drivers SET status = 'offline'
+                                 WHERE RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(phone,''),' ',''),'-',''),'+',''), 10) = ?"
+                            );
+                            if ($byPhone) {
+                                $byPhone->bind_param('s', $phoneKey);
+                                $byPhone->execute();
+                                $byPhone->close();
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -381,10 +502,18 @@ try {
             'createdAt' => $userData['created_at']
         ];
         
+        if ($hasProfile && !$hasRole && !$hasActive) {
+            $updateMessage = 'User details updated successfully';
+        } elseif ($hasActive && !$hasRole) {
+            $updateMessage = 'User status updated successfully';
+        } else {
+            $updateMessage = 'User role updated successfully';
+        }
+
         secureLog("Successfully updated user $targetUserId", "INFO");
         sendJsonResponse([
             'status' => 'success',
-            'message' => $hasActive && !$hasRole ? 'User status updated successfully' : 'User role updated successfully',
+            'message' => $updateMessage,
             'accessSaved' => $accessSaved,
             'data' => $updatedUser,
         ]);

@@ -16,6 +16,7 @@ import { extractTextFromImage } from '../services/ocrService';
 import { colors } from '../theme/colors';
 import { formatPlaceFromGeocode } from '../utils/formatReverseGeocode';
 import { parseFuelFinalAmountFromText } from '../utils/parseFuelFinalAmountFromOcr';
+import { saveCaptureToGallery } from '../utils/saveCaptureToGallery';
 
 export type ParsedFuelType = 'Petrol' | 'Diesel' | 'CNG' | 'Electric';
 
@@ -186,6 +187,7 @@ export function FuelCaptureModal({ visible, onClose, onSessionComplete }: Props)
     }
 
     const imageUri = pickerResult.assets[0].uri;
+    void saveCaptureToGallery(imageUri);
     const capturedAt = new Date().toISOString();
     setStep('processing');
 

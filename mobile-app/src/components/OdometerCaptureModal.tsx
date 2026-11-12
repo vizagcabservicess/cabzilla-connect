@@ -21,7 +21,7 @@ import { authAPI } from '../services/authAPI';
 import { driverTripsAPI, uploadImage } from '../services/driverTripsAPI';
 import { analyzeFuelCaptureUnified } from '../services/fuelGeminiVisionUnified';
 import { chooseOdometerReading, kmLabeledOdometer, parseOdometerFromText } from '../utils/parseOdometerFromOcr';
-import { FuelCaptureCameraModal } from './FuelCaptureCameraModal';
+import { saveCaptureToGallery } from '../utils/saveCaptureToGallery';
 
 export type OdometerCaptureModalProps =
   | {
@@ -50,7 +50,6 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
   const [error, setError] = useState('');
   const [manualValue, setManualValue] = useState('');
   const [failedImageUri, setFailedImageUri] = useState<string | null>(null);
-  const [guidedCameraVisible, setGuidedCameraVisible] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -58,7 +57,6 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
       setError('');
       setFailedImageUri(null);
       setStep('idle');
-      setGuidedCameraVisible(false);
     }
   }, [visible]);
 
@@ -163,11 +161,6 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
 
   const handleCapture = async () => {
     setError('');
-    if (Platform.OS !== 'web') {
-      setGuidedCameraVisible(true);
-      return;
-    }
-
     setStep('capturing');
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -180,7 +173,7 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
     try {
       result = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
-        quality: 0.8,
+        quality: 1,
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
       });
     } catch (cameraErr) {
@@ -198,6 +191,7 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
       return;
     }
 
+    void saveCaptureToGallery(result.assets[0].uri);
     await processCapturedUri(result.assets[0].uri);
   };
 
@@ -274,7 +268,6 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
         animationType="fade"
         statusBarTranslucent
         onRequestClose={() => {
-          if (guidedCameraVisible) return;
           if (step === 'processing' || step === 'uploading') return;
           setStep('idle');
           onClose();
@@ -291,12 +284,8 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
             </Text>
             <Text style={styles.desc}>
               {tripMode
-                ? Platform.OS === 'web'
-                  ? 'Take a photo of the odometer or enter the reading manually below.'
-                  : 'Align the odometer inside the on-screen frame (only that area is saved—same as fuel capture), or type the reading below.'
-                : Platform.OS === 'web'
-                  ? 'Photograph your dashboard odometer to fill the reading, or type it manually.'
-                  : 'Use the guided camera to frame the odometer, or type the reading manually.'}
+                ? 'Take a normal camera photo of the odometer, or enter the reading manually below.'
+                : 'Photograph the odometer with the normal camera, or type the reading manually.'}
             </Text>
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
             {showManualEntry && (
@@ -347,17 +336,6 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-      {Platform.OS !== 'web' && (
-        <FuelCaptureCameraModal
-          visible={guidedCameraVisible}
-          phase="odometer"
-          onDismiss={() => setGuidedCameraVisible(false)}
-          onCaptured={(uri) => {
-            setGuidedCameraVisible(false);
-            void processCapturedUri(uri);
-          }}
-        />
-      )}
     </>
   );
 }

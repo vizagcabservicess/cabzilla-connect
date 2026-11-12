@@ -120,6 +120,25 @@ function digitCount(value: number): number {
   return String(Math.round(value)).length;
 }
 
+/** True when `short` is the leading digits of `long` (10963 vs 109631 — trailing digit dropped). */
+export function isOdometerPrefixTruncation(short: number, long: number): boolean {
+  const s = String(Math.round(short));
+  const l = String(Math.round(long));
+  return l.length > s.length && l.startsWith(s);
+}
+
+/**
+ * Prefer the longer reading when one value is only a truncated prefix of the other
+ * (common Maruti MID miss: 109631 km → 10963). Returns null when there is no prefix link.
+ */
+export function preferCompleteOdometerReading(a: number | null, b: number | null): number | null {
+  if (a == null || b == null) return null;
+  if (a === b) return a;
+  if (isOdometerPrefixTruncation(a, b)) return b;
+  if (isOdometerPrefixTruncation(b, a)) return a;
+  return null;
+}
+
 /**
  * A number printed with km is the odometer, at any length.
  * Expo Go often gets the trip meter from the server and the full km total from photo text.
@@ -130,11 +149,21 @@ export function chooseOdometerReading(
   fromVision: number | null,
   kmLabeled: number | null = null,
 ): number | null {
-  if (kmLabeled != null && kmLabeled >= 1 && (fromVision == null || kmLabeled >= fromVision)) {
-    return kmLabeled;
+  if (kmLabeled != null && kmLabeled >= 1) {
+    const withVision = preferCompleteOdometerReading(kmLabeled, fromVision);
+    if (withVision != null) {
+      return preferCompleteOdometerReading(withVision, fromText) ?? withVision;
+    }
+    const withText = preferCompleteOdometerReading(kmLabeled, fromText);
+    if (withText != null) return withText;
+    if (fromVision == null || kmLabeled >= fromVision || isOdometerPrefixTruncation(fromVision, kmLabeled)) {
+      return kmLabeled;
+    }
   }
-  if (fromVision != null && fromText != null && fromVision !== fromText && digitCount(fromText) > digitCount(fromVision)) {
-    return fromText;
+  if (fromVision != null && fromText != null && fromVision !== fromText) {
+    const complete = preferCompleteOdometerReading(fromText, fromVision);
+    if (complete != null) return complete;
+    if (digitCount(fromText) > digitCount(fromVision)) return fromText;
   }
   if (fromVision != null && fromVision >= 1) return fromVision;
   if (fromText != null && fromText >= 1) return fromText;

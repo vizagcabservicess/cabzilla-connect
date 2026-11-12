@@ -31,6 +31,8 @@ export interface DriverDashboardTrip {
   startedAt?: string | null;
   /** When the driver photographed the closing odometer. */
   endedAt?: string | null;
+  /** This row is one duty day of a multi-day trip, already scoped to that date. */
+  dutyDayScoped?: boolean;
   pickupLocation: string;
   dropLocation: string;
   status: TripStatus;

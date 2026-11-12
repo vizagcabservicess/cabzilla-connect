@@ -66,7 +66,7 @@ export function ChangeAssignmentScreen() {
       try {
         const [duty, driverList, vehicleList] = await Promise.all([
           adminAPI.getDutyAssignment(bookingId),
-          adminAPI.getDrivers(),
+          adminAPI.getAssignableDrivers(),
           adminAPI.getFleetVehicles(),
         ]);
         const loaded = duty.days ?? [];

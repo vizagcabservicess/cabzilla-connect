@@ -20,6 +20,7 @@ import { EventDriverDutyView } from './EventDriverDutyView';
 import { deliverDutyAlerts } from '../../lib/eventDutyLocationTask';
 import { ensureEventDutyAlertChannel, getPushToken } from '../../services/pushNotificationService';
 import { compressImageForUpload } from '../../utils/compressImageForUpload';
+import { saveCaptureToGallery } from '../../utils/saveCaptureToGallery';
 import { keepFilled, parseDocumentOcr, dutyStatusLabel, formatReportingTime, formatServerTime } from '../../lib/eventDutyFormat';
 import {
   formatDutyDate,
@@ -83,6 +84,9 @@ async function captureUpload(source: 'camera' | 'library'): Promise<UploadPart |
     ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.85 })
     : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.85 });
   if (result.canceled || !result.assets[0]) return null;
+  if (source === 'camera') {
+    void saveCaptureToGallery(result.assets[0].uri);
+  }
   const uri = await compressImageForUpload(result.assets[0].uri);
   return { uri, name: `${source}-${Date.now()}.jpg`, type: 'image/jpeg' };
 }

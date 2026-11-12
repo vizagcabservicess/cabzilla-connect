@@ -44,12 +44,18 @@ function patchNotificationBuilder(projectRoot) {
     // ${MARKER}: a new trip opens over the lock screen, like an incoming call.
     val category = notificationContent.categoryId
     val dataJson = content.body?.toString() ?: ""
-    val tripPopup = category == "trip_assigned" || dataJson.contains("trip_assigned")
+    val tripPopup =
+      category == "trip_assigned" ||
+        dataJson.contains("trip_assigned") ||
+        dataJson.contains("trip_assignments_v4")
     if (tripPopup) {
       builder.setFullScreenIntent(contentPending, true)
-      builder.setCategory(NotificationCompat.CATEGORY_ALARM)
+      builder.setCategory(NotificationCompat.CATEGORY_CALL)
       builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
       builder.priority = NotificationCompat.PRIORITY_MAX
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        builder.setTimeoutAfter(90_000)
+      }
     }`;
   if (!src.includes(needle)) {
     throw new Error('Trip lock-screen patch could not find the notification builder block.');

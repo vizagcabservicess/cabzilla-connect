@@ -38,7 +38,7 @@ export function AssignDriverScreen() {
     const load = async () => {
       try {
         const [driverList, vehicleList] = await Promise.all([
-          adminAPI.getDrivers(),
+          adminAPI.getAssignableDrivers(),
           adminAPI.getFleetVehicles(true),
         ]);
         setDrivers(driverList);
@@ -139,7 +139,9 @@ export function AssignDriverScreen() {
           contentContainerStyle={styles.list}
           ListHeaderComponent={
             <View>
-              <Text style={styles.hint}>Select the fleet vehicle, then tap the driver. Both are saved together, the same way as the website.</Text>
+              <Text style={styles.hint}>
+                Same active drivers as the website. Select the fleet vehicle, then tap the driver.
+              </Text>
               {vehicles.map((item) => {
                 const id = String(item.id);
                 const plate = String(item.vehicleNumber ?? item.vehicle_number ?? 'Vehicle');

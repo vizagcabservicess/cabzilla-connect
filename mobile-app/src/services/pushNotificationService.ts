@@ -85,16 +85,23 @@ export async function ensureEventDutyAlertChannel(): Promise<void> {
   });
 }
 
-const TRIP_LOCK_SCREEN_ALLOWED_KEY = 'trip_lock_screen_allowed_v2';
+const TRIP_LOCK_SCREEN_ALLOWED_KEY = 'trip_lock_screen_allowed_v3';
+const TRIP_LOCK_SCREEN_PROMPT_AT_KEY = 'trip_lock_screen_prompt_at_v3';
+const TRIP_LOCK_SCREEN_PROMPT_GAP_MS = 24 * 60 * 60 * 1000;
 
-/** Android 14+ does not grant lock-screen popups until the driver allows full-screen alerts. */
+/** Android 14+ blocks lock-screen popups until the driver allows full-screen intents. */
 export async function promptTripLockScreenAccess(): Promise<void> {
   if (Platform.OS !== 'android' || Number(Platform.Version) < 34) return;
   const allowed = await AsyncStorage.getItem(TRIP_LOCK_SCREEN_ALLOWED_KEY);
   if (allowed === '1') return;
+  const lastPromptAt = Number((await AsyncStorage.getItem(TRIP_LOCK_SCREEN_PROMPT_AT_KEY)) ?? 0);
+  if (Number.isFinite(lastPromptAt) && Date.now() - lastPromptAt < TRIP_LOCK_SCREEN_PROMPT_GAP_MS) {
+    return;
+  }
+  await AsyncStorage.setItem(TRIP_LOCK_SCREEN_PROMPT_AT_KEY, String(Date.now()));
   Alert.alert(
     'Show new trips on the lock screen',
-    'Turn on full-screen notifications for Vizag Taxi Hub. Without that, View trip stays in the shade when the phone is locked.',
+    'Android blocks the Accept / Decline popup while the phone is locked until you allow full-screen notifications for Vizag Taxi Hub.',
     [
       { text: 'Not now', style: 'cancel' },
       {
@@ -103,7 +110,9 @@ export async function promptTripLockScreenAccess(): Promise<void> {
           void AsyncStorage.setItem(TRIP_LOCK_SCREEN_ALLOWED_KEY, '1');
           void Linking.sendIntent('android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT', [
             { key: 'android.provider.extra.APP_PACKAGE', value: 'com.vizagtaxihub.app' },
-          ]).catch(() => undefined);
+          ]).catch(() => {
+            void Linking.openSettings().catch(() => undefined);
+          });
         },
       },
     ]
@@ -114,8 +123,13 @@ export async function ensureTripAssignmentNotificationChannel(): Promise<void> {
   if (Platform.OS === 'web') return;
   await Notifications.setNotificationCategoryAsync('trip_assigned', [
     {
-      identifier: 'view_trip',
-      buttonTitle: 'View trip',
+      identifier: 'accept_trip',
+      buttonTitle: 'Accept',
+      options: { opensAppToForeground: true },
+    },
+    {
+      identifier: 'decline_trip',
+      buttonTitle: 'Decline',
       options: { opensAppToForeground: true },
     },
   ]);

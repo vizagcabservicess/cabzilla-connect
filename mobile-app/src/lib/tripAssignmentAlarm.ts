@@ -16,8 +16,11 @@ import {
 export const TRIP_ASSIGNMENT_ALARM_TASK = 'TRIP_ASSIGNMENT_ALARM_TASK';
 export const TRIP_ALARM_SOUND = 'trip_alarm.wav';
 export const PENDING_LOCK_TRIP_KEY = 'pending_lock_screen_trip';
+/** Booking keys the driver already opened / muted — stops View-trip from looping. */
+const HANDLED_TRIP_ASSIGNMENTS_KEY = 'handled_trip_assignments_v1';
 
 const PENDING_LOCK_TRIP_MS = 20 * 60 * 1000;
+const HANDLED_TRIP_ASSIGNMENT_MS = 12 * 60 * 60 * 1000;
 
 const CHIME_COUNT = 8;
 const CHIME_GAP_SECONDS = 12;
@@ -197,7 +200,72 @@ export async function clearPendingLockTrip(): Promise<void> {
   await AsyncStorage.removeItem(PENDING_LOCK_TRIP_KEY).catch(() => undefined);
 }
 
-/** Posted by the app so Android can open it over the lock screen. A system-drawn push cannot. */
+function normalizeBookingNumberKey(bookingNumber: string): string {
+  return String(bookingNumber ?? '')
+    .trim()
+    .replace(/^#/, '')
+    .toLowerCase();
+}
+
+/** Stable keys used to remember that the driver already handled this assignment alert. */
+export function tripAssignmentHandleKeys(
+  bookingId: number | string | null | undefined,
+  bookingNumber: string
+): string[] {
+  const keys: string[] = [];
+  const bn = normalizeBookingNumberKey(bookingNumber);
+  if (bn) keys.push(`n:${bn}`);
+  const idNum = Number(bookingId);
+  if (Number.isFinite(idNum) && idNum > 0) keys.push(`i:${idNum}`);
+  return keys;
+}
+
+async function readHandledAssignmentMap(): Promise<Record<string, number>> {
+  const raw = await AsyncStorage.getItem(HANDLED_TRIP_ASSIGNMENTS_KEY).catch(() => null);
+  if (!raw) return {};
+  try {
+    const parsed = asRecord(JSON.parse(raw));
+    if (!parsed) return {};
+    const now = Date.now();
+    const next: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      const at = Number(value);
+      if (Number.isFinite(at) && now - at <= HANDLED_TRIP_ASSIGNMENT_MS) {
+        next[key] = at;
+      }
+    }
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+export async function isTripAssignmentHandled(
+  bookingId: number | string | null | undefined,
+  bookingNumber: string
+): Promise<boolean> {
+  const keys = tripAssignmentHandleKeys(bookingId, bookingNumber);
+  if (keys.length === 0) return false;
+  const map = await readHandledAssignmentMap();
+  return keys.some((key) => map[key] != null);
+}
+
+/** Call after View trip / Mute so cold-start and chime retries do not reopen the same alert. */
+export async function markTripAssignmentHandled(
+  bookingId: number | string | null | undefined,
+  bookingNumber: string
+): Promise<void> {
+  const keys = tripAssignmentHandleKeys(bookingId, bookingNumber);
+  if (keys.length === 0) return;
+  const map = await readHandledAssignmentMap();
+  const at = Date.now();
+  for (const key of keys) map[key] = at;
+  await AsyncStorage.setItem(HANDLED_TRIP_ASSIGNMENTS_KEY, JSON.stringify(map)).catch(() => undefined);
+  await clearPendingLockTrip();
+  await Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
+}
+
+/** Posted by the app so Android can open it over the lock screen (full-screen intent). */
 export async function presentLockScreenTrip(trip: PendingLockTrip): Promise<void> {
   if (Platform.OS === 'web') return;
   await ensureTripAssignmentNotificationChannel();
@@ -214,10 +282,17 @@ export async function presentLockScreenTrip(trip: PendingLockTrip): Promise<void
         bookingNumber: trip.bookingNumber,
       },
       ...(Platform.OS === 'android'
-        ? { priority: Notifications.AndroidNotificationPriority.MAX }
+        ? {
+            priority: Notifications.AndroidNotificationPriority.MAX,
+            vibrate: [0, 700, 250, 700, 250, 700],
+          }
         : {}),
     },
-    trigger: { channelId: TRIP_ASSIGNMENT_CHANNEL_ID },
+    // ChannelAwareTriggerInput = show now on that Android channel (needed for lock-screen popup).
+    trigger:
+      Platform.OS === 'android'
+        ? { channelId: TRIP_ASSIGNMENT_CHANNEL_ID }
+        : null,
   });
 }
 

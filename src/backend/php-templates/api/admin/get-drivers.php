@@ -44,9 +44,18 @@ function driverPhoneKey($phone) {
     return $digits;
 }
 
+function driverLicenseIsPending(array $row) {
+    $license = strtoupper(trim((string)($row['license_no'] ?? $row['license_number'] ?? '')));
+    return $license === 'PENDING';
+}
+
 function driverIsAssignable(array $row, array $inactiveUserIds, array $inactivePhones) {
     $status = strtolower(trim((string)($row['status'] ?? '')));
     if (in_array($status, ['offline', 'inactive', 'blocked'], true)) {
+        return false;
+    }
+    // Auto-provisioned shadow rows (license PENDING) duplicate real fleet drivers in the assign list.
+    if (driverLicenseIsPending($row)) {
         return false;
     }
     $userId = isset($row['user_id']) ? (int)$row['user_id'] : 0;

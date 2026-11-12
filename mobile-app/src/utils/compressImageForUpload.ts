@@ -1,7 +1,7 @@
 /**
  * Resize + JPEG compress before OCR / upload so files stay under Vision API (~4MB) limits.
  * Never upscales: stretching a small odometer or pump crop softens the digits OCR has to read.
- * Use `geminiVisionPreset: true` for driver fuel captures (2048px max edge, ~92% JPEG).
+ * Use `geminiVisionPreset: true` for driver fuel captures (2560px max edge, high JPEG quality).
  */
 import { manipulateAsync, SaveFormat, type Action } from 'expo-image-manipulator';
 import { getInfoAsync } from 'expo-file-system/legacy';
@@ -14,8 +14,8 @@ const JPEG_QUALITY = 0.9;
 const FALLBACK_EDGE = 1600;
 const FALLBACK_QUALITY = 0.8;
 
-const GEMINI_VISION_MAX_EDGE = 2048;
-const GEMINI_VISION_JPEG_QUALITY = 0.92;
+const GEMINI_VISION_MAX_EDGE = 2560;
+const GEMINI_VISION_JPEG_QUALITY = 0.95;
 
 function imageSize(uri: string): Promise<{ width: number; height: number } | null> {
   return new Promise((resolve) => {

@@ -71,7 +71,7 @@ function normalizeFuelKind(v: string | undefined): FuelPumpFuelKind {
 function rateBand(kind: FuelPumpFuelKind): { min: number; max: number } {
   if (kind === 'diesel') return { min: 80, max: 100 };
   if (kind === 'cng') return { min: 70, max: 100 };
-  return { min: 88, max: 110 };
+  return { min: 85, max: 130 };
 }
 
 /** Hard validation — mirrors PHP client-side guard (server is authoritative). */
@@ -265,7 +265,7 @@ async function extractViaPhpProxy(
   }
 }
 
-/** Pump photo: stencil-cropped + 2048px JPEG from FuelCaptureCameraModal, then compressImageForUpload(geminiVisionPreset). */
+/** Pump photo from the system camera, then compressImageForUpload(geminiVisionPreset). */
 export async function extractIndianFuelPumpDisplayFromImage(
   imageUri: string,
   authToken: string | null,

@@ -105,6 +105,7 @@ function savedTripForm(trip: DriverDashboardTrip) {
 }
 
 type DutyKmRow = {
+  dayId: number;
   segmentId: number;
   dayIndex: number;
   dutyDate: string;
@@ -112,6 +113,7 @@ type DutyKmRow = {
   detail: string;
   openingKm: string;
   closingKm: string;
+  closingAt: string;
 };
 
 function kmText(value: unknown): string {
@@ -176,7 +178,37 @@ export function DriverDashboardTripEditSheet({ trip, open, onOpenChange, onSaved
   const [clearing, setClearing] = useState<'start' | 'end' | null>(null);
   const [fillingSheet, setFillingSheet] = useState(false);
   const [startedAt, setStartedAt] = useState('');
+  const [cancellingDayId, setCancellingDayId] = useState<number | null>(null);
+  const [cancelDayBusy, setCancelDayBusy] = useState(false);
   const readingsStamp = React.useRef(0);
+
+  const applyDutyDays = (days: Array<{ id?: number; dayIndex?: number; dutyDate?: string; status?: string; segments?: Array<Record<string, unknown>> }>) => {
+    const rows: DutyKmRow[] = [];
+    for (const day of days) {
+      const dayId = Number(day.id);
+      const segments = Array.isArray(day.segments) ? day.segments : [];
+      for (const segment of segments) {
+        const segmentId = Number(segment.id);
+        if (!Number.isFinite(segmentId)) continue;
+        const driverName = typeof segment.driverName === 'string' ? segment.driverName : '';
+        const vehicleNumber = typeof segment.vehicleNumber === 'string' ? segment.vehicleNumber : '';
+        rows.push({
+          dayId: Number.isFinite(dayId) ? dayId : 0,
+          segmentId,
+          dayIndex: Number(day.dayIndex) || rows.length + 1,
+          dutyDate: String(day.dutyDate || ''),
+          dayStatus: String(day.status || ''),
+          detail: [driverName, vehicleNumber].filter((part) => part.trim() !== '').join(' · '),
+          openingKm: kmText(segment.openingKm),
+          closingKm: kmText(segment.closingKm),
+          closingAt: toDatetimeLocalValue(typeof segment.closingAt === 'string' ? segment.closingAt : ''),
+        });
+      }
+    }
+    setDayRows(rows);
+    setSavedDayRows(rows);
+    setDayLoadState('ready');
+  };
 
   const fuelNote = useMemo(() => {
     if (!trip) return '';
@@ -274,36 +306,15 @@ export function DriverDashboardTripEditSheet({ trip, open, onOpenChange, onSaved
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(async (response) => {
-        const result = await response.json() as { status?: string; message?: string; days?: Array<{ dayIndex?: number; dutyDate?: string; status?: string; segments?: Array<Record<string, unknown>> }> };
+        const result = await response.json() as { status?: string; message?: string; days?: Array<{ id?: number; dayIndex?: number; dutyDate?: string; status?: string; segments?: Array<Record<string, unknown>> }> };
         if (!response.ok || result?.status !== 'success') {
           throw new Error(result?.message || 'Duty days could not be loaded');
         }
         return result;
       })
-      .then((result: { status?: string; days?: Array<{ dayIndex?: number; dutyDate?: string; status?: string; segments?: Array<Record<string, unknown>> }> }) => {
+      .then((result) => {
         if (cancelled || stamp !== readingsStamp.current || !Array.isArray(result.days)) return;
-        const rows: DutyKmRow[] = [];
-        for (const day of result.days) {
-          const segments = Array.isArray(day.segments) ? day.segments : [];
-          for (const segment of segments) {
-            const segmentId = Number(segment.id);
-            if (!Number.isFinite(segmentId)) continue;
-            const driverName = typeof segment.driverName === 'string' ? segment.driverName : '';
-            const vehicleNumber = typeof segment.vehicleNumber === 'string' ? segment.vehicleNumber : '';
-            rows.push({
-              segmentId,
-              dayIndex: Number(day.dayIndex) || rows.length + 1,
-              dutyDate: String(day.dutyDate || ''),
-              dayStatus: String(day.status || ''),
-              detail: [driverName, vehicleNumber].filter((part) => part.trim() !== '').join(' · '),
-              openingKm: kmText(segment.openingKm),
-              closingKm: kmText(segment.closingKm),
-            });
-          }
-        }
-        setDayRows(rows);
-        setSavedDayRows(rows);
-        setDayLoadState('ready');
+        applyDutyDays(result.days);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -388,6 +399,7 @@ export function DriverDashboardTripEditSheet({ trip, open, onOpenChange, onSaved
           id: row.segmentId,
           openingKm: row.openingKm.trim() === '' ? null : Number(row.openingKm),
           closingKm: row.closingKm.trim() === '' ? null : Number(row.closingKm),
+          closingAt: datetimeLocalToMysql(row.closingAt) || null,
         }));
       }
       const startTrim = startOdo.trim();
@@ -410,6 +422,44 @@ export function DriverDashboardTripEditSheet({ trip, open, onOpenChange, onSaved
       setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCancelDay = async () => {
+    if (!trip || cancellingDayId == null) return;
+    setCancelDayBusy(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(getApiUrl('/api/admin/duty-assignment.php'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          action: 'cancel-day',
+          bookingId: trip.tripId,
+          dayId: cancellingDayId,
+        }),
+      });
+      const result = await response.json() as {
+        status?: string;
+        message?: string;
+        days?: Array<{ id?: number; dayIndex?: number; dutyDate?: string; status?: string; segments?: Array<Record<string, unknown>> }>;
+      };
+      if (!response.ok || result.status !== 'success') {
+        throw new Error(result.message || 'Could not cancel this day');
+      }
+      if (Array.isArray(result.days)) {
+        applyDutyDays(result.days);
+      }
+      setCancellingDayId(null);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not cancel this day');
+    } finally {
+      setCancelDayBusy(false);
     }
   };
 
@@ -608,6 +658,32 @@ export function DriverDashboardTripEditSheet({ trip, open, onOpenChange, onSaved
                           />
                         </div>
                       </div>
+                      <div className="grid gap-1">
+                        <Label className="text-xs">Closing time</Label>
+                        <Input
+                          type="datetime-local"
+                          value={row.closingAt}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setDayRows((current) => current.map((item) => (
+                              item.segmentId === row.segmentId ? { ...item, closingAt: value } : item
+                            )));
+                          }}
+                        />
+                      </div>
+                      {row.dayId > 0
+                        && row.dayStatus.trim().toLowerCase() === 'not_started'
+                        && new Set(dayRows.map((item) => item.dayId).filter((id) => id > 0)).size > 1 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="text-destructive border-destructive/40"
+                          disabled={cancelDayBusy || saving}
+                          onClick={() => setCancellingDayId(row.dayId)}
+                        >
+                          Cancel this day
+                        </Button>
+                      ) : null}
                     </div>
                   ))}
               </div>
@@ -702,6 +778,39 @@ export function DriverDashboardTripEditSheet({ trip, open, onOpenChange, onSaved
               onClick={() => void handleDelete()}
             >
               {deleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={cancellingDayId != null}
+        onOpenChange={(next) => {
+          if (!next && !cancelDayBusy) setCancellingDayId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this duty day?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const day = dayRows.find((row) => row.dayId === cancellingDayId);
+                const label = day
+                  ? `Day ${day.dayIndex}${day.dutyDate ? ` · ${formatDutyDate(day.dutyDate)}` : ''}`
+                  : 'This day';
+                return `${label} has not started. It will be removed from the trip. Completed days stay as they were driven.`;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelDayBusy}>Keep this day</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={cancelDayBusy}
+              onClick={() => void handleCancelDay()}
+            >
+              {cancelDayBusy ? 'Cancelling…' : 'Cancel this day'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

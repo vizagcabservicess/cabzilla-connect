@@ -67,6 +67,29 @@ export const userAPI = {
       throw error;
     }
   },
+
+  /**
+   * Update name, email, and phone for an existing user
+   */
+  updateUserProfile: async (
+    userId: number | string,
+    profile: { name: string; email: string; phone: string }
+  ) => {
+    try {
+      const response = await axios.put(
+        `${API_BASE_URL}/api/admin/users.php`,
+        { userId, name: profile.name, email: profile.email, phone: profile.phone },
+        { headers: getAuthHeaders() }
+      );
+      if (response.data?.status === 'error') {
+        throw new Error(response.data?.message || 'Failed to update user details');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      throw error;
+    }
+  },
   
   /**
    * Delete user

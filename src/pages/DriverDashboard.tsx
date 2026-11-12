@@ -221,7 +221,7 @@ function formatJourneyDate(value: string | null): string {
 function formatStartClock(value: string | null | undefined): string {
   if (!value || !/[T ]\d{2}:\d{2}/.test(value)) return '';
   const date = parseTripTime(value);
-  if (!date) return '';
+  if (!date || (date.getHours() === 0 && date.getMinutes() === 0)) return '';
   return date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
 }
 

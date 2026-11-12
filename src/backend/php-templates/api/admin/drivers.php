@@ -149,6 +149,11 @@ function drivers_normalize_phone_key($phone) {
 /**
  * One row per logical driver: same mobile (last 10 digits) or same email keeps lowest id.
  */
+function drivers_license_is_pending(array $row): bool
+{
+    return strtoupper(trim((string) ($row['license_no'] ?? $row['license_number'] ?? ''))) === 'PENDING';
+}
+
 function drivers_dedupe_rows(array $rows) {
     $best = [];
     foreach ($rows as $row) {
@@ -165,7 +170,17 @@ function drivers_dedupe_rows(array $rows) {
         } else {
             $key = 'id:' . $id;
         }
-        if (!isset($best[$key]) || $id < (int)($best[$key]['id'] ?? PHP_INT_MAX)) {
+        if (!isset($best[$key])) {
+            $best[$key] = $row;
+            continue;
+        }
+        $prev = $best[$key];
+        $prevPending = drivers_license_is_pending($prev);
+        $rowPending = drivers_license_is_pending($row);
+        // Prefer a real license over an auto-created PENDING shadow for the same phone/email.
+        if ($prevPending && !$rowPending) {
+            $best[$key] = $row;
+        } elseif ($prevPending === $rowPending && $id < (int) ($prev['id'] ?? PHP_INT_MAX)) {
             $best[$key] = $row;
         }
     }

@@ -476,6 +476,23 @@ export function DriverTripDetailScreen() {
     }
   };
 
+  const cancelLaterDay = async (dayId: number) => {
+    setLoading(true);
+    try {
+      await driverTripsAPI.cancelDutyDay(trip.id, dayId);
+      const [dutyDays, fresh] = await Promise.all([
+        driverTripsAPI.getDutyDays(trip.id),
+        driverTripsAPI.getTripById(trip.id).catch(() => null),
+      ]);
+      setDuty(dutyDays);
+      if (fresh) setTripDetail(fresh);
+    } catch (e) {
+      Alert.alert('Could not cancel this day', e instanceof Error ? e.message : 'Could not cancel this day');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEndTrip = () => {
     setOdometerModal('end');
   };
@@ -1084,6 +1101,23 @@ export function DriverTripDetailScreen() {
                     <Text style={styles.dutySlipLink}>Duty slip for this day</Text>
                   </TouchableOpacity>
                 ) : null}
+                {officeView && day.status === 'not_started' && duty.days.length > 1 && isoDay(day.dutyDate) !== isoDay(duty.currentDutyDate || '') ? (
+                  <TouchableOpacity
+                    disabled={loading}
+                    onPress={() => {
+                      Alert.alert(
+                        `Cancel day ${day.dayIndex}?`,
+                        `${formatPrettyDate(day.dutyDate)} has not started. Today's duty stays open.`,
+                        [
+                          { text: 'Keep this day', style: 'cancel' },
+                          { text: 'Cancel this day', style: 'destructive', onPress: () => { void cancelLaterDay(day.id); } },
+                        ],
+                      );
+                    }}
+                  >
+                    <Text style={styles.dutyCancel}>Cancel this day</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ))}
           </View>
@@ -1242,6 +1276,7 @@ const styles = StyleSheet.create({
   dutyPillTextDone: { color: '#166534' },
   dutyLine: { fontSize: 12, color: colors.gray600, marginTop: 4 },
   dutySlipLink: { fontSize: 12, color: colors.primary, fontWeight: '700', marginTop: 6 },
+  dutyCancel: { fontSize: 12, color: '#b91c1c', fontWeight: '700', marginTop: 6 },
   placeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
   placeCell: { width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 6 },
   placeIndex: { width: 22, fontSize: 13, fontWeight: '700', color: colors.gray500, textAlign: 'right', lineHeight: 18 },
