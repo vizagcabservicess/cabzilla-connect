@@ -288,7 +288,8 @@ export function patchInvoiceHtmlBillingAddress(html: string, billingAddress: str
 }
 
 /**
- * Replace invoice number in server-generated HTML using stored admin override.
+ * Replace invoice number in server-generated HTML (always overwrite baked-in/cached values).
+ * Only touches the Invoice # line — never parent table cells (that left orphan numbers like 582).
  */
 export function patchInvoiceHtmlInvoiceNumber(html: string, invoiceNumber: string): string {
   const value = invoiceNumber.trim();
@@ -296,25 +297,68 @@ export function patchInvoiceHtmlInvoiceNumber(html: string, invoiceNumber: strin
     return html;
   }
 
+  const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
   if (typeof DOMParser !== 'undefined') {
     try {
       const doc = new DOMParser().parseFromString(html, 'text/html');
       let changed = false;
 
-      doc.querySelectorAll('p.compact-p, p[class*="compact"]').forEach((p) => {
-        const strong = p.querySelector('strong');
-        if (!strong) {
+      const isInvoiceLabel = (label: string) => /^invoice\s*#\s*:?\s*$/i.test(label);
+      const isInvoiceLine = (text: string) => /^invoice\s*#\s*:?\s*.+$/i.test(text);
+
+      // 1) Rewrite only paragraph lines that are the Invoice # row.
+      doc.querySelectorAll('p.compact-p, p[class*="compact"], p').forEach((p) => {
+        const strong = p.querySelector('strong, b');
+        const fullText = (p.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!strong && !isInvoiceLine(fullText)) {
           return;
         }
-        const label = (strong.textContent || '').replace(/\s+/g, ' ').trim();
-        if (!/^invoice\s*#\s*:?\s*$/i.test(label)) {
-          return;
+
+        if (strong) {
+          const label = (strong.textContent || '').replace(/\s+/g, ' ').trim();
+          // Case A: <strong>Invoice #:</strong> 582
+          if (isInvoiceLabel(label) || /^invoice\s*#\s*:?\s*/i.test(label)) {
+            strong.textContent = 'Invoice #:';
+            while (strong.nextSibling) {
+              strong.nextSibling.remove();
+            }
+            // Drop any other leftover nodes in the paragraph (orphan digits, etc.).
+            Array.from(p.childNodes).forEach((node) => {
+              if (node !== strong) {
+                p.removeChild(node);
+              }
+            });
+            p.appendChild(doc.createTextNode(` ${value}`));
+            changed = true;
+            return;
+          }
         }
-        while (strong.nextSibling) {
-          strong.nextSibling.remove();
+
+        // Case B: whole paragraph text is "Invoice #: 582" / "Invoice #92 582"
+        if (isInvoiceLine(fullText)) {
+          p.textContent = '';
+          const labelEl = doc.createElement('strong');
+          labelEl.textContent = 'Invoice #:';
+          p.appendChild(labelEl);
+          p.appendChild(doc.createTextNode(` ${value}`));
+          changed = true;
         }
-        p.appendChild(doc.createTextNode(` ${value}`));
-        changed = true;
+      });
+
+      // 2) Remove orphan bare invoice leftovers (e.g. a stray "582" text node under Booking #).
+      doc.querySelectorAll('td').forEach((td) => {
+        Array.from(td.childNodes).forEach((node) => {
+          if (node.nodeType !== 3) {
+            return;
+          }
+          const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+          // Only strip standalone numeric leftovers, not real content.
+          if (/^\d{2,6}$/.test(text)) {
+            node.parentNode?.removeChild(node);
+            changed = true;
+          }
+        });
       });
 
       if (changed) {
@@ -325,11 +369,20 @@ export function patchInvoiceHtmlInvoiceNumber(html: string, invoiceNumber: strin
     }
   }
 
-  const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return html.replace(
-    /(<p class="compact-p"><strong>Invoice\s*#:<\/strong>)\s*[^<]*/i,
-    `$1 ${escaped}`
-  );
+  // Regex fallback: force a single clean Invoice #: value.
+  return html
+    .replace(
+      /(<p class="compact-p"><strong>\s*Invoice\s*#:\s*<\/strong>)\s*[^<]*/gi,
+      `$1 ${escaped}`
+    )
+    .replace(
+      /(<strong>\s*Invoice\s*#:\s*<\/strong>)\s*(?:INV-[\w-]+|\d+(?:\s+\d+)*)/gi,
+      `$1 ${escaped}`
+    )
+    .replace(
+      /(Invoice\s*#\s*:?\s*)(?:INV-[\w-]+|\d+(?:\s+\d+)*)/gi,
+      `$1${escaped}`
+    );
 }
 
 /**

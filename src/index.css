@@ -1150,7 +1150,7 @@ html.location-search-sheet-open .pac-logo::after {
 .premium-hero-copy {
   padding-top: 1.5rem;
   padding-bottom: 0.5rem;
-  max-width: 34rem;
+  max-width: 44rem;
 }
 
 .premium-hero-overlap-spacer {
@@ -1160,17 +1160,17 @@ html.location-search-sheet-open .pac-logo::after {
 
 @media (min-width: 1024px) {
   .premium-hero-banner {
-    min-height: clamp(280px, 34vh, 380px);
+    min-height: 0;
   }
 
   .premium-hero-copy {
     padding-top: 1.75rem;
-    padding-bottom: 0.75rem;
-    max-width: 38rem;
+    padding-bottom: 0;
+    max-width: 48rem;
   }
 
   .premium-hero-overlap-spacer {
-    height: 4.5rem;
+    height: 1.5rem;
   }
 }
 
@@ -1182,7 +1182,7 @@ html.location-search-sheet-open .pac-logo::after {
 
 @media (min-width: 1024px) {
   .premium-hero-booking-wrap {
-    margin-top: -5rem;
+    margin-top: -0.25rem;
   }
 }
 
@@ -1345,7 +1345,7 @@ html.location-search-sheet-open .pac-logo::after {
 
 .premium-hero-banner .premium-hero-subtitle {
   margin-top: 0.625rem;
-  max-width: 28rem;
+  max-width: 44rem;
   font-size: 0.875rem;
   line-height: 1.55;
   font-weight: 400;
@@ -1356,7 +1356,7 @@ html.location-search-sheet-open .pac-logo::after {
   .premium-hero-banner .premium-hero-subtitle {
     font-size: 0.9375rem;
     margin-top: 0.75rem;
-    max-width: 30rem;
+    max-width: none;
   }
 }
 
@@ -1421,25 +1421,38 @@ html.location-search-sheet-open .pac-logo::after {
 }
 
 .premium-booking-card label,
-.premium-booking-card [class*='text-xs'] {
-  font-size: 0.625rem !important;
+.premium-booking-card .axis-trip-toggle + span,
+.premium-booking-card .flex.flex-col.gap-1 > span {
+  font-size: 0.75rem !important;
   font-weight: 500;
-  letter-spacing: 0.01em;
-  color: #94a3b8;
+  letter-spacing: 0;
+  color: #64748b;
 }
 
 .premium-booking-card input,
 .premium-booking-card select,
 .premium-booking-card [data-radix-select-trigger],
-.premium-booking-card button[data-radix-select-trigger] {
+.premium-booking-card button[data-radix-select-trigger],
+.premium-booking-card button.h-\[2\.75rem\]:not(.axis-search-btn) span {
+  font-size: 0.875rem !important;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.premium-booking-card input::placeholder {
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.premium-booking-card .axis-trip-toggle-btn {
   font-size: 0.8125rem !important;
   font-weight: 600;
 }
 
 /* Compact Axis-style tabs inside booking widget */
 .premium-booking-card #tab-trip-selector button {
-  font-size: 0.6875rem !important;
-  font-weight: 500 !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
   padding-top: 0.375rem;
   padding-bottom: 0.375rem;
 }
@@ -1450,7 +1463,7 @@ html.location-search-sheet-open .pac-logo::after {
 }
 
 .premium-booking-card .hidden.lg\:block.border-b {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
 }
 
 .premium-booking-card .axis-search-btn {
@@ -1458,7 +1471,7 @@ html.location-search-sheet-open .pac-logo::after {
   min-width: 7rem;
   padding-left: 1.35rem;
   padding-right: 1.35rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
   border-radius: 9999px;
   background: linear-gradient(135deg, #33B5FF 0%, #0066FF 48%, #0052CC 100%) !important;

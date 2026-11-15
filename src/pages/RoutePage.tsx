@@ -9,6 +9,8 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 import { getRouteBySlug } from '@/lib/routeData';
 import { RelatedRoutes } from '@/components/RelatedRoutes';
 import { ServiceLinks } from '@/components/ServiceLinks';
+import { outstationDistanceCopy } from '@/seo/outstationDistance';
+import { resolvePublicHead } from '@/seo/publicPageMeta';
 
 export const RoutePage = () => {
   const { slug } = useParams();
@@ -96,37 +98,38 @@ export const RoutePage = () => {
     );
   }
 
+  const slugParts = (slug ?? '').split('-to-');
+  const distanceCopy = slugParts[0] === 'visakhapatnam' && slugParts[1]
+    ? outstationDistanceCopy(slugParts[1])
+    : null;
+  const sharedHead = slug ? resolvePublicHead(`/outstation-taxi/${slug}`) : null;
+  const pageTitle = sharedHead?.title || routeInfo.seo?.title || `${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`;
+  const pageDescription = sharedHead?.description || routeInfo.seo?.description || `Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`;
+  const pageUrl = sharedHead?.canonical || `https://vizagtaxihub.com/outstation-taxi/${slug}`;
+  const pageImage = sharedHead?.ogImage || '/og-image.png';
+
   return (
     <>
       <Helmet>
-        <title>{routeInfo.seo?.title || `${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`}</title>
-        <meta name="description" content={routeInfo.seo?.description || `Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`} />
+        {/* Title, description, canonical and Open Graph: PublicHead */}
         <meta name="keywords" content={routeInfo.seo?.keywords || `${routeInfo.from} to ${routeInfo.to} taxi, ${routeInfo.from} to ${routeInfo.to} cab, outstation taxi ${routeInfo.from} ${routeInfo.to}`} />
         <meta name="author" content="Vizag Taxi Hub" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={`https://vizagtaxihub.com/outstation-taxi/${slug}`} />
-        <meta property="og:title" content={routeInfo.seo?.title || `${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`} />
-        <meta property="og:description" content={routeInfo.seo?.description || `Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`} />
-        <meta property="og:image" content="/og-image.png" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        
-        {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content={`https://vizagtaxihub.com/outstation-taxi/${slug}`} />
-        <meta property="twitter:title" content={routeInfo.seo?.title || `${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`} />
-        <meta property="twitter:description" content={routeInfo.seo?.description || `Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`} />
-        <meta property="twitter:image" content="/og-image.png" />
-        
-        {/* Additional SEO */}
+        <meta property="twitter:image" content={pageImage} />
         <meta name="robots" content="index, follow" />
-        <link rel="canonical" href={`https://vizagtaxihub.com/outstation-taxi/${slug}`} />
       </Helmet>
       <ScrollToTop />
       <div className="min-h-screen bg-gray-50 pt-24 md:pt-28">
         <Navbar />
+
+        {distanceCopy && (
+          <section className="bg-white">
+            <div className="container mx-auto max-w-4xl px-4 pt-6">
+              <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">{distanceCopy.h1}</h1>
+              <p className="mt-3 text-base leading-relaxed text-gray-700">{distanceCopy.lead}</p>
+            </div>
+          </section>
+        )}
         
         {/* Hero Section with Route-specific Search Widget */}
         <div className="pb-8 md:pb-12">

@@ -177,9 +177,9 @@ export function DestinationsShowcase() {
           </div>
 
           <div className="flex flex-1 flex-col px-4 pb-3 pt-4">
-            <h3 className="line-clamp-2 text-base font-bold leading-snug text-slate-900">
+            <p className="line-clamp-2 text-base font-bold leading-snug text-slate-900">
               {title}
-            </h3>
+            </p>
             <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-slate-500">
               {getDescription(tour)}
             </p>
@@ -269,7 +269,7 @@ export function DestinationsShowcase() {
           </p>
         ) : (
           <>
-            <div className="relative mb-4 hidden overflow-hidden lg:block">
+            <div className="relative mb-4 hidden overflow-hidden lg:block" aria-hidden="true">
               <div className="flex justify-center gap-4">
                 {currentWindowItems.map((tour, index) => (
                   <div key={tour.id || tour.tourId || index} className="w-full max-w-[calc(25%-12px)]">
@@ -307,7 +307,7 @@ export function DestinationsShowcase() {
               )}
             </div>
 
-            <div className="mb-4 hidden grid-cols-2 gap-4 md:grid lg:hidden">
+            <div className="mb-4 hidden grid-cols-2 gap-4 md:grid lg:hidden" aria-hidden="true">
               {browseTours.slice(0, 4).map((tour, index) => renderTourCard(tour, index))}
             </div>
 

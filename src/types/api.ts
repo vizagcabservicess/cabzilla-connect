@@ -147,6 +147,11 @@ export interface Booking {
   vehicle_capacity?: number;
   fare: number;
   totalAmount?: number;
+  /** Google Sheet Invoice no (ledger column A). */
+  invoiceNo?: number | null;
+  invoice_no?: number | null;
+  invoiceNumber?: string | null;
+  invoice_number?: string | null;
   /** Cash the driver collected on top of the package fare. */
   extraCollectedAmount?: number | null;
   extra_collected_amount?: number | null;

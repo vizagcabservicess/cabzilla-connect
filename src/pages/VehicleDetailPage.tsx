@@ -20,6 +20,7 @@ import { Helmet } from 'react-helmet-async';
 import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
 import type { VehicleLoaderData } from '@/loaders/vehicleLoader';
 import { getOptimizedImageUrl } from '@/utils/imageOptimization';
+import { resolvePublicHead } from '@/seo/publicPageMeta';
 import {
   getVehicleEmbedConfig,
   resolveEmbedIllustrationLocalSrc,
@@ -149,10 +150,12 @@ const VehicleDetailPage = () => {
       ? getVehicleEmbedConfig(resolvedEmbedSlug, vehicle)
       : null;
 
+    const sharedHead = resolvePublicHead(`/vehicle/${vehicleSlug ?? ''}`);
+
     if (resolvedEmbedConfig) {
       const { seo } = resolvedEmbedConfig;
-      const title = vehicle.seoContent?.title || seo.title;
-      const description = vehicle.seoContent?.metaDescription || seo.description;
+      const title = sharedHead?.title || vehicle.seoContent?.title || seo.title;
+      const description = sharedHead?.description || vehicle.seoContent?.metaDescription || seo.description;
       const keywords =
         vehicle.seoContent?.keywords ||
         `${seo.keywords}, ${vehicle.capacity} ${seo.capacityKeywordSuffix}`;
@@ -160,16 +163,12 @@ const VehicleDetailPage = () => {
         title,
         description,
         keywords,
-        image:
-          galleryImages?.[0]?.url ||
-          vehicle.image ||
-          seo.ogImageUrl,
-        url: seo.canonicalUrl,
+        image: sharedHead?.ogImage || galleryImages?.[0]?.url || vehicle.image || seo.ogImageUrl,
+        url: sharedHead?.canonical || seo.canonicalUrl,
       };
     }
 
     const vehicleType = vehicle.capacity > 12 ? 'mini bus' : vehicle.capacity > 6 ? 'SUV' : 'sedan';
-    const vehicleTypeForTitle = vehicle.capacity > 12 ? 'Mini Bus' : vehicle.capacity > 6 ? 'SUV' : 'Sedan';
 
     const getUniqueDescription = () => {
       if (vehicle.seoContent?.metaDescription) {
@@ -186,13 +185,13 @@ const VehicleDetailPage = () => {
     };
 
     return {
-      title: vehicle.seoContent?.title || `${vehicle.name} - ${vehicle.capacity} Seater ${vehicleTypeForTitle} Service in Visakhapatnam | Vizag Taxi Hub`,
-      description: getUniqueDescription(),
+      title: sharedHead?.title || vehicle.seoContent?.title || `${vehicle.name} | Vizag Taxi Hub`,
+      description: sharedHead?.description || getUniqueDescription(),
       keywords:
         vehicle.seoContent?.keywords ||
         `${vehicle.name.toLowerCase()}, ${vehicle.capacity} seater ${vehicleType}, ${vehicleType} service vizag, taxi service visakhapatnam, ${vehicle.tags?.join(', ').toLowerCase() || 'taxi service'}, vizag taxi hub vehicles`,
-      image: galleryImages?.[0]?.url || vehicle.image || '/og-image.png',
-      url: `https://vizagtaxihub.com${getVehicleUrl(vehicle)}`,
+      image: sharedHead?.ogImage || galleryImages?.[0]?.url || vehicle.image || '/og-image.png',
+      url: sharedHead?.canonical || `https://vizagtaxihub.com${getVehicleUrl(vehicle)}`,
     };
   }, [vehicle, galleryImages, vehicleSlug]);
 
@@ -382,18 +381,12 @@ const VehicleDetailPage = () => {
   return (
     <>
       <Helmet>
-        <title>{seoData?.title || 'Vehicle Details - Vizag Taxi Hub'}</title>
-        <meta name="description" content={seoData?.description || 'Vehicle details and booking information'} />
+        {/* Title, description, canonical and Open Graph: PublicHead */}
         <meta name="keywords" content={seoData?.keywords || 'taxi service, vehicle rental'} />
-        
-        {/* Critical CSS for above-the-fold content */}
         <style>{criticalStyles}</style>
-        
-        {/* Preload LCP image early - use optimized URL when backend supports it */}
         {embedConfig && embedHeroIllustrationSrc && (
           <link rel="preload" as="image" href={embedHeroIllustrationSrc} fetchPriority="high" />
         )}
-        {/* Embed LCP is the illustrator above the fold — avoid a second high-priority image preload. */}
         {vehicle?.image && !embedConfig && (
           <link rel="preload" as="image" href={getOptimizedImageUrl(vehicle.image)} fetchPriority="high" />
         )}
@@ -407,32 +400,11 @@ const VehicleDetailPage = () => {
         <meta name="geo.placename" content="Visakhapatnam" />
         <meta name="geo.position" content="17.6868;83.2185" />
         <meta name="ICBM" content="17.6868, 83.2185" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={seoData?.url || 'https://vizagtaxihub.com'} />
-        <meta property="og:title" content={seoData?.title || 'Vehicle Details - Vizag Taxi Hub'} />
-        <meta property="og:description" content={seoData?.description || 'Vehicle details and booking information'} />
-        <meta property="og:image" content={seoData?.image || '/og-image.png'} />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta property="og:site_name" content="Vizag Taxi Hub" />
-        <meta property="og:locale" content="en_IN" />
-        
-        {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content={seoData?.url || 'https://vizagtaxihub.com'} />
-        <meta property="twitter:title" content={seoData?.title || 'Vehicle Details - Vizag Taxi Hub'} />
-        <meta property="twitter:description" content={seoData?.description || 'Vehicle details and booking information'} />
         <meta property="twitter:image" content={seoData?.image || '/og-image.png'} />
-        
-        {/* Additional SEO */}
         <meta name="robots" content="index, follow" />
         <meta name="language" content="English" />
         <meta name="revisit-after" content="7 days" />
-        <link rel="canonical" href={seoData?.url || `https://vizagtaxihub.com/vehicle/${vehicleSlug}`} />
-        
-        {/* Local Business meta for high-intent fleet pages */}
         {(vehicle?.id === 'tempo_traveller' || embedConfig) && (
           <>
             <meta name="business:contact_data:locality" content="Visakhapatnam" />
@@ -534,7 +506,7 @@ const VehicleDetailPage = () => {
                 </div>
 
                 <div className="vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-4 max-lg:pb-3 max-lg:pt-0 lg:border-0 lg:bg-transparent lg:p-0">
-                  <h1 className="sr-only max-lg:hidden">{embedConfig.seo.pageHeadline}</h1>
+                  <p className="sr-only max-lg:hidden" aria-hidden="true">{embedConfig.seo.pageHeadline}</p>
                   <p className="sr-only max-lg:hidden">{embedConfig.seo.pageSubtitle}</p>
                   <Hero
                     hideBackground
@@ -545,6 +517,13 @@ const VehicleDetailPage = () => {
                     summaryBackHref={`/vehicle/${embedSlug}`}
                     onStepChange={setEmbedHeroStep}
                     onTripEditOpenChange={setEmbedRevealPageGrid}
+                    pageDefaultTripType={
+                      embedSlug === 'urbania' ||
+                      embedSlug === 'tempo-traveller' ||
+                      embedSlug === 'innova-crysta'
+                        ? 'outstation'
+                        : undefined
+                    }
                   />
                 </div>
               </div>

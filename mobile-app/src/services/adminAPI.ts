@@ -444,7 +444,8 @@ export const adminAPI = {
 
   /**
    * Same list the website assign-driver modal uses (`get-drivers.php`):
-   * hides offline/inactive/blocked and users marked inactive in User Management.
+   * includes Active User Management drivers (even PENDING license / offline fleet),
+   * and hides inactive/blocked plus inactive logins.
    */
   getAssignableDrivers: async (): Promise<AdminDriver[]> => {
     const base = getBase();
@@ -462,7 +463,7 @@ export const adminAPI = {
     const raw = Array.isArray(list) ? list : [];
     const assignable = (raw as AdminDriver[]).filter((driver) => {
       const status = String(driver.status ?? '').toLowerCase();
-      return status !== 'offline' && status !== 'inactive' && status !== 'blocked';
+      return status !== 'inactive' && status !== 'blocked';
     });
     return dedupeDriversByPhoneOrEmail(assignable).sort((a, b) =>
       String(a.name ?? '').localeCompare(String(b.name ?? ''), undefined, { sensitivity: 'base' })

@@ -7,6 +7,7 @@ import {
   useSpring,
   useTransform,
 } from 'framer-motion';
+import { Star } from 'lucide-react';
 import { HeroMeshBackground } from './HeroMeshBackground';
 
 const fadeUp = {
@@ -109,8 +110,8 @@ export function HomeHeroBanner() {
             variants={fadeUp}
             className="premium-hero-badge mb-3 inline-flex w-fit items-center gap-2 lg:mb-3.5"
           >
-            <span className="premium-hero-badge-dot" aria-hidden />
-            <span>Trusted by 20,000+ Happy Travellers</span>
+            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
+            <span>4.9 on Google · 20,000+ trips</span>
           </motion.div>
 
           <motion.h1
@@ -120,8 +121,7 @@ export function HomeHeroBanner() {
             variants={fadeUp}
             className="premium-hero-heading"
           >
-            Your Journey,{' '}
-            <span className="premium-hero-accent">Our Priority.</span>
+            Cab & Taxi Service in Vizag
           </motion.h1>
 
           <motion.p
@@ -131,7 +131,7 @@ export function HomeHeroBanner() {
             variants={fadeUp}
             className="premium-hero-subtitle"
           >
-            Safe, reliable and affordable taxi services across Visakhapatnam and Andhra Pradesh.
+            Local · Outstation · Airport · Tours, with fixed fares and door pickup
           </motion.p>
         </div>
       </div>

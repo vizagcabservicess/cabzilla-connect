@@ -5,6 +5,12 @@ import https from "node:https";
 import { componentTagger } from "lovable-tagger";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
+import {
+  buildSeoHeadDocument,
+  listSitemapPaths,
+  resolvePublicHead,
+  validatePublicHead,
+} from "./src/seo/publicPageMeta";
 import { VEHICLE_EMBED_CONFIGS } from "./src/seo/vehicleEmbedMeta";
 
 function sniffMediaType(buf: Buffer): string {
@@ -73,6 +79,74 @@ function escapeHtmlAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
+function escapeHtmlText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** Same app shell as index.html, with this route's head tags plus crawlable H1/main text in #root. */
+function injectRouteHead(
+  html: string,
+  routePath: string,
+  head: { title: string; description: string; ogImage: string; h1?: string; mainText?: string },
+): string {
+  const canonical = routePath === "/"
+    ? "https://vizagtaxihub.com/"
+    : `https://vizagtaxihub.com${routePath}`;
+  const title = escapeHtmlAttr(head.title);
+  const description = escapeHtmlAttr(head.description);
+  const image = escapeHtmlAttr(head.ogImage);
+  const canonicalAttr = escapeHtmlAttr(canonical);
+  const h1 = escapeHtmlText(head.h1 || head.title.split("|")[0]?.trim() || head.title);
+  const mainText = escapeHtmlText(head.mainText || head.description);
+  const block = [
+    `<meta name="description" content="${description}" />`,
+    `<link rel="canonical" href="${canonicalAttr}" />`,
+    `<meta property="og:title" content="${title}" />`,
+    `<meta property="og:description" content="${description}" />`,
+    `<meta property="og:url" content="${canonicalAttr}" />`,
+    `<meta property="og:image" content="${image}" />`,
+  ].join("\n    ");
+  const stripped = html
+    .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>\s*/gi, "")
+    .replace(/<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>\s*/gi, "")
+    .replace(/<meta\s+property="og:(?:title|description|url|image)"\s+content="[^"]*"\s*\/?>\s*/gi, "");
+  const withHead = stripped.replace(
+    /<title>[^<]*<\/title>/i,
+    `<title>${title}</title>\n    ${block}`,
+  );
+  // Crawlable H1/text stay in the first HTML response, but stay visually hidden so
+  // users still see the loading skeleton until React replaces #root.
+  const staticBody = [
+    '<div id="root">',
+    '      <main id="vth-seo-static" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">',
+    `        <h1>${h1}</h1>`,
+    `        <p>${mainText}</p>`,
+    '      </main>',
+    '      <div style="min-height:100vh;background:#f9fafb">',
+    '        <div style="background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.08)">',
+    '          <div class="skel-header">',
+    '            <div class="skel skel-bar"></div>',
+    '            <div class="skel skel-bar" style="width:5rem"></div>',
+    '          </div>',
+    '        </div>',
+    '        <div class="skel-hero">',
+    '          <div class="skel-card">',
+    '            <div class="skel-row"><div class="skel skel-block"></div><div class="skel skel-block"></div><div class="skel skel-block"></div></div>',
+    '            <div class="skel skel-btn"></div>',
+    '          </div>',
+    '        </div>',
+    '      </div>',
+    '    </div>',
+  ].join("\n    ");
+  return withHead.replace(
+    /<div id="root">[\s\S]*?<\/div>\s*(?=\s*(?:<!--|<\/body>|<script))/i,
+    `${staticBody}\n\n    `,
+  );
+}
+
 /** Duplicate of dist/index.html with vehicle embed head tags for WhatsApp / Facebook (no-JS crawlers). */
 function injectVehicleEmbedSocialMeta(
   html: string,
@@ -83,49 +157,25 @@ function injectVehicleEmbedSocialMeta(
   const m = config.seo;
   const keywords = `${m.keywords}, ${capacitySuffix}`;
   const lcpPreload = `<link rel="preload" href="${escapeHtmlAttr(config.illustration.cdnUrl)}" as="image" fetchpriority="high" />`;
-  return html
+  const headTags = [
+    `<meta name="description" content="${escapeHtmlAttr(m.description)}" />`,
+    `<meta name="keywords" content="${escapeHtmlAttr(keywords)}" />`,
+    `<link rel="canonical" href="${escapeHtmlAttr(m.canonicalUrl)}" />`,
+    `<meta property="og:title" content="${escapeHtmlAttr(m.title)}" />`,
+    `<meta property="og:description" content="${escapeHtmlAttr(m.description)}" />`,
+    `<meta property="og:url" content="${escapeHtmlAttr(m.canonicalUrl)}" />`,
+    `<meta property="og:image" content="${escapeHtmlAttr(m.ogImageUrl)}" />`,
+    `<meta name="twitter:title" content="${escapeHtmlAttr(m.title)}" />`,
+    `<meta name="twitter:description" content="${escapeHtmlAttr(m.description)}" />`,
+    `<meta name="twitter:image" content="${escapeHtmlAttr(m.ogImageUrl)}" />`,
+  ].join('\n    ');
+  const stripped = html
+    .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>\s*/gi, '')
+    .replace(/<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>\s*/gi, '')
+    .replace(/<meta\s+property="og:(?:title|description|url|image)"\s+content="[^"]*"\s*\/?>\s*/gi, '');
+  return stripped
     .replace(/<head>/i, `<head>\n    ${lcpPreload}`)
-    .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtmlAttr(m.title)}</title>`)
-    .replace(
-      /<meta name="description" content="[^"]*" \/>/,
-      `<meta name="description" content="${escapeHtmlAttr(m.description)}" />`,
-    )
-    .replace(
-      /<meta name="keywords" content="[^"]*" \/>/,
-      `<meta name="keywords" content="${escapeHtmlAttr(keywords)}" />`,
-    )
-    .replace(
-      /<link rel="canonical" href="[^"]*" \/>/,
-      `<link rel="canonical" href="${escapeHtmlAttr(m.canonicalUrl)}" />`,
-    )
-    .replace(
-      /<meta property="og:title" content="[^"]*" \/>/,
-      `<meta property="og:title" content="${escapeHtmlAttr(m.title)}" />`,
-    )
-    .replace(
-      /<meta property="og:description" content="[^"]*" \/>/,
-      `<meta property="og:description" content="${escapeHtmlAttr(m.description)}" />`,
-    )
-    .replace(
-      /<meta property="og:url" content="[^"]*" \/>/,
-      `<meta property="og:url" content="${escapeHtmlAttr(m.canonicalUrl)}" />`,
-    )
-    .replace(
-      /<meta property="og:image" content="[^"]*" \/>/,
-      `<meta property="og:image" content="${escapeHtmlAttr(m.ogImageUrl)}" />`,
-    )
-    .replace(
-      /<meta name="twitter:title" content="[^"]*" \/>/,
-      `<meta name="twitter:title" content="${escapeHtmlAttr(m.title)}" />`,
-    )
-    .replace(
-      /<meta name="twitter:description" content="[^"]*" \/>/,
-      `<meta name="twitter:description" content="${escapeHtmlAttr(m.description)}" />`,
-    )
-    .replace(
-      /<meta name="twitter:image" content="[^"]*" \/>/,
-      `<meta name="twitter:image" content="${escapeHtmlAttr(m.ogImageUrl)}" />`,
-    );
+    .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtmlAttr(m.title)}</title>\n    ${headTags}`);
 }
 
 /** Per-deploy id so unchanged chunk hashes (e.g. react-vendor) still get new URLs after deploy. */
@@ -259,8 +309,12 @@ export default defineConfig(({ mode }) => ({
       name: 'strip-gptengineer-prod',
       apply: 'build' as const,
       transformIndexHtml(html: string) {
-        if (mode !== 'production') return html;
-        return html.replace(
+        const stamped = html.replace(
+          /content="__BUILD_TIME__"/g,
+          `content="${new Date().toISOString()}"`,
+        );
+        if (mode !== 'production') return stamped;
+        return stamped.replace(
           /<script src="https:\/\/cdn\.gpteng\.co\/gptengineer\.js"[^>]*>\s*<\/script>\s*/i,
           '',
         );
@@ -270,7 +324,59 @@ export default defineConfig(({ mode }) => ({
       name: 'emit-vehicle-embed-social-index-html',
       apply: 'build' as const,
       closeBundle() {
-        const distIndex = join(process.cwd(), 'dist', 'index.html');
+        const distDir = join(process.cwd(), 'dist');
+        try {
+          validatePublicHead();
+          const sitemapFile = existsSync(join(distDir, 'sitemap.xml'))
+            ? join(distDir, 'sitemap.xml')
+            : join(process.cwd(), 'public', 'sitemap.xml');
+          const sitemapPaths = existsSync(sitemapFile)
+            ? listSitemapPaths(readFileSync(sitemapFile, 'utf8'))
+            : [];
+          const doc = buildSeoHeadDocument(sitemapPaths);
+          writeFileSync(join(distDir, 'seo-head.json'), JSON.stringify(doc), 'utf8');
+          console.log(`✅ Wrote dist/seo-head.json (${Object.keys(doc.pages).length} pages)`);
+
+          let shell = readFileSync(join(distDir, 'index.html'), 'utf8');
+          const home = resolvePublicHead('/') ?? doc.pages['/'];
+          if (home) {
+            shell = injectRouteHead(shell, '/', {
+              title: home.title,
+              description: home.description,
+              ogImage: home.ogImage,
+              h1: 'h1' in home ? home.h1 : home.title.split('|')[0]?.trim(),
+              mainText: 'mainText' in home ? home.mainText : home.description,
+            });
+            writeFileSync(join(distDir, 'index.html'), shell, 'utf8');
+            console.log('✅ Injected homepage H1/main text into dist/index.html');
+          }
+
+          let written = 0;
+          for (const [routePath, head] of Object.entries(doc.pages)) {
+            if (routePath === '/') continue;
+            const relative = routePath.replace(/^\//, '');
+            const file = join(distDir, 'seo', `${relative}.html`);
+            mkdirSync(join(file, '..'), { recursive: true });
+            writeFileSync(file, injectRouteHead(shell, routePath, head), 'utf8');
+            written += 1;
+          }
+          // Ensure every sitemap path has a shell even if resolvePublicHead was null earlier.
+          for (const routePath of sitemapPaths) {
+            if (routePath === '/' || doc.pages[routePath]) continue;
+            const head = resolvePublicHead(routePath);
+            if (!head) continue;
+            const relative = routePath.replace(/^\//, '');
+            const file = join(distDir, 'seo', `${relative}.html`);
+            mkdirSync(join(file, '..'), { recursive: true });
+            writeFileSync(file, injectRouteHead(shell, routePath, head), 'utf8');
+            written += 1;
+          }
+          console.log(`✅ Wrote ${written} route HTML files in dist/seo (head + H1 for crawlers)`);
+        } catch (e) {
+          console.warn('emit-seo-head:', e);
+          throw e;
+        }
+        const distIndex = join(distDir, 'index.html');
         try {
           const html = readFileSync(distIndex, 'utf8');
           const embedPages: Array<{

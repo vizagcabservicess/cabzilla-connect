@@ -65,13 +65,8 @@ const TempoTravellerRentalPage = () => {
   return (
     <>
       <Helmet>
-        <title>Tempo Traveller in Vizag | Van Rental & Tempo Traveller Hire | Vizag Taxi Hub</title>
-        <meta name="description" content="Hire tempo traveller in Vizag — van rental, 17 seater vehicle, and tempo traveller hire Vizag with AC and driver. Book online. Call +91 9966363662." />
+        {/* Title, description, canonical and Open Graph: PublicHead */}
         <meta name="keywords" content="tempo traveller in vizag, tempo traveller hire vizag, tempo traveller rent in vizag, van rental, van hire, traveller van rental, 17 seater vehicle, tempo traveller rental vizag, mini bus rental vizag" />
-        <link rel="canonical" href="https://vizagtaxihub.com/tempo-traveller-rental-vizag" />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://vizagtaxihub.com/tempo-traveller-rental-vizag" />
-        <meta property="twitter:url" content="https://vizagtaxihub.com/tempo-traveller-rental-vizag" />
         <script type="application/ld+json">
           {JSON.stringify(structuredData)}
         </script>

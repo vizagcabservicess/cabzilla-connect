@@ -74,7 +74,8 @@ export function ChangeAssignment({ booking }: ChangeAssignmentProps) {
       if (driverResult.status === 'success' && Array.isArray(driverResult.data)) {
         const assignable = driverResult.data.filter((driver: { id: string | number; name: string; phone?: string; status?: string }) => {
           const status = String(driver.status || '').toLowerCase();
-          return status !== 'offline' && status !== 'inactive' && status !== 'blocked';
+          // get-drivers.php already limits to Active User Management drivers.
+          return status !== 'inactive' && status !== 'blocked';
         });
         setDrivers(
           dedupeDriversByPhoneOrEmail(assignable)

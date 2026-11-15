@@ -51,11 +51,7 @@ function driverLicenseIsPending(array $row) {
 
 function driverIsAssignable(array $row, array $inactiveUserIds, array $inactivePhones) {
     $status = strtolower(trim((string)($row['status'] ?? '')));
-    if (in_array($status, ['offline', 'inactive', 'blocked'], true)) {
-        return false;
-    }
-    // Auto-provisioned shadow rows (license PENDING) duplicate real fleet drivers in the assign list.
-    if (driverLicenseIsPending($row)) {
+    if (in_array($status, ['inactive', 'blocked'], true)) {
         return false;
     }
     $userId = isset($row['user_id']) ? (int)$row['user_id'] : 0;
@@ -64,6 +60,11 @@ function driverIsAssignable(array $row, array $inactiveUserIds, array $inactiveP
     }
     $phoneKey = driverPhoneKey($row['phone'] ?? '');
     if ($phoneKey !== '' && isset($inactivePhones[$phoneKey])) {
+        return false;
+    }
+    // Offline fleet rows stay hidden unless linked to an Active User Management account.
+    // PENDING-license rows (auto-provisioned from User Management) are assignable.
+    if ($status === 'offline' && ($userId <= 0 || isset($inactiveUserIds[$userId]))) {
         return false;
     }
     return true;
@@ -79,6 +80,21 @@ function driverDedupeKey(array $row) {
         return 'e:' . $emailKey;
     }
     return 'id:' . (int)($row['id'] ?? 0);
+}
+
+/**
+ * Prefer a real license over an auto-created PENDING shadow for the same phone/email.
+ */
+function driverPreferForDedupe(array $prev, array $row) {
+    $prevPending = driverLicenseIsPending($prev);
+    $rowPending = driverLicenseIsPending($row);
+    if ($prevPending && !$rowPending) {
+        return $row;
+    }
+    if (!$prevPending && $rowPending) {
+        return $prev;
+    }
+    return ((int)($row['id'] ?? 0) < (int)($prev['id'] ?? PHP_INT_MAX)) ? $row : $prev;
 }
 
 function loadInactiveDriverUsers($conn) {
@@ -104,6 +120,52 @@ function loadInactiveDriverUsers($conn) {
         }
     }
     return [$inactiveUserIds, $inactivePhones];
+}
+
+/**
+ * Ensure every Active User Management driver has a fleet row so Assign Driver can list them.
+ */
+function ensureActiveDriverUsersInFleet($conn) {
+    $usersTable = $conn->query("SHOW TABLES LIKE 'users'");
+    if (!$usersTable || $usersTable->num_rows === 0) {
+        return;
+    }
+    $linkPath = __DIR__ . '/../utils/driver_user_link.php';
+    if (!is_readable($linkPath)) {
+        return;
+    }
+    require_once $linkPath;
+    if (!function_exists('syncDriverFleetLinkForUserRole')) {
+        return;
+    }
+
+    $hasActive = false;
+    $activeColumn = $conn->query("SHOW COLUMNS FROM users LIKE 'is_active'");
+    if ($activeColumn && $activeColumn->num_rows > 0) {
+        $hasActive = true;
+    }
+
+    $sql = $hasActive
+        ? "SELECT id FROM users WHERE LOWER(TRIM(COALESCE(role,''))) = 'driver' AND is_active = 1"
+        : "SELECT id FROM users WHERE LOWER(TRIM(COALESCE(role,''))) = 'driver'";
+    $result = $conn->query($sql);
+    if (!$result) {
+        return;
+    }
+    while ($user = $result->fetch_assoc()) {
+        $userId = (int)($user['id'] ?? 0);
+        if ($userId <= 0) {
+            continue;
+        }
+        try {
+            syncDriverFleetLinkForUserRole($conn, $userId, 'driver');
+        } catch (Throwable $e) {
+            logDriversError('Failed syncing active driver user into fleet', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
 }
 
 // Function to log errors with details
@@ -204,6 +266,9 @@ try {
     // Get all drivers
     if ($tableExists) {
         try {
+            // Pull Active Driver logins into the fleet table before building the assign list.
+            ensureActiveDriverUsersInFleet($conn);
+
             $result = $conn->query("SELECT * FROM drivers ORDER BY name ASC");
             
             if (!$result) {
@@ -217,8 +282,10 @@ try {
                     continue;
                 }
                 $key = driverDedupeKey($row);
-                if (!isset($chosen[$key]) || (int)$row['id'] < (int)$chosen[$key]['id']) {
+                if (!isset($chosen[$key])) {
                     $chosen[$key] = $row;
+                } else {
+                    $chosen[$key] = driverPreferForDedupe($chosen[$key], $row);
                 }
             }
             $rows = array_values($chosen);

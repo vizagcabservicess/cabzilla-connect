@@ -91,6 +91,7 @@ try {
             elseif ($driverCat === 'extra_km') $driverLabel = 'Extra km';
             elseif ($driverCat === 'tolls') $driverLabel = 'Tolls';
             elseif ($driverCat === 'other') $driverLabel = 'Others';
+            $sheetInvoiceNo = isset($row['invoice_no']) ? (int)$row['invoice_no'] : 0;
             $invoiceData = [
                 'booking_number' => $row['booking_number'],
                 'passenger_name' => $row['passenger_name'] ?? '',
@@ -105,7 +106,8 @@ try {
                 'seats' => '-',
                 'trip_type' => $row['trip_type'] ?? '',
                 'payment_method' => $row['payment_method'] ?? 'Pending',
-                'invoice_number' => 'INV-' . date('Ymd') . '-' . $bookingId,
+                'invoice_number' => $sheetInvoiceNo > 0 ? (string)$sheetInvoiceNo : ('INV-' . date('Ymd') . '-' . $bookingId),
+                'invoice_no' => $sheetInvoiceNo > 0 ? $sheetInvoiceNo : null,
             ];
         }
     }

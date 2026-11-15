@@ -99,9 +99,25 @@ if (fs.existsSync(dataDir)) {
 }
 
 // Optional helpers often needed alongside the SPA
-for (const extra of ['.htaccess', 'sw.js', 'robots.txt', 'sitemap.xml', 'sitemap.php']) {
+for (const extra of ['.htaccess', 'sw.js', 'robots.txt', 'sitemap.xml', 'sitemap.php', 'seo-shell.php', 'seo-head.json']) {
   const p = path.join(dist, extra);
   if (fs.existsSync(p)) copyRecursive(p, path.join(outDir, extra));
+}
+
+const seoDir = path.join(dist, 'seo');
+if (fs.existsSync(seoDir)) {
+  copyRecursive(seoDir, path.join(outDir, 'seo'));
+} else {
+  console.warn('⚠️  dist/seo/ missing — crawlers will not get per-route HTML shells.');
+}
+
+for (const required of ['seo-shell.php', 'seo-head.json']) {
+  if (!fs.existsSync(path.join(outDir, required))) {
+    fail(`dist/${required} missing after pack. Rebuild with npm run build first.`);
+  }
+}
+if (!fs.existsSync(path.join(outDir, 'seo'))) {
+  fail('dist/seo/ missing after pack. Rebuild with npm run build first.');
 }
 
 rmrf(zipPath);
@@ -132,7 +148,12 @@ console.log('');
 console.log('Upload ALL of these together to vizagtaxihub.com public_html:');
 console.log('  • index.html');
 console.log('  • assets/');
+console.log('  • seo/              (per-route HTML shells for crawlers)');
+console.log('  • seo-shell.php');
+console.log('  • seo-head.json');
+console.log('  • .htaccess');
 console.log('  • data/   (if present)');
 console.log('  • tracker.js  (required for live visitors + VTH AI)');
 console.log('Do not mix with files from an older build.');
 console.log('After upload, open https://vizagtaxihub.com/tracker.js — it must start with JS, not <!DOCTYPE html>.');
+console.log('Check: curl -s https://vizagtaxihub.com/tempo-traveller-rental-vizag | findstr /i title');

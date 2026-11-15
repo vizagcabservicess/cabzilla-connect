@@ -70,10 +70,14 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
-// Generate a proper invoice number
-function generateInvoiceNumber($bookingId, $customNumber = '') {
+// Prefer Google Sheet Invoice no (bookings.invoice_no); fall back to INV-YYYYMMDD-bookingId.
+function generateInvoiceNumber($bookingId, $customNumber = '', $sheetInvoiceNo = null) {
     if (!empty($customNumber)) {
         return $customNumber;
+    }
+    $sheetNo = (int) $sheetInvoiceNo;
+    if ($sheetNo > 0) {
+        return (string) $sheetNo;
     }
     return 'INV-' . date('Ymd') . '-' . $bookingId;
 }
@@ -719,7 +723,34 @@ try {
 
     // Current date for invoice generation
     $currentDate = date('Y-m-d');
-    $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
+    $sheetInvoiceNo = (int) ($booking['invoice_no'] ?? 0);
+    // If this booking is already on the Google Sheet but invoice_no was never stored, adopt it now.
+    if ($sheetInvoiceNo <= 0 && !empty($booking['id']) && empty($customInvoiceNumber)) {
+        try {
+            $syncBootstrap = dirname(__DIR__) . '/ai-booking/services/OnlineBookingSheetSync.php';
+            if (is_readable($syncBootstrap)) {
+                require_once dirname(__DIR__) . '/utils/ai-booking-db.php';
+                require_once dirname(__DIR__) . '/ai-booking/config/sheets-config.php';
+                require_once dirname(__DIR__) . '/ai-booking/services/GoogleSheetService.php';
+                require_once $syncBootstrap;
+                $adopt = OnlineBookingSheetSync::adoptInvoiceFromSheet((int) $booking['id']);
+                if (!empty($adopt['invoice_no'])) {
+                    $sheetInvoiceNo = (int) $adopt['invoice_no'];
+                    $booking['invoice_no'] = $sheetInvoiceNo;
+                } elseif ($sheetInvoiceNo <= 0) {
+                    // Only append to the sheet when this booking has no invoice_no and no sheet row yet.
+                    $synced = OnlineBookingSheetSync::syncByBookingId((int) $booking['id']);
+                    if (!empty($synced['invoice_no'])) {
+                        $sheetInvoiceNo = (int) $synced['invoice_no'];
+                        $booking['invoice_no'] = $sheetInvoiceNo;
+                    }
+                }
+            }
+        } catch (Throwable $sheetAdoptError) {
+            logInvoiceError('Sheet invoice adopt skipped', ['error' => $sheetAdoptError->getMessage()]);
+        }
+    }
+    $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber, $sheetInvoiceNo);
     
     // CRITICAL: Get original booking total FIRST - this is the source of truth
     // This is the amount the customer originally paid/booked
@@ -3187,6 +3218,23 @@ try {
             ]);
         } catch (Exception $e) {
             logInvoiceError("Error updating booking with invoice settings", ['error' => $e->getMessage()]);
+        }
+
+        // Push invoice total (base + extras) to Google Sheet COST / % VTH / Tolls.
+        try {
+            $syncBootstrap = dirname(__DIR__) . '/ai-booking/services/OnlineBookingSheetSync.php';
+            if (!empty($booking['id']) && is_readable($syncBootstrap)) {
+                require_once dirname(__DIR__) . '/utils/ai-booking-db.php';
+                require_once dirname(__DIR__) . '/ai-booking/config/sheets-config.php';
+                require_once dirname(__DIR__) . '/ai-booking/services/GoogleSheetService.php';
+                require_once $syncBootstrap;
+                $sheetCostSync = OnlineBookingSheetSync::syncCostForBooking((int) $booking['id']);
+                logInvoiceError('Google Sheet cost sync after invoice', $sheetCostSync);
+            }
+        } catch (Throwable $sheetCostError) {
+            logInvoiceError('Google Sheet cost sync after invoice failed (non-fatal)', [
+                'error' => $sheetCostError->getMessage(),
+            ]);
         }
     }
     

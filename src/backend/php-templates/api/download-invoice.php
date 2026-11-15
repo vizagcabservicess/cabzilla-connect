@@ -252,8 +252,15 @@ try {
         }
     }
 
-    // Generate invoice number
-    $invoiceNumber = empty($customInvoiceNumber) ? 'INV-' . date('Ymd') . '-' . $bookingId : $customInvoiceNumber;
+    // Prefer Google Sheet Invoice no (bookings.invoice_no) over generated INV-YYYYMMDD-id.
+    $sheetInvoiceNo = isset($booking['invoice_no']) ? (int)$booking['invoice_no'] : 0;
+    if (!empty($customInvoiceNumber)) {
+        $invoiceNumber = $customInvoiceNumber;
+    } elseif ($sheetInvoiceNo > 0) {
+        $invoiceNumber = (string)$sheetInvoiceNo;
+    } else {
+        $invoiceNumber = 'INV-' . date('Ymd') . '-' . $bookingId;
+    }
 
     // Current date for invoice generation
     $currentDate = date('Y-m-d');

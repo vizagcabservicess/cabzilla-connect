@@ -1,4 +1,4 @@
-import { slugify } from '@/lib/utils';
+import { slugify } from './slugify';
 
 export interface RouteInfo {
   from: string;

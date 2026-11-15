@@ -69,10 +69,13 @@
       })();
     </script>
     
-    <!-- Title + meta description + OG/Twitter come only from react-helmet-async per route.
-         Do not duplicate them here: Googlebot (Live Test) executes JS and was seeing TWO
-         <meta name="description"> tags (static generic + Helmet), which can dilute snippets. -->
-    <title>Vizag Taxi Hub - Outstation, Local & Airport Cabs in Visakhapatnam</title>
+    <!-- Home tags are in this file so the first HTML response already has them.
+         Other public URLs get their own title and description from the HTML written at build time. -->
+    <title>Cab &amp; Taxi Service in Vizag | Outstation, Airport, Araku</title>
+    <meta name="description" content="Vizag Taxi Hub – local, outstation and airport cabs in Visakhapatnam since 2020. 4.9★ from 700+ reviews. Check your fare instantly and book online." />
+    <meta property="og:title" content="Cab &amp; Taxi Service in Vizag | Outstation, Airport, Araku" />
+    <meta property="og:description" content="Vizag Taxi Hub – local, outstation and airport cabs in Visakhapatnam since 2020. 4.9★ from 700+ reviews. Check your fare instantly and book online." />
+    <meta property="og:image" content="https://vizagtaxihub.com/og-image.png" />
     
     <!-- Google Search Console site verification -->
     <meta name="google-site-verification" content="fWB4H7qCW6v0Wb5JZypd3yVjgDk1kjkuc8CgvJX506g" />

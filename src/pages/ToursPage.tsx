@@ -1141,30 +1141,12 @@ const ToursPage = () => {
   return (
     <>
       <Helmet>
-        <title>Tour Packages - Vizag Taxi Hub | Best Tour Packages in Visakhapatnam</title>
-        <meta name="description" content="Discover exciting tour packages from Visakhapatnam to Araku Valley, Simhachalam, Borra Caves, and more. Book guided tours, sightseeing trips, and holiday packages with professional drivers. Customizable tour packages with best prices." />
+        {/* Title, description, canonical and Open Graph: PublicHead */}
         <meta name="keywords" content="tour packages vizag, sightseeing visakhapatnam, holiday packages, guided tours vizag, tourist places around vizag, travel packages" />
         <meta name="author" content="Vizag Taxi Hub" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://vizagtaxihub.com/tours" />
-        <meta property="og:title" content="Tour Packages - Vizag Taxi Hub | Best Tour Packages in Visakhapatnam" />
-        <meta property="og:description" content="Explore amazing tour packages in and around Visakhapatnam. Book guided tours, sightseeing trips, and holiday packages with Vizag Taxi Hub." />
-        <meta property="og:image" content="/og-image.png" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        
-        {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://vizagtaxihub.com/tours" />
-        <meta property="twitter:title" content="Tour Packages - Vizag Taxi Hub | Best Tour Packages in Visakhapatnam" />
-        <meta property="twitter:description" content="Explore amazing tour packages in and around Visakhapatnam. Book guided tours and sightseeing trips." />
         <meta property="twitter:image" content="/og-image.png" />
-        
-        {/* Additional SEO */}
         <meta name="robots" content="index, follow" />
-        <link rel="canonical" href="https://vizagtaxihub.com/tours" />
       </Helmet>
       
       <div className="flex min-h-screen max-w-[100%] flex-col overflow-x-clip bg-white">

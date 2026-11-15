@@ -60,7 +60,9 @@ export function DriverAssignment({
         if (response.ok && result.status === 'success' && Array.isArray(result.data)) {
           const assignable = result.data.filter((driver: Driver) => {
             const status = String(driver.status || '').toLowerCase();
-            return status !== 'offline' && status !== 'inactive' && status !== 'blocked';
+            // get-drivers.php already limits to Active User Management drivers;
+            // keep inactive/blocked out if they slip through.
+            return status !== 'inactive' && status !== 'blocked';
           });
           setDrivers(
             dedupeDriversByPhoneOrEmail(assignable).sort((a, b) =>

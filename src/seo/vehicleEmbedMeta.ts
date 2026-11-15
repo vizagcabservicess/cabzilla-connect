@@ -2,6 +2,7 @@
  * Shared config for `/vehicle/*` pages that embed the Hero booking widget
  * (Urbania-style mobile layout: illustration, search slot, step-2 hide grid).
  */
+import { resolvePublicHead } from './publicPageMeta';
 import {
   generateVehicleUrl,
   getVehicleDisplayName,
@@ -67,15 +68,16 @@ export const VEHICLE_EMBED_CONFIGS: Record<VehicleEmbedSlug, VehicleEmbedConfig>
     slug: 'urbania',
     vehicleIds: ['bus'],
     seo: {
-      title: 'Urbania Rental Vizag | Force Urbania for Rent | Vizag Taxi Hub',
+      title: resolvePublicHead('/vehicle/urbania')?.title ?? 'Urbania Rental in Vizag | 16 Seater AC – Vizag Taxi Hub',
       description:
-        'Book Urbania rental Vizag and Force Urbania for rent — weddings, corporate groups, outstation trips. Premium AC with professional driver. Call +91 9966363662.',
+        resolvePublicHead('/vehicle/urbania')?.description ??
+        'Rent a 16 seater AC Force Urbania in Vizag for weddings, Araku trips, airport groups and corporate travel. See rates and book online.',
       keywords:
         'urbania rental vizag, force urbania vizag, force urbania for rent vizag, urbania hire visakhapatnam, premium van hire vizag, corporate urbania vizag, wedding urbania vizag',
       capacityKeywordSuffix: 'seater urbania',
       canonicalUrl: 'https://vizagtaxihub.com/vehicle/urbania',
       ogImageUrl: 'https://vizagtaxihub.com/uploads/og-image-urbania.jpg',
-      pageHeadline: 'Urbania Rental Vizag',
+      pageHeadline: 'Urbania Rental in Vizag – 16 Seater AC Force Urbania',
       pageSubtitle: 'Force Urbania for rent — premium AC group travel',
       structuredDataName: 'Urbania Premium Van Rental in Visakhapatnam',
       structuredDataDescription:
@@ -101,15 +103,18 @@ export const VEHICLE_EMBED_CONFIGS: Record<VehicleEmbedSlug, VehicleEmbedConfig>
     slug: 'tempo-traveller',
     vehicleIds: ['tempo_traveller'],
     seo: {
-      title: 'Tempo Traveller in Vizag | 17 Seater Hire & Van Rental | Vizag Taxi Hub',
+      title:
+        resolvePublicHead('/vehicle/tempo-traveller')?.title ??
+        'Tempo Traveller in Vizag | 12, 17 & 18 Seater AC Hire',
       description:
-        'Book tempo traveller in Vizag — 17 seater vehicle hire and van rental with AC and professional driver for groups, weddings, and outstation. Call +91 9966363662.',
+        resolvePublicHead('/vehicle/tempo-traveller')?.description ??
+        'AC tempo traveller hire in Vizag – 12, 17 and 18 seater for Araku, weddings, pilgrimages and group tours. Check rates and book online.',
       keywords:
         'tempo traveller in vizag, tempo traveller hire vizag, tempo traveller rent in vizag, 17 seater vehicle, van rental, traveller van rental, tempo traveller rental vizag',
       capacityKeywordSuffix: 'seater tempo traveller',
       canonicalUrl: 'https://vizagtaxihub.com/vehicle/tempo-traveller',
       ogImageUrl: 'https://vizagtaxihub.com/uploads/taxi-services--visakhapatnam-tempo-traveller.png',
-      pageHeadline: 'Tempo Traveller in Vizag',
+      pageHeadline: 'Tempo Traveller Rental in Vizag – 12, 17 & 18 Seater',
       pageSubtitle: '17 seater AC hire & van rental for groups',
       structuredDataName: '17 Seater AC Tempo Traveller Rental in Vizag',
       structuredDataDescription:
@@ -242,23 +247,20 @@ function buildDynamicVehicleEmbedConfig(
     `Book ${name} taxi in Visakhapatnam with professional driver, AC comfort, and transparent rates. Local, airport & outstation trips across Vizag and Andhra Pradesh. Call +91 9966363662.`;
 
   const isInnova = name.toLowerCase().includes('innova');
+  const sharedHead = resolvePublicHead(`/vehicle/${slug}`);
   return {
     slug,
     vehicleIds: vehicle?.id ? [vehicle.id] : [],
     seo: {
-      title:
-        vehicle?.seoContent?.title ??
-        (isInnova
-          ? 'Innova Crysta Taxi Booking in Vizag | Rates & Hire | Vizag Taxi Hub'
-          : `${name} Taxi in Vizag | AC Cab Rental | Vizag Taxi Hub`),
-      description,
+      title: sharedHead?.title ?? vehicle?.seoContent?.title ?? `${name} | Vizag Taxi Hub`,
+      description: sharedHead?.description ?? description,
       keywords:
         vehicle?.seoContent?.keywords ??
         `${name.toLowerCase()} taxi vizag, ${name.toLowerCase()} cab visakhapatnam, book ${name.toLowerCase()} vizag, vizag taxi hub`,
       capacityKeywordSuffix: capacityKeywordSuffix(capacity),
-      canonicalUrl: `https://vizagtaxihub.com/vehicle/${slug}`,
-      ogImageUrl,
-      pageHeadline: isInnova ? 'Innova Crysta Taxi Booking' : `Book ${name}`,
+      canonicalUrl: sharedHead?.canonical ?? `https://vizagtaxihub.com/vehicle/${slug}`,
+      ogImageUrl: sharedHead?.ogImage ?? ogImageUrl,
+      pageHeadline: isInnova ? 'Innova Crysta Rental in Vizag – 7 + Driver' : `Book ${name}`,
       pageSubtitle: buildPageSubtitle(name, capacity),
       structuredDataName: `${name} Taxi Rental in Visakhapatnam`,
       structuredDataDescription: description,

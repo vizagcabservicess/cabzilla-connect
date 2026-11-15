@@ -10,10 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BookingSummary } from '@/components/BookingSummary';
 import { GuestDetailsForm } from '@/components/GuestDetailsForm';
 import { TourGallery } from '@/components/tour/TourGallery';
+import { ArakuDayTourLayout } from '@/components/tour/ArakuDayTourLayout';
 import { TourEditModule } from '@/components/tour/TourEditModule';
 import { TourVehicleSelection } from '@/components/tour/TourVehicleSelection';
 import { useToast } from '@/components/ui/use-toast';
 import { Helmet } from 'react-helmet-async';
+import { resolvePublicHead } from '@/seo/publicPageMeta';
 import { 
   MapPin, 
   Calendar, 
@@ -80,7 +82,9 @@ const TourDetailPage = () => {
     () => shouldOpenGuestForm && Boolean(navigationState?.selectedVehicle)
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>('one-way');
+  const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>(
+    tourSlug === 'araku-valley-tour' ? 'round-trip' : 'one-way'
+  );
   const [aiPrefillDone, setAiPrefillDone] = useState(false);
   const [isEditingPickup, setIsEditingPickup] = useState(false);
   const [isEditingDate, setIsEditingDate] = useState(false);
@@ -154,6 +158,18 @@ const TourDetailPage = () => {
   const [pickupLocation, setPickupLocation] = useState(pickupData.location);
   const [pickupDate, setPickupDate] = useState(pickupData.date);
 
+  useEffect(() => {
+    if (tourSlug !== 'araku-valley-tour') return;
+    setPickupLocation((current) => {
+      const id = String((current as { id?: string })?.id || '');
+      const name = String(current?.name || '').trim();
+      if (name === 'Visakhapatnam' && (id === '' || id === 'tour-pickup')) {
+        return { ...current, id: '', name: '', address: '' };
+      }
+      return current;
+    });
+  }, [tourSlug]);
+
   
   const handleReturnToSelectedTours = () => {
     const snapshot = readTourCartCheckout();
@@ -180,6 +196,25 @@ const TourDetailPage = () => {
 
   const handleEditTrip = () => {
     handleReturnToSelectedTours();
+  };
+
+  const handleArakuBook = () => {
+    if (!selectedVehicle) {
+      toast({
+        title: 'Choose a vehicle',
+        description: 'Pick the cab for your group.',
+      });
+      return;
+    }
+    const name = String(pickupLocation?.name || '').trim();
+    if (!name) {
+      toast({
+        title: 'Add a pickup address',
+        description: 'Tell us where in Vizag to collect you.',
+      });
+      return;
+    }
+    setShowBookingForm(true);
   };
 
   const handleEditPickupLocation = () => {
@@ -725,12 +760,15 @@ const TourDetailPage = () => {
     );
   }
 
-  // Generate SEO-friendly content based on tour data
-  const seoTitle = `${tour.tourName} - ${tour.duration} Tour Package | Vizag Taxi Hub`;
-  const seoDescription = `${tour.tourName} - ${tour.duration} tour package from Visakhapatnam. ${tour.description.substring(0, 120)}... Book now for the best prices and professional service.`;
+  const sharedHead = resolvePublicHead(`/tours/${tourSlug ?? ''}`);
+  const seoTitle = sharedHead?.title ?? `${tour.tourName} - ${tour.duration} Tour Package | Vizag Taxi Hub`;
+  const seoDescription = sharedHead?.description ?? `${tour.tourName} - ${tour.duration} tour package from Visakhapatnam. ${tour.description.substring(0, 120)}... Book now for the best prices and professional service.`;
   const seoKeywords = `${tour.tourName.toLowerCase()}, ${tour.category.toLowerCase()} tour, ${tour.duration} package, tour from vizag, ${tour.difficulty.toLowerCase()} tour, vizag taxi hub tours`;
-  const tourImage = tour.imageUrl || tour.gallery?.[0]?.url || '/og-image.png';
-  const tourUrl = `https://vizagtaxihub.com${getTourUrl(tour)}`;
+  const tourImage = sharedHead?.ogImage || tour.imageUrl || tour.gallery?.[0]?.url || '/og-image.png';
+  const tourUrl = sharedHead?.canonical ?? `https://vizagtaxihub.com${getTourUrl(tour)}`;
+  const pageHeading = tourSlug === 'araku-valley-tour'
+    ? 'Vizag to Araku Valley One Day Tour by Cab'
+    : tour.tourName;
   const payableTotal =
     (checkoutLines.length > 1 && checkoutCombinedTotal > 0
       ? checkoutCombinedTotal
@@ -742,32 +780,12 @@ const TourDetailPage = () => {
   return (
     <>
       <Helmet>
-        <title>{seoTitle}</title>
-        <meta name="description" content={seoDescription} />
+        {/* Title, description, canonical and Open Graph: PublicHead */}
         <meta name="keywords" content={seoKeywords} />
         <meta name="author" content="Vizag Taxi Hub" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={tourUrl} />
-        <meta property="og:title" content={seoTitle} />
-        <meta property="og:description" content={seoDescription} />
-        <meta property="og:image" content={tourImage} />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        
-        {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content={tourUrl} />
-        <meta property="twitter:title" content={seoTitle} />
-        <meta property="twitter:description" content={seoDescription} />
         <meta property="twitter:image" content={tourImage} />
-        
-        {/* Additional SEO */}
         <meta name="robots" content="index, follow" />
-        <link rel="canonical" href={tourUrl} />
-        
-        {/* Tour-specific structured data */}
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
@@ -800,7 +818,8 @@ const TourDetailPage = () => {
       <div className="min-h-screen max-w-[100%] overflow-x-clip bg-gray-50 text-[14px] md:text-[15px]">
         <Navbar />
         
-        <div className="mx-auto max-w-6xl min-w-0 overflow-x-clip pb-24 md:container md:px-3 md:py-4 md:pb-20">
+        <div className={`mx-auto max-w-6xl min-w-0 overflow-x-clip md:container md:px-3 md:pb-20 ${tourSlug === 'araku-valley-tour' ? 'pb-0 md:pt-1' : 'pb-24 md:py-4'}`}>
+          {tourSlug !== 'araku-valley-tour' ? (
           <Button
             variant="ghost"
             onClick={handleReturnToSelectedTours}
@@ -809,6 +828,7 @@ const TourDetailPage = () => {
             <ArrowLeft className="mr-2 h-4 w-4" />
             {checkoutLines.length > 1 ? 'Back to selected tours' : 'Back to Tours'}
           </Button>
+          ) : null}
           {checkoutLines.length > 1 && (
             <div className="mb-3 mx-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 md:mx-0">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -919,8 +939,10 @@ const TourDetailPage = () => {
           )}
 
           
-          {/* Edit Module with PDF Export for Super Admin */}
+          {/* Edit Module with PDF Export for Super Admin. Araku uses the start bar instead. */}
+          {(tourSlug !== 'araku-valley-tour' || isSuperAdmin()) && (
           <div className="mb-4 hidden items-center justify-between gap-4 md:flex">
+            {tourSlug !== 'araku-valley-tour' && (
             <div className="flex-1">
               <TourEditModule
                 pickupLocation={pickupLocation.name}
@@ -933,7 +955,8 @@ const TourDetailPage = () => {
                 onEdit={handleEditTrip}
               />
             </div>
-            
+            )}
+
             {/* PDF Export Button - Super Admin Only */}
             {isSuperAdmin() && (
               <Button
@@ -952,8 +975,42 @@ const TourDetailPage = () => {
               </Button>
             )}
           </div>
+          )}
 
-          {!showBookingForm ? (
+          {tourSlug === 'araku-valley-tour' && !showBookingForm ? (
+            <ArakuDayTourLayout
+              tour={tour}
+              pickup={
+                String(pickupLocation?.name || '').trim()
+                  ? pickupAsLocation
+                  : { ...pickupAsLocation, id: '', name: '', address: '' }
+              }
+              pickupDate={pickupDate}
+              selectedVehicle={selectedVehicle}
+              onPickupChange={(loc) => {
+                const name = String(loc?.name || loc?.address || '').trim();
+                const lat = Number(loc?.lat);
+                const lng = Number(loc?.lng);
+                const picked = Boolean(
+                  name && Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)
+                );
+                if (!picked) return;
+                const next = { ...loc, name: loc.name || name, isInVizag: loc.isInVizag !== false };
+                setPickupLocation(next);
+                sessionStorage.setItem('pickupLocation', JSON.stringify(next));
+              }}
+              onDateChange={(date) => {
+                setPickupDate(date);
+                sessionStorage.setItem('pickupDate', JSON.stringify(date.toISOString()));
+              }}
+              onVehicleSelect={setSelectedVehicle}
+              tripMode={tripMode}
+              onTripModeChange={setTripMode}
+              onBook={handleArakuBook}
+            />
+          ) : null}
+
+          {tourSlug !== 'araku-valley-tour' && !showBookingForm ? (
             <div className="grid gap-4 lg:grid-cols-3">
               {/* Left Section - Tour Details */}
               <div className="lg:col-span-2 md:space-y-4">
@@ -962,7 +1019,7 @@ const TourDetailPage = () => {
                     <Badge variant="secondary" className="text-xs">{tour.category}</Badge>
                     <Badge variant="outline" className="text-xs">{tour.difficulty}</Badge>
                   </div>
-                  <h1 className="mb-2 text-xl font-bold text-gray-900 md:text-2xl">{tour.tourName}</h1>
+                  <p className="mb-2 text-xl font-bold text-gray-900 md:text-2xl" aria-hidden="true">{pageHeading}</p>
                   <div className="flex items-center gap-3 text-xs text-gray-600">
                     <span className="flex items-center gap-1">
                       <MapPin size={15} />
@@ -1003,7 +1060,7 @@ const TourDetailPage = () => {
                       <Badge variant="secondary" className="text-xs">{tour.category}</Badge>
                       <Badge variant="outline" className="text-xs">{tour.difficulty}</Badge>
                     </div>
-                    <h1 className="text-2xl font-bold leading-tight text-slate-900">{tour.tourName}</h1>
+                    <h1 className="text-2xl font-bold leading-tight text-slate-900">{pageHeading}</h1>
                     <div className="mt-3 flex flex-nowrap items-center gap-3 overflow-x-auto text-sm text-slate-600 [&::-webkit-scrollbar]:hidden">
                       <span className="inline-flex shrink-0 items-center gap-1.5">
                         <MapPin className="h-4 w-4 shrink-0 text-slate-500" />
@@ -1139,7 +1196,7 @@ const TourDetailPage = () => {
               </div>
 
               {/* Right Section - Vehicle Selection & Booking */}
-              <div className="space-y-4 px-4 md:px-0">
+              <div id="araku-tour-vehicles" className="space-y-4 px-4 md:px-0">
                 {!selectedVehicle ? (
                   <>
                     <TourVehicleSelection
@@ -1244,7 +1301,7 @@ const TourDetailPage = () => {
                 ) : null}
               </div>
             </div>
-          ) : (
+          ) : showBookingForm ? (
             <div className="grid gap-6 px-4 md:grid-cols-2 md:px-0">
               <div>
                 <GuestDetailsForm
@@ -1306,11 +1363,11 @@ const TourDetailPage = () => {
                 )}
               </div>
             </div>
-          )}
+          ) : null}
         </div>
         
         <Footer />
-        <MobileNavigation />
+        {tourSlug === 'araku-valley-tour' && !showBookingForm ? null : <MobileNavigation />}
       </div>
     </>
   );

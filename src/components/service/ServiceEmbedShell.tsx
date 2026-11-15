@@ -165,19 +165,9 @@ export function ServiceEmbedShell({
   return (
     <>
       <Helmet>
-        <title>{config.seo.title}</title>
-        <meta name="description" content={config.seo.description} />
+        {/* Title, description, canonical and Open Graph: PublicHead */}
         <meta name="keywords" content={config.seo.keywords} />
-        <link rel="canonical" href={config.seo.canonicalUrl} />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={config.seo.canonicalUrl} />
-        <meta property="og:title" content={config.seo.title} />
-        <meta property="og:description" content={config.seo.description} />
-        <meta property="og:image" content={config.seo.ogImageUrl} />
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content={config.seo.canonicalUrl} />
-        <meta property="twitter:title" content={config.seo.title} />
-        <meta property="twitter:description" content={config.seo.description} />
         <meta property="twitter:image" content={config.seo.ogImageUrl} />
         <meta name="robots" content="index, follow" />
         {helmetExtra}
@@ -227,7 +217,7 @@ export function ServiceEmbedShell({
                       <div className="relative isolate bg-white lg:hidden">
                         <div className="flex flex-col gap-0">
                           {slug === 'airport' ? (
-                            <h1 className="sr-only">{config.seo.pageHeadline}</h1>
+                            <p className="sr-only" aria-hidden="true">{config.seo.pageHeadline}</p>
                           ) : (
                             <div className="relative z-[3] shrink-0 bg-white px-2.5 pb-0 pt-2 sm:px-3 sm:pt-2">
                               <div className="max-w-xl">
@@ -275,9 +265,15 @@ export function ServiceEmbedShell({
                           <span className="inline-flex items-center rounded-full border border-blue-200/80 bg-white/90 px-3.5 py-1 text-sm font-semibold tracking-wide text-[var(--brand-primary)] shadow-sm">
                             {marketing.badge}
                           </span>
-                          <h1 className="mt-4 text-left font-sans text-[1.875rem] font-bold leading-[1.12] tracking-tight text-[#0B1F3A] xl:text-[2.25rem]">
-                            {renderAccentHeadline(config.seo.pageHeadline, marketing.accentWord)}
-                          </h1>
+                          {slug === 'airport' ? (
+                            <h1 className="mt-4 text-left font-sans text-[1.875rem] font-bold leading-[1.12] tracking-tight text-[#0B1F3A] xl:text-[2.25rem]">
+                              {renderAccentHeadline(config.seo.pageHeadline, marketing.accentWord)}
+                            </h1>
+                          ) : (
+                            <p className="mt-4 text-left font-sans text-[1.875rem] font-bold leading-[1.12] tracking-tight text-[#0B1F3A] xl:text-[2.25rem]" aria-hidden="true">
+                              {renderAccentHeadline(config.seo.pageHeadline, marketing.accentWord)}
+                            </p>
+                          )}
                           <p className="mt-2.5 max-w-md text-left font-sans text-sm font-normal leading-relaxed text-slate-600 xl:text-base">
                             {config.seo.pageSubtitle}
                           </p>
@@ -369,9 +365,9 @@ export function ServiceEmbedShell({
 
                   <div className="mb-5 hidden lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-center lg:gap-8">
                     <div className="min-w-0">
-                      <h1 className="text-left font-sans text-4xl font-bold leading-[1.08] tracking-tight text-[#001b3a] xl:text-5xl">
+                      <p className="text-left font-sans text-4xl font-bold leading-[1.08] tracking-tight text-[#001b3a] xl:text-5xl" aria-hidden="true">
                         {config.seo.pageHeadline}
-                      </h1>
+                      </p>
                       <p className="mt-2 max-w-xl text-left font-sans text-base font-normal leading-snug text-gray-700 xl:text-lg">
                         {config.seo.pageSubtitle}
                       </p>

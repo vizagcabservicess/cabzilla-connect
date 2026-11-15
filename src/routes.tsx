@@ -15,6 +15,7 @@ import { captureGclidFromSearch } from '@/lib/gclid';
 import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
 import { RouteErrorFallback } from './components/ErrorBoundary';
+import { PublicHead } from './seo/PublicHead';
 
 if (typeof window !== 'undefined') {
   captureGclidFromSearch(window.location.search);
@@ -349,8 +350,9 @@ function Root() {
     || location.pathname.startsWith('/driver')
     || location.pathname.startsWith('/event/share')
     || location.pathname.startsWith('/ride/');
+  const onTourDetail = /^\/tours\/[^/]+\/?$/.test(location.pathname);
   const publicChrome = !isStaff && !onStaffPath;
-  const showBuildTrip = !onStaffPath && (user?.role === 'super_admin' || !isStaff);
+  const showBuildTrip = !onStaffPath && !onTourDetail && (user?.role === 'super_admin' || !isStaff);
 
   return (
     <>
@@ -388,6 +390,7 @@ function Root() {
           <SitePromoPopup enabled />
         </Suspense>
       )}
+      <PublicHead key={location.pathname} />
     </>
   );
 }

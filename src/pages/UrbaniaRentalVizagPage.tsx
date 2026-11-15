@@ -84,34 +84,17 @@ const UrbaniaRentalVizagPage = () => {
   return (
     <>
       <Helmet>
-        <title>Urbania Rental Vizag | Force Urbania for Rent | Vizag Taxi Hub</title>
-        <meta
-          name="description"
-          content="Book Urbania rental Vizag and Force Urbania for rent in Visakhapatnam — weddings, corporate groups, outstation trips. Premium AC with driver. Call +91 9966363662."
-        />
+        {/* Title, description, canonical and Open Graph: PublicHead */}
         <meta
           name="keywords"
           content="urbania rental vizag, force urbania vizag, force urbania for rent vizag, urbania hire visakhapatnam, premium van hire vizag, corporate urbania vizag, wedding urbania vizag"
         />
-        <link rel="canonical" href={PAGE_URL} />
         <meta name="author" content="Vizag Taxi Hub" />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={PAGE_URL} />
-        <meta
-          property="og:title"
-          content="Urbania Van Rental in Vizag | Premium AC Group Travel"
-        />
-        <meta
-          property="og:description"
-          content="Urbania hire in Visakhapatnam — weddings, corporate groups, outstation tours. Book with Vizag Taxi Hub."
-        />
-        <meta property="og:image" content="https://vizagtaxihub.com/uploads/og-image-urbania.jpg" />
-        <meta property="og:site_name" content="Vizag Taxi Hub" />
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content={PAGE_URL} />
         <meta
           property="twitter:title"
-          content="Urbania Van Rental in Vizag | Vizag Taxi Hub"
+          content="Force Urbania Rental in Vizag | Luxury Van Hire"
         />
         <meta
           property="twitter:description"

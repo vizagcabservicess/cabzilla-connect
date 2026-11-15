@@ -388,7 +388,19 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
         onSelect={disabled ? undefined : handleCalendarSelect}
         disabled={isValidTripDate(minDate) ? { before: startOfDay(minDate) } : undefined}
         initialFocus
-        className="pointer-events-auto mx-auto w-full max-w-sm"
+        className="pointer-events-auto w-full p-3"
+        classNames={{
+          months: 'flex w-full flex-col',
+          month: 'w-full space-y-2',
+          caption: 'relative flex items-center justify-center pt-0',
+          table: 'w-full border-collapse',
+          head_row: 'flex w-full',
+          head_cell:
+            'flex h-8 flex-1 items-center justify-center text-[0.8rem] font-normal text-muted-foreground',
+          row: 'mt-0.5 flex w-full',
+          cell: 'relative flex h-9 flex-1 items-center justify-center p-0 text-center text-sm focus-within:relative focus-within:z-20',
+          day: 'inline-flex h-9 w-9 items-center justify-center rounded-md p-0 text-sm font-normal aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground',
+        }}
       />
       <div className="flex items-center gap-2 border-t p-3">
         <Clock className="h-4 w-4 shrink-0 text-gray-400" />
@@ -617,7 +629,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
               {triggerContent}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="z-[10080] w-[20.5rem] p-0" align="start">
+          <PopoverContent className="z-[10080] w-[18.5rem] p-0" align="start">
             {desktopPickerPanel}
           </PopoverContent>
         </Popover>

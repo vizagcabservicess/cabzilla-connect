@@ -1196,7 +1196,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
           "ios-search-input-wrapper relative",
           isDesktopVariant &&
             cn(
-              "flex min-h-[2.75rem] items-center rounded-md border border-gray-200 bg-white pl-3",
+              "flex min-h-[2.75rem] items-center rounded-md border border-gray-200 bg-white pl-2.5",
               "transition-[border-color,box-shadow] duration-150",
               "focus-within:border-blue-500",
               isFocused && "border-blue-500"
@@ -1214,7 +1214,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         )}
       >
         {((isDesktopVariant || (isAppVariant && !isInfieldVariant)) && !hideLeadingIcon) && (
-          <MapPin className={cn("flex-shrink-0 text-gray-400", isAppVariant ? "h-5 w-5" : "mr-2 h-4 w-4")} aria-hidden />
+          <MapPin className={cn("flex-shrink-0 text-gray-400", isAppVariant ? "h-5 w-5" : "mr-1.5 h-4 w-4")} aria-hidden />
         )}
         {isInfieldVariant && !hideLeadingIcon && (
           <MapPin className="h-4 w-4 shrink-0 self-center text-gray-500" aria-hidden />
@@ -1309,7 +1309,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             isDesktopVariant || (isAppVariant && !isInfieldVariant)
               ? cn(
                   "border-0 bg-transparent font-semibold text-gray-900 shadow-none placeholder:text-gray-500",
-                  isAppVariant && !isInfieldVariant && "px-0 pr-10"
+                  (isDesktopVariant || (isAppVariant && !isInfieldVariant)) && "pl-0 pr-10"
                 )
               : isInfieldVariant && !isDesktop
                   ? cn(

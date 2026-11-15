@@ -97,30 +97,12 @@ export default function FleetPage() {
   return (
     <>
       <Helmet>
-        <title>Our Fleet - Vizag Taxi Hub | Wide Range of Vehicles in Visakhapatnam</title>
-        <meta name="description" content="Browse our comprehensive fleet of 50+ vehicles in Visakhapatnam. From economy sedans to luxury SUVs, tempo travellers to mini buses. All vehicles are well-maintained with professional drivers. Choose the perfect vehicle for your journey." />
+        {/* Title, description, canonical and Open Graph: PublicHead */}
         <meta name="keywords" content="fleet vizag taxi hub, vehicles visakhapatnam, car rental fleet, sedan suv tempo traveller, luxury cars vizag, taxi fleet" />
         <meta name="author" content="Vizag Taxi Hub" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://vizagtaxihub.com/fleet" />
-        <meta property="og:title" content="Our Fleet - Vizag Taxi Hub | Wide Range of Vehicles in Visakhapatnam" />
-        <meta property="og:description" content="Explore our diverse fleet of vehicles in Visakhapatnam. From sedans to SUVs, tempo travellers to luxury cars." />
-        <meta property="og:image" content="/og-image.png" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        
-        {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://vizagtaxihub.com/fleet" />
-        <meta property="twitter:title" content="Our Fleet - Vizag Taxi Hub | Wide Range of Vehicles in Visakhapatnam" />
-        <meta property="twitter:description" content="Explore our diverse fleet of vehicles in Visakhapatnam. From sedans to SUVs, tempo travellers to luxury cars." />
         <meta property="twitter:image" content="/og-image.png" />
-        
-        {/* Additional SEO */}
         <meta name="robots" content="index, follow" />
-        <link rel="canonical" href="https://vizagtaxihub.com/fleet" />
       </Helmet>
       
       <div className="min-h-screen bg-background flex flex-col">

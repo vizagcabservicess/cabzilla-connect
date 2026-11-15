@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
   Menu,
+  Search,
   Home,
   LogOut,
   User,
@@ -190,6 +191,8 @@ export function Navbar() {
   const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [arakuSearchOpen, setArakuSearchOpen] = useState(false);
+  const compactArakuHeader = location.pathname === '/tours/araku-valley-tour';
   const [megaMenuOpen, setMegaMenuOpen] = useState<MegaMenuCategory | null>(null);
   const [activeCategory, setActiveCategory] = useState<MegaMenuCategory>('Services');
   const [activeLeftIndex, setActiveLeftIndex] = useState(0);
@@ -622,7 +625,7 @@ export function Navbar() {
       <div className="border-b border-gray-100/80 bg-white/[0.97] backdrop-blur-xl">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           {/* Mobile: search + voice above logo / menu */}
-          <div className="pb-2 pt-2.5 lg:hidden">
+          <div className={cn('pb-2 pt-2.5 lg:hidden', compactArakuHeader && !arakuSearchOpen && 'hidden')}>
             <HeaderSearchBar className="max-w-none" />
           </div>
           <div
@@ -745,6 +748,17 @@ export function Navbar() {
 
           {/* Mobile menu button */}
           <div className="ml-auto flex items-center gap-1 lg:hidden">
+            {compactArakuHeader ? (
+              <button
+                type="button"
+                className="flex items-center rounded-full p-2 text-slate-700 hover:bg-slate-100"
+                aria-label={arakuSearchOpen ? 'Close search' : 'Search'}
+                aria-expanded={arakuSearchOpen}
+                onClick={() => setArakuSearchOpen((open) => !open)}
+              >
+                <Search className="h-5 w-5" />
+              </button>
+            ) : null}
             <a
               href="tel:+919966363662"
               className="flex items-center rounded-full border border-blue-200 bg-blue-50 p-2 text-blue-700 transition-colors hover:bg-blue-100 sm:hidden"

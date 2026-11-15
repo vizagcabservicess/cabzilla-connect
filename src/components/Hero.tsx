@@ -302,7 +302,7 @@ function RestrictedAirportRouteNotice({ message }: { message: string }) {
 /** Session: last search tracking snapshot (pickup, drop, cars shown, selected cab, etc.) for support/debug. */
 const SESSION_GUEST_SEARCH_SNAPSHOT_KEY = 'guestSearchSnapshot';
 
-export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, embedStretchToShell, onEditStart, onTripEditOpenChange, onStepChange, lockedVehicleSlug, summaryBackHref, urbaniaUnifiedMobileLayout, embedDesktopCardLayout, embedDesktopCardTitle }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour' | 'custom'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; /** When embedded in a route that already wraps `container`/padding: drop inner max-width + nested container so the widget aligns with breadcrumbs */ embedStretchToShell?: boolean; onEditStart?: () => void; /** Urbania embed parent: show page content below the widget while user edits trip search (step 2). */ onTripEditOpenChange?: (open: boolean) => void; onStepChange?: (step: number) => void; lockedVehicleSlug?: string; summaryBackHref?: string; /** `/vehicle/urbania`: parent already renders one gray shell — hide duplicate mobile white card around this embed */ urbaniaUnifiedMobileLayout?: boolean; /** Desktop: stacked booking card (title + fields + full-width Search) for service marketing hero */ embedDesktopCardLayout?: boolean; /** Booking-card heading when `embedDesktopCardLayout` is on */ embedDesktopCardTitle?: string }) {
+export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, embedStretchToShell, onEditStart, onTripEditOpenChange, onStepChange, lockedVehicleSlug, summaryBackHref, urbaniaUnifiedMobileLayout, embedDesktopCardLayout, embedDesktopCardTitle, pageDefaultTripType, pageDefaultTripMode, pageDefaultDrop, hideMobileNavigation }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour' | 'custom'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; /** When embedded in a route that already wraps `container`/padding: drop inner max-width + nested container so the widget aligns with breadcrumbs */ embedStretchToShell?: boolean; onEditStart?: () => void; /** Urbania embed parent: show page content below the widget while user edits trip search (step 2). */ onTripEditOpenChange?: (open: boolean) => void; onStepChange?: (step: number) => void; lockedVehicleSlug?: string; summaryBackHref?: string; /** `/vehicle/urbania`: parent already renders one gray shell — hide duplicate mobile white card around this embed */ urbaniaUnifiedMobileLayout?: boolean; /** Desktop: stacked booking card (title + fields + full-width Search) for service marketing hero */ embedDesktopCardLayout?: boolean; /** Booking-card heading when `embedDesktopCardLayout` is on */ embedDesktopCardTitle?: string; /** Wins over a trip type left in session by another page. A matching route prefill still wins. */ pageDefaultTripType?: TripType; /** Wins over a trip mode left in session by another page. */ pageDefaultTripMode?: TripMode; /** This page owns the drop field. Ignores a route prefill from another page. */ pageDefaultDrop?: Location | null; /** Tour pages already render the site nav. */ hideMobileNavigation?: boolean }) {
   const normalizedLockSlug = lockedVehicleSlug?.trim().toLowerCase() ?? '';
   const vehicleEmbedConfig = lockedVehicleSlug
     ? getVehicleEmbedConfig(normalizedLockSlug)
@@ -357,6 +357,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       const routePrefillData = sessionStorage.getItem('routePrefillData');
       if (routePrefillData) {
         const prefillData = JSON.parse(routePrefillData);
+        const prefillTrip = (prefillData.tripType || 'outstation') as TripType;
+        const pageOwnsDrop = Boolean(pageDefaultDrop);
+        const staleOtherService =
+          Boolean(pageDefaultTripType) && prefillTrip !== pageDefaultTripType;
+        if (!pageOwnsDrop && !staleOtherService) {
         // sessionStorage.removeItem('routePrefillData'); // Do NOT clear after use
         const prePick = prefillData.pickupLocation as Location | undefined;
         const allowAnyPickup = Boolean(prefillData.openGuestDetails);
@@ -410,6 +415,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
               : 0,
           intermediateStops: parseStoredStops(prefillData.intermediateStops),
         };
+        }
       }
 
       const pickupData = sessionStorage.getItem('pickupLocation');
@@ -422,21 +428,26 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       const cabData = sessionStorage.getItem('selectedCab');
       
       // Determine default trip type based on visibleTabs
-      let defaultTripType: TripType = 'outstation';
-      if (visibleTabs && visibleTabs.length === 1) {
+      let defaultTripType: TripType = pageDefaultTripType ?? 'outstation';
+      if (!pageDefaultTripType && visibleTabs && visibleTabs.length === 1) {
         defaultTripType = visibleTabs[0] as TripType;
       }
+      const sessionMatchesPage =
+        !pageDefaultTripType || !tripTypeData || tripTypeData === pageDefaultTripType;
+      const keepSessionLocations = !pageDefaultDrop && sessionMatchesPage;
       
       return {
-        pickupLocation: pickupData
+        pickupLocation: keepSessionLocations && pickupData
           ? (() => {
               const p = JSON.parse(pickupData) as Location;
               return isAllowedPickupLocation(p, defaultTripType) ? withCanonicalAirportCoords(p) : null;
             })()
           : null,
-        dropLocation: dropData
-          ? withCanonicalAirportCoords(JSON.parse(dropData) as Location)
-          : null,
+        dropLocation: pageDefaultDrop
+          ? pageDefaultDrop
+          : keepSessionLocations && dropData
+            ? withCanonicalAirportCoords(JSON.parse(dropData) as Location)
+            : null,
         pickupDate: coerceTripDate(
           pickupDateStr
             ? (() => {
@@ -456,10 +467,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
               return isValidTripDate(parsedReturn) ? parsedReturn : null;
             })()
           : null,
-        tripType: tripTypeData as TripType || defaultTripType,
-        tripMode: tripModeData as TripMode || 'one-way',
+        tripType: pageDefaultTripType ?? ((tripTypeData as TripType) || defaultTripType),
+        tripMode: pageDefaultTripMode ?? ((tripModeData as TripMode) || 'one-way'),
         hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
-        selectedCab: cabData ? JSON.parse(cabData) as CabType : null,
+        selectedCab: keepSessionLocations && cabData ? JSON.parse(cabData) as CabType : null,
         autoTriggerSearch: false,
         focusField: undefined,
         skipAirportAutoFill: false,
@@ -468,29 +479,31 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         vehicleHint: '',
         estimatedFare: 0,
         estimatedKm: 0,
-        intermediateStops: parseStoredStops(
-          (() => {
-            try {
-              const raw = sessionStorage.getItem('intermediateStops');
-              return raw ? JSON.parse(raw) : [];
-            } catch {
-              return [];
-            }
-          })()
-        ),
+        intermediateStops: keepSessionLocations
+          ? parseStoredStops(
+              (() => {
+                try {
+                  const raw = sessionStorage.getItem('intermediateStops');
+                  return raw ? JSON.parse(raw) : [];
+                } catch {
+                  return [];
+                }
+              })()
+            )
+          : [],
       };
     } catch (error) {
       console.error("Error loading data from session storage:", error);
       
       // Determine default trip type based on visibleTabs
-      let defaultTripType: TripType = 'outstation';
-      if (visibleTabs && visibleTabs.length === 1) {
+      let defaultTripType: TripType = pageDefaultTripType ?? 'outstation';
+      if (!pageDefaultTripType && visibleTabs && visibleTabs.length === 1) {
         defaultTripType = visibleTabs[0] as TripType;
       }
       
       return {
         pickupLocation: null,
-        dropLocation: null,
+        dropLocation: pageDefaultDrop ?? null,
         pickupDate: (() => {
           const now = new Date();
           const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
@@ -498,7 +511,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         })(),
         returnDate: null,
         tripType: defaultTripType,
-        tripMode: 'one-way' as TripMode,
+        tripMode: pageDefaultTripMode ?? ('one-way' as TripMode),
         hourlyPackage: hourlyPackageOptions[0].value,
         selectedCab: null,
         autoTriggerSearch: false,
@@ -515,6 +528,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   };
   
   const savedData = loadFromSessionStorage();
+  const pageDefaultDropTouchedRef = useRef(false);
+  const pageDefaultModeTouchedRef = useRef(false);
   
   // Handle navigation state from edit functionality
   const navigationState = location.state as any;
@@ -857,6 +872,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   };
 
   const handleTripModeChangeWithAdvance = (mode: TripMode) => {
+    pageDefaultModeTouchedRef.current = true;
     setTripMode(mode);
     advanceAfterTripModeSelected();
   };
@@ -1885,6 +1901,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   };
   
   const handleDropLocationChange = (location: Location) => {
+    pageDefaultDropTouchedRef.current = true;
     // Check if location is null, undefined, or empty (cleared)
     const isLocationCleared = !isSelectedMapLocation(location);
     
@@ -2015,7 +2032,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
   useEffect(() => {
     sessionStorage.setItem('tripType', tripType);
-    sessionStorage.setItem('tripMode', tripMode);
+    const untouchedPageMode =
+      Boolean(pageDefaultTripMode) &&
+      !pageDefaultModeTouchedRef.current &&
+      tripMode === pageDefaultTripMode;
+    if (!untouchedPageMode) {
+      sessionStorage.setItem('tripMode', tripMode);
+    }
     
     if (tripType === 'airport' && airportLocation) {
       // Reset airport direction label when switching to airport tab
@@ -2059,7 +2082,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     } else {
       sessionStorage.removeItem('pickupLocation');
     }
-    if (dropLocation) {
+    const untouchedPageDrop =
+      Boolean(pageDefaultDrop) &&
+      !pageDefaultDropTouchedRef.current &&
+      dropLocation?.id === pageDefaultDrop?.id;
+    if (dropLocation && !untouchedPageDrop) {
       sessionStorage.setItem('dropLocation', JSON.stringify(dropLocation));
     } else {
       sessionStorage.removeItem('dropLocation');
@@ -3892,7 +3919,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                     )
                     : showPremiumHomeBookingStack
                     ? cn(
-                        'premium-booking-card premium-booking-card--glass animate-booking-slide-up w-full p-3.5 sm:p-4 lg:p-4',
+                        'premium-booking-card premium-booking-card--glass animate-booking-slide-up w-full p-3.5 sm:p-4 lg:px-3.5 lg:pb-2.5 lg:pt-2',
                         // Classic home ticket chrome below lg — desktop keeps glass card
                         heroMobileTicketShellCardClass,
                         heroMobileTicketShellPaddingHomeClass,
@@ -4350,8 +4377,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
                       {/* DESKTOP ONLY: horizontal row, or stacked card for Local marketing hero */}
                       <div
-                        className={cn('hidden lg:block', embedDesktopCardLayout ? 'mt-0' : '!mt-3')}
-                        style={embedDesktopCardLayout ? undefined : { marginTop: '12px' }}
+                        className={cn('hidden lg:block', embedDesktopCardLayout ? 'mt-0' : '!mt-2')}
                       >
                         {embedDesktopCardLayout && (
                           <h2 className="mb-4 text-left text-xl font-bold tracking-tight text-slate-900">
@@ -4362,7 +4388,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           className={
                             embedDesktopCardLayout
                               ? 'flex flex-col gap-3'
-                              : 'flex flex-row flex-nowrap items-end gap-4'
+                              : 'flex flex-row flex-nowrap items-end gap-3'
                           }
                         >
                           <div className={embedDesktopCardLayout ? 'w-full min-w-0' : 'min-w-0 flex-1'}>
@@ -4699,13 +4725,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           </div>
                         </div>
                         {tripType === 'outstation' && (
-                          <div className="mt-2 flex w-full flex-col gap-2">
+                          <div className="mt-1.5 flex w-full flex-col gap-2">
                             {intermediateStops.length === 0 ? (
                               <OutstationAddStopLink
                                 stopCount={0}
                                 onAdd={handleAddOutstationStop}
                                 variant="card"
-                                className="px-0"
+                                dense
                               />
                             ) : (
                               <>
@@ -5410,8 +5436,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         </DialogContent>
       </Dialog>
 
-      {/* Mobile Navigation Bar */}
-      <MobileNavigation />
+      {hideMobileNavigation ? null : <MobileNavigation />}
     </div>
   );
 }

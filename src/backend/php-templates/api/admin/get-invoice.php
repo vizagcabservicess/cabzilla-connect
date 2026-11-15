@@ -20,6 +20,81 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
+/** Pull Google Sheet Invoice no onto the booking (sheet column A wins over DB MAX+1). */
+function adopt_sheet_invoice_onto_booking(array &$booking): void
+{
+    $bookingId = (int)($booking['id'] ?? 0);
+    if ($bookingId <= 0) {
+        return;
+    }
+    try {
+        $syncBootstrap = dirname(__DIR__) . '/ai-booking/services/OnlineBookingSheetSync.php';
+        if (!is_readable($syncBootstrap)) {
+            return;
+        }
+        require_once dirname(__DIR__) . '/utils/ai-booking-db.php';
+        require_once dirname(__DIR__) . '/ai-booking/config/sheets-config.php';
+        require_once dirname(__DIR__) . '/ai-booking/services/GoogleSheetService.php';
+        require_once $syncBootstrap;
+
+        // Always re-check the sheet by guest identity. DB invoice_no may be a wrong MAX+1 value.
+        $adopt = OnlineBookingSheetSync::adoptInvoiceFromSheet($bookingId);
+        if (!empty($adopt['invoice_no'])) {
+            $booking['invoice_no'] = (int)$adopt['invoice_no'];
+            return;
+        }
+
+        // Only append a new sheet row when this booking is not on the sheet yet.
+        $existing = (int)($booking['invoice_no'] ?? 0);
+        if ($existing > 0) {
+            return;
+        }
+        $synced = OnlineBookingSheetSync::syncByBookingId($bookingId);
+        if (!empty($synced['invoice_no'])) {
+            $booking['invoice_no'] = (int)$synced['invoice_no'];
+        }
+    } catch (Throwable $ignored) {
+        // Non-fatal
+    }
+}
+
+/** Persist sheet Invoice no onto the invoices row so later loads keep it. */
+function persist_sheet_invoice_number(mysqli $conn, int $bookingId, string $invoiceNumber, ?int $invoiceRowId = null): void
+{
+    $invoiceNumber = trim($invoiceNumber);
+    $bookingId = (int)$bookingId;
+    if ($bookingId <= 0 || $invoiceNumber === '' || preg_match('/^INV-/i', $invoiceNumber)) {
+        return;
+    }
+    try {
+        $exists = @$conn->query("SHOW TABLES LIKE 'invoices'");
+        if (!$exists || $exists->num_rows === 0) {
+            return;
+        }
+        if ($invoiceRowId !== null && $invoiceRowId > 0) {
+            $stmt = $conn->prepare('UPDATE invoices SET invoice_number = ? WHERE id = ?');
+            if ($stmt) {
+                $stmt->bind_param('si', $invoiceNumber, $invoiceRowId);
+                $stmt->execute();
+                $stmt->close();
+            }
+            return;
+        }
+        $stmt = $conn->prepare(
+            "UPDATE invoices SET invoice_number = ?
+             WHERE booking_id = ?
+               AND (invoice_number IS NULL OR invoice_number = '' OR invoice_number LIKE 'INV-%')"
+        );
+        if ($stmt) {
+            $stmt->bind_param('si', $invoiceNumber, $bookingId);
+            $stmt->execute();
+            $stmt->close();
+        }
+    } catch (Throwable $ignored) {
+        // Non-fatal
+    }
+}
+
 $bookingId = isset($_GET['booking_id']) ? intval($_GET['booking_id']) : 0;
 if (!$bookingId) {
     sendJsonResponse(['status' => 'error', 'message' => 'Missing or invalid booking_id'], 400);
@@ -129,6 +204,9 @@ try {
                 $bRes = $bStmt->get_result();
                 if ($bRes->num_rows > 0) $booking = $bRes->fetch_assoc();
                 $bStmt->close();
+                if (is_array($booking)) {
+                    adopt_sheet_invoice_onto_booking($booking);
+                }
                 $baseAmount = (float)($inv['base_amount'] ?? 0);
                 $taxAmount = (float)($inv['tax_amount'] ?? 0);
                 $totalAmount = (float)($inv['total_amount'] ?? 0);
@@ -140,10 +218,27 @@ try {
                 $cgstAmount = $taxAmount > 0 && !($inv['is_igst'] ?? 0) ? round($taxAmount / 2, 2) : 0;
                 $sgstAmount = $taxAmount > 0 && !($inv['is_igst'] ?? 0) ? round($taxAmount - $cgstAmount, 2) : 0;
                 $igstAmount = ($inv['is_igst'] ?? 0) ? $taxAmount : 0;
+                $sheetInvoiceNo = isset($booking['invoice_no']) ? (int)$booking['invoice_no'] : 0;
+                $storedInvoiceNumber = trim((string)($inv['invoice_number'] ?? ''));
+                // Prefer Google Sheet Invoice no over legacy INV-YYYYMMDD-id values.
+                if ($sheetInvoiceNo > 0 && ($storedInvoiceNumber === '' || preg_match('/^INV-/i', $storedInvoiceNumber))) {
+                    $resolvedInvoiceNumber = (string)$sheetInvoiceNo;
+                } elseif ($storedInvoiceNumber !== '') {
+                    $resolvedInvoiceNumber = $storedInvoiceNumber;
+                } elseif ($sheetInvoiceNo > 0) {
+                    $resolvedInvoiceNumber = (string)$sheetInvoiceNo;
+                } else {
+                    $resolvedInvoiceNumber = 'INV-' . date('Ymd') . '-' . $bookingId;
+                }
+                if ($sheetInvoiceNo > 0) {
+                    persist_sheet_invoice_number($conn, $bookingId, (string)$sheetInvoiceNo, (int)($inv['id'] ?? 0));
+                    $resolvedInvoiceNumber = (string)$sheetInvoiceNo;
+                }
                 $invoiceData = [
                     'id' => (int)$inv['id'],
                     'booking_id' => $bookingId,
-                    'invoice_number' => $inv['invoice_number'] ?? ('INV-' . date('Ymd') . '-' . $bookingId),
+                    'invoice_number' => $resolvedInvoiceNumber,
+                    'invoice_no' => $sheetInvoiceNo > 0 ? $sheetInvoiceNo : null,
                     'booking_number' => $booking['booking_number'] ?? '',
                     'passenger_name' => $booking['passenger_name'] ?? '',
                     'passenger_phone' => $booking['passenger_phone'] ?? '',
@@ -185,6 +280,7 @@ try {
             if ($bookingResult->num_rows > 0) {
                 $booking = $bookingResult->fetch_assoc();
                 $bookingStmt->close();
+                adopt_sheet_invoice_onto_booking($booking);
                 $total = (float)($booking['total_amount'] ?? 0);
                 $adv = (float)($booking['advance_paid_amount'] ?? 0);
                 $invoiceHtml = '<table><tbody>';
@@ -202,10 +298,12 @@ try {
                     $total = round($total + $driverExtra, 2);
                 }
                 $invoiceHtml .= '<tr><td>Total Amount</td><td>₹ ' . number_format($total, 2) . '</td></tr></tbody></table>';
+                $sheetInvoiceNo = isset($booking['invoice_no']) ? (int)$booking['invoice_no'] : 0;
                 $invoiceData = [
                     'id' => $bookingId,
                     'booking_id' => $bookingId,
-                    'invoice_number' => 'INV-' . date('Ymd') . '-' . $bookingId,
+                    'invoice_number' => $sheetInvoiceNo > 0 ? (string)$sheetInvoiceNo : ('INV-' . date('Ymd') . '-' . $bookingId),
+                    'invoice_no' => $sheetInvoiceNo > 0 ? $sheetInvoiceNo : null,
                     'booking_number' => $booking['booking_number'],
                     'passenger_name' => $booking['passenger_name'] ?? '',
                     'passenger_phone' => $booking['passenger_phone'] ?? '',

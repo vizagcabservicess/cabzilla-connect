@@ -24,6 +24,8 @@ interface OutstationAddStopLinkProps {
   more?: boolean;
   /** `card` = dashed row between From/To. `link` = compact + Add more. */
   variant?: 'card' | 'link';
+  /** Compact text link for the desktop home widget. */
+  dense?: boolean;
 }
 
 export function OutstationAddStopLink({
@@ -33,8 +35,25 @@ export function OutstationAddStopLink({
   align = 'left',
   more = false,
   variant = 'link',
+  dense = false,
 }: OutstationAddStopLinkProps) {
   if (stopCount >= MAX_OUTSTATION_STOPS) return null;
+
+  if (variant === 'card' && !more && dense) {
+    return (
+      <div className={cn('flex justify-start', className)}>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex items-center gap-1.5 py-0.5 text-[13px] font-semibold leading-none text-blue-600 transition-colors hover:text-blue-700"
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+          <span>Add stop</span>
+          <span className="font-medium text-slate-400">Add multiple stops in between</span>
+        </button>
+      </div>
+    );
+  }
 
   if (variant === 'card' && !more) {
     return (

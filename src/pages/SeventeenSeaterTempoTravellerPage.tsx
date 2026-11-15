@@ -57,13 +57,8 @@ const SeventeenSeaterTempoTravellerPage = () => {
   return (
     <>
       <Helmet>
-        <title>17 Seater Vehicle in Vizag | Tempo Traveller Hire | Vizag Taxi Hub</title>
-        <meta name="description" content="Book a 17 seater vehicle in Vizag — AC tempo traveller hire for group travel with professional driver. Best rates in Visakhapatnam. Call +91 9966363662." />
+        {/* Title, description, canonical and Open Graph: PublicHead */}
         <meta name="keywords" content="17 seater vehicle, 17 seater tempo traveller vizag, tempo traveller hire vizag, tempo traveller in vizag, AC mini bus rental vizag, group travel vizag" />
-        <link rel="canonical" href="https://vizagtaxihub.com/17-seater-tempo-traveller-vizag" />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://vizagtaxihub.com/17-seater-tempo-traveller-vizag" />
-        <meta property="twitter:url" content="https://vizagtaxihub.com/17-seater-tempo-traveller-vizag" />
         <script type="application/ld+json">
           {JSON.stringify(structuredData)}
         </script>
