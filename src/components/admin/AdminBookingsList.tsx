@@ -290,12 +290,51 @@ export function AdminBookingsList() {
     setSelectedBooking(null);
   };
 
+  const pushSheetCost = async (bookingId: number) => {
+    try {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const res = await fetch(getApiUrl('/api/admin/sync-sheet-cost.php'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ booking_id: bookingId }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        success?: boolean;
+        sheet_cost?: number;
+        message?: string;
+        error?: string;
+        errors?: string[];
+      } | null;
+      if (json?.success && json.sheet_cost != null) {
+        toast.success(`Google Sheet COST updated to ₹${Number(json.sheet_cost).toLocaleString('en-IN')}`);
+        return;
+      }
+      const err =
+        json?.error ||
+        json?.errors?.filter(Boolean).join(' ') ||
+        json?.message ||
+        'Sheet COST was not updated';
+      toast.error(err);
+    } catch (e) {
+      console.warn('sync-sheet-cost failed', e);
+      toast.error(e instanceof Error ? e.message : 'Sheet COST sync failed');
+    }
+  };
+
   const handleEditBooking = async (updatedData: Partial<Booking>) => {
     if (!selectedBooking) return;
     
     setIsSubmitting(true);
     try {
       console.log('Updating booking:', selectedBooking.id, updatedData);
+      const touchesFare =
+        Object.prototype.hasOwnProperty.call(updatedData, 'extraCharges') ||
+        Object.prototype.hasOwnProperty.call(updatedData, 'totalAmount') ||
+        Object.prototype.hasOwnProperty.call(updatedData, 'extraCollectedAmount');
       
       // Try bookingAPI first
       try {
@@ -307,6 +346,15 @@ export function AdminBookingsList() {
         applyFilters(nextBookings);
         
         toast.success("Booking updated successfully");
+        const sheetSync = (response as { sheet_sync?: { success?: boolean; skipped?: boolean; cost?: number; error?: string } })
+          ?.sheet_sync;
+        if (touchesFare) {
+          if (sheetSync?.success && !sheetSync.skipped && sheetSync.cost != null) {
+            toast.success(`Google Sheet COST updated to ₹${Number(sheetSync.cost).toLocaleString('en-IN')}`);
+          } else {
+            await pushSheetCost(selectedBooking.id);
+          }
+        }
         return;
       } catch (apiError) {
         console.warn('bookingAPI.updateBooking failed, trying direct fetch:', apiError);
@@ -351,6 +399,16 @@ export function AdminBookingsList() {
       applyFilters(nextBookings);
       
       toast.success("Booking updated successfully");
+      if (touchesFare) {
+        const sheetSync = response?.sheet_sync as
+          | { success?: boolean; skipped?: boolean; cost?: number }
+          | undefined;
+        if (sheetSync?.success && !sheetSync.skipped && sheetSync.cost != null) {
+          toast.success(`Google Sheet COST updated to ₹${Number(sheetSync.cost).toLocaleString('en-IN')}`);
+        } else {
+          await pushSheetCost(selectedBooking.id);
+        }
+      }
     } catch (error) {
       console.error('Error updating booking:', error);
       toast.error("Failed to update booking: " + (error instanceof Error ? error.message : 'Unknown error'));

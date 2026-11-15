@@ -15,6 +15,7 @@ import { ArrowLeft, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { safeGetString } from '@/lib/safeStringUtils';
 import { convertUTCToLocal, formatDateForAPI } from '@/lib/dateUtils';
 import type { Location } from '@/lib/locationData';
+import { getApiUrl } from '@/config/api';
 
 export default function BookingEditPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -190,6 +191,51 @@ export default function BookingEditPage() {
       if (result && result.data) {
         setBooking(result.data);
         console.log('Setting booking to:', result.data);
+      }
+      const touchesFare =
+        Object.prototype.hasOwnProperty.call(updatedData, 'extraCharges') ||
+        Object.prototype.hasOwnProperty.call(updatedData, 'totalAmount') ||
+        Object.prototype.hasOwnProperty.call(updatedData, 'extraCollectedAmount');
+      if (touchesFare) {
+        const sheetSync = result?.sheet_sync as
+          | { success?: boolean; skipped?: boolean; cost?: number }
+          | undefined;
+        if (sheetSync?.success && !sheetSync.skipped && sheetSync.cost != null) {
+          toast({
+            title: 'Google Sheet updated',
+            description: `COST set to ₹${Number(sheetSync.cost).toLocaleString('en-IN')}.`,
+          });
+        } else {
+          try {
+            const token = localStorage.getItem('auth_token');
+            const costRes = await fetch(getApiUrl('/api/admin/sync-sheet-cost.php'), {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              credentials: 'include',
+              body: JSON.stringify({ booking_id: booking.id }),
+            });
+            const costJson = await costRes.json().catch(() => null) as
+              | { success?: boolean; sheet_cost?: number; message?: string; error?: string }
+              | null;
+            if (costJson?.success && costJson.sheet_cost != null) {
+              toast({
+                title: 'Google Sheet updated',
+                description: `COST set to ₹${Number(costJson.sheet_cost).toLocaleString('en-IN')}.`,
+              });
+            } else if (costJson?.error || costJson?.message) {
+              toast({
+                title: 'Sheet COST not updated',
+                description: costJson.error || costJson.message,
+                variant: 'destructive',
+              });
+            }
+          } catch {
+            // non-fatal
+          }
+        }
       }
     } catch (error) {
       console.error('Error updating booking:', error);

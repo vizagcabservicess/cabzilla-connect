@@ -458,12 +458,39 @@ try {
         'updatedAt' => $updatedBooking['updated_at']
     ];
     admin_booking_append_messaging_fields($updatedBooking, $formattedBooking);
+
+    // Keep Google Sheet COST in sync when fare / extras change (non-blocking).
+    $sheetSync = null;
+    $shouldSyncSheetCost = array_key_exists('totalAmount', $data)
+        || array_key_exists('extraCharges', $data)
+        || array_key_exists('extra_charges', $data)
+        || array_key_exists('extraCollectedAmount', $data);
+    if ($shouldSyncSheetCost) {
+        try {
+            $syncBootstrap = dirname(__DIR__) . '/ai-booking/services/OnlineBookingSheetSync.php';
+            if (is_readable($syncBootstrap)) {
+                require_once dirname(__DIR__) . '/utils/ai-booking-db.php';
+                require_once dirname(__DIR__) . '/ai-booking/config/sheets-config.php';
+                require_once dirname(__DIR__) . '/ai-booking/services/GoogleSheetService.php';
+                require_once $syncBootstrap;
+                $sheetSync = OnlineBookingSheetSync::syncCostForBooking((int) $bookingId);
+                error_log('[update-booking] Google Sheet cost sync: ' . json_encode($sheetSync));
+            }
+        } catch (Throwable $sheetError) {
+            $sheetSync = [
+                'success' => false,
+                'error' => $sheetError->getMessage(),
+            ];
+            error_log('[update-booking] Google Sheet cost sync failed (non-fatal): ' . $sheetError->getMessage());
+        }
+    }
     
     // Send success response
     $response = [
         'status' => 'success', 
         'message' => 'Booking updated successfully',
-        'data' => $formattedBooking
+        'data' => $formattedBooking,
+        'sheet_sync' => $sheetSync,
     ];
     
     logDebug("Sending success response", $response);

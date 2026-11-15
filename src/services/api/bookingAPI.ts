@@ -363,7 +363,7 @@ export const bookingAPI = {
       const payload = { bookingId: bookingId, ...data } as Record<string, unknown>;
 
       const postAdmin = () =>
-        axios.post(`${API_BASE_URL}/api/admin/update-booking.php`, payload, { headers, timeout: 25000 });
+        axios.post(`${API_BASE_URL}/api/admin/update-booking.php`, payload, { headers, timeout: 45000 });
 
       if (options?.forceAdmin) {
         const r = await postAdmin();
@@ -379,6 +379,10 @@ export const bookingAPI = {
         'extraCollectedAmount',
         'extraCollectedCategory',
         'completedAt',
+        // Extras / fare must hit admin so Google Sheet COST sync runs with full rights.
+        'extraCharges',
+        'extra_charges',
+        'totalAmount',
       ];
       const needsAdmin = tripFieldsOnlyInAdmin.some((k) => Object.prototype.hasOwnProperty.call(data as object, k));
       if (needsAdmin) {
@@ -391,7 +395,7 @@ export const bookingAPI = {
       }
 
       try {
-        const r1 = await axios.post(`/api/update-booking.php`, payload, { headers, timeout: 25000 });
+        const r1 = await axios.post(`/api/update-booking.php`, payload, { headers, timeout: 45000 });
         return r1.data;
       } catch (e1) {
         console.log('Non-admin endpoint failed, trying admin endpoint:', (e1 as Error).message);

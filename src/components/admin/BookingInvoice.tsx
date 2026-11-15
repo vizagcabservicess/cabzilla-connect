@@ -177,11 +177,32 @@ export function BookingInvoice({
   } = invoiceState;
   const tripSummary = mergeTripSummary(storedTripSummary, booking);
   const billingAddress = storedBillingAddress ?? getDefaultBillingAddress(booking);
-  const displayInvoiceNumber =
-    customInvoiceNumber.trim() ||
-    invoiceData?.invoiceNumber ||
-    invoiceData?.invoice_number ||
-    'Generated';
+  // Fresh value from last sheet adopt / get-invoice. Booking.invoice_no can be a stale MAX+1 (e.g. 596).
+  const [adoptedSheetInvoice, setAdoptedSheetInvoice] = useState('');
+  const bookingPropInvoice = Number(
+    (booking as { invoiceNo?: number | null; invoice_no?: number | null })?.invoiceNo
+      ?? (booking as { invoice_no?: number | null })?.invoice_no
+      ?? 0
+  );
+  const isLegacyInvNumber = (value: string) => /^INV-/i.test(value.trim());
+  const pickDisplayInvoiceNumber = (...candidates: Array<string | null | undefined>) => {
+    const cleaned = candidates.map((value) => String(value ?? '').trim()).filter(Boolean);
+    const numeric = cleaned.find((value) => /^\d+$/.test(value));
+    if (numeric) return numeric;
+    const nonLegacy = cleaned.find((value) => !isLegacyInvNumber(value));
+    if (nonLegacy) return nonLegacy;
+    return cleaned[0] || 'Generated';
+  };
+  const apiInvoiceNo = Number(invoiceData?.invoice_no ?? 0);
+  const displayInvoiceNumber = pickDisplayInvoiceNumber(
+    adoptedSheetInvoice,
+    apiInvoiceNo > 0 ? String(apiInvoiceNo) : '',
+    invoiceData?.invoiceNumber,
+    invoiceData?.invoice_number,
+    customInvoiceNumber,
+    // Booking prop last — often a wrong global MAX+1 that does not match the sheet.
+    bookingPropInvoice > 0 ? String(bookingPropInvoice) : '',
+  );
 
   const updateTripSummaryField = (field: keyof TripSummaryOverrides, value: string) => {
     onInvoiceStateChange({
@@ -1030,8 +1051,10 @@ export function BookingInvoice({
       let out = doc.documentElement.outerHTML;
       out = patchInvoiceHtmlTripSummary(out, tripSummary);
       out = patchInvoiceHtmlBillingAddress(out, billingAddress);
-      if (customInvoiceNumber.trim()) {
-        out = patchInvoiceHtmlInvoiceNumber(out, customInvoiceNumber.trim());
+      // Always overwrite baked-in HTML invoice numbers with the fresh resolved value.
+      const freshInvoiceNo = displayInvoiceNumber !== 'Generated' ? displayInvoiceNumber : customInvoiceNumber.trim();
+      if (freshInvoiceNo) {
+        out = patchInvoiceHtmlInvoiceNumber(out, freshInvoiceNo);
       }
       if (!tripSummary.tripType.trim()) {
         out = patchInvoiceHtmlTripTypeCell(out, booking);
@@ -1041,15 +1064,16 @@ export function BookingInvoice({
       console.error('Failed to sanitize admin invoice HTML:', error);
       let out = patchInvoiceHtmlTripSummary(html, tripSummary);
       out = patchInvoiceHtmlBillingAddress(out, billingAddress);
-      if (customInvoiceNumber.trim()) {
-        out = patchInvoiceHtmlInvoiceNumber(out, customInvoiceNumber.trim());
+      const freshInvoiceNo = displayInvoiceNumber !== 'Generated' ? displayInvoiceNumber : customInvoiceNumber.trim();
+      if (freshInvoiceNo) {
+        out = patchInvoiceHtmlInvoiceNumber(out, freshInvoiceNo);
       }
       if (!tripSummary.tripType.trim()) {
         out = patchInvoiceHtmlTripTypeCell(out, booking);
       }
       return out;
     }
-  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData, summaryBaseFare, summaryTaxes, summaryTotal, invoiceTotal, driverExtraAmount, driverExtraLabel, originalTotalAmount, backendTaxAmount, backendCgstAmount, backendSgstAmount, booking, tripSummary, billingAddress, customInvoiceNumber]);
+  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData, summaryBaseFare, summaryTaxes, summaryTotal, invoiceTotal, driverExtraAmount, driverExtraLabel, originalTotalAmount, backendTaxAmount, backendCgstAmount, backendSgstAmount, booking, tripSummary, billingAddress, customInvoiceNumber, displayInvoiceNumber]);
 
   const htmlContent = useMemo(
     () => sanitizeInvoiceHtml(rawHtmlContent),
@@ -1067,21 +1091,64 @@ export function BookingInvoice({
       if (booking && booking.id) {
         try {
           setLoading(true);
-          const resp = await fetch(`/api/admin/get-invoice.php?booking_id=${booking.id}`);
+          const resp = await fetch(
+            getApiUrl(`/api/admin/get-invoice.php?booking_id=${booking.id}&_=${Date.now()}`),
+            {
+              credentials: 'include',
+              headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                Pragma: 'no-cache',
+                'X-Force-Refresh': 'true',
+                ...(localStorage.getItem('auth_token')
+                  ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
+                  : {}),
+              },
+            }
+          );
           const data = await resp.json();
           
           if (data.status === 'success' && data.invoice) {
             const rawHtml = data.invoice.invoice_html ?? data.invoice.invoiceHtml ?? null;
             const fetchedInvoiceNumber = (data.invoice.invoice_number || data.invoice.invoiceNumber || '').trim();
+            const bookingSheetInvoice = String(
+              (data.invoice.invoice_no ?? (booking as { invoiceNo?: number; invoice_no?: number }).invoiceNo
+                ?? (booking as { invoice_no?: number }).invoice_no ?? '') || ''
+            ).trim();
             const storedSettings = readStoredInvoiceSettings(booking.id);
             const storedCustomNumber = String(storedSettings?.customInvoiceNumber ?? '').trim();
-            const effectiveInvoiceNumber = storedCustomNumber || fetchedInvoiceNumber;
+            // Prefer Google Sheet Invoice no over legacy INV-YYYYMMDD-id values stored locally.
+            const legacyStored = /^INV-/i.test(storedCustomNumber);
+            const legacyFetched = /^INV-/i.test(fetchedInvoiceNumber);
+            // Sheet/API first; cached localStorage last so stale MAX+1 values cannot win.
+            const effectiveInvoiceNumber = pickDisplayInvoiceNumber(
+              bookingSheetInvoice,
+              !legacyFetched ? fetchedInvoiceNumber : '',
+              fetchedInvoiceNumber,
+              !legacyStored ? storedCustomNumber : '',
+              storedCustomNumber,
+            );
+            if (/^\d+$/.test(effectiveInvoiceNumber)) {
+              setAdoptedSheetInvoice(effectiveInvoiceNumber);
+              // Drop stale localStorage invoice numbers so cache cannot keep MAX+1 / INV- values.
+              try {
+                const key = `invoice-settings-${booking.id}`;
+                const raw = localStorage.getItem(key);
+                const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+                const cached = String(parsed.customInvoiceNumber ?? '').trim();
+                if (cached !== effectiveInvoiceNumber) {
+                  parsed.customInvoiceNumber = effectiveInvoiceNumber;
+                  localStorage.setItem(key, JSON.stringify(parsed));
+                }
+              } catch {
+                // ignore
+              }
+            }
 
             let patchedHtml = rawHtml;
+            if (patchedHtml && effectiveInvoiceNumber) {
+              patchedHtml = patchInvoiceHtmlInvoiceNumber(patchedHtml, effectiveInvoiceNumber);
+            }
             if (patchedHtml && storedSettings) {
-              if (storedCustomNumber) {
-                patchedHtml = patchInvoiceHtmlInvoiceNumber(patchedHtml, storedCustomNumber);
-              }
               patchedHtml = patchInvoiceHtmlTripSummary(
                 patchedHtml,
                 mergeTripSummary(storedSettings.tripSummary, booking)
@@ -1117,8 +1184,7 @@ export function BookingInvoice({
               return invoicePayload;
             });
             
-            // Use invoice for display (invoiceData, rawHtml). For form state: prefer localStorage so user changes persist.
-            // Only sync invoiceState from DB when we have NO stored settings - prevents overwriting user's unsaved changes.
+            // Always refresh invoice number from sheet/API — never keep a stale cached MAX+1 / INV- value.
             const hasStoredSettings = !!localStorage.getItem(`invoice-settings-${booking.id}`);
             if (!hasStoredSettings) {
               const fetchedGstEnabled = !!(data.invoice.gst_enabled ?? data.invoice.gstEnabled);
@@ -1133,15 +1199,14 @@ export function BookingInvoice({
                 ...invoiceState,
                 gstEnabled: fetchedGstEnabled,
                 gstDetails: fetchedGstDetails,
-                customInvoiceNumber: fetchedInvoiceNumber,
+                customInvoiceNumber: effectiveInvoiceNumber,
                 includeTax: fetchedIncludeTax,
                 isIGST: fetchedIsIGST
               });
-            } else if (storedCustomNumber && storedCustomNumber !== fetchedInvoiceNumber) {
-              // Stored custom number differs from DB — keep settings field and patched preview in sync
+            } else if (effectiveInvoiceNumber && effectiveInvoiceNumber !== storedCustomNumber) {
               onInvoiceStateChange({
                 ...invoiceState,
-                customInvoiceNumber: storedCustomNumber,
+                customInvoiceNumber: effectiveInvoiceNumber,
               });
             }
             
@@ -1155,13 +1220,13 @@ export function BookingInvoice({
             // Prefill from booking → guest GST details
             const prefillGstEnabled = Boolean((booking as any).gstEnabled);
             const prefillGstDetails = (booking as any).gstDetails || null;
-            if (!localStorage.getItem(`invoice-settings-${booking.id}`) && (prefillGstEnabled || prefillGstDetails)) {
+            if (!localStorage.getItem(`invoice-settings-${booking.id}`) && (prefillGstEnabled || prefillGstDetails || sheetInvoiceLabel)) {
               onInvoiceStateChange({
                 ...invoiceState,
                 gstEnabled: prefillGstEnabled,
                 isIGST: false,
                 includeTax: true,
-                customInvoiceNumber: '',
+                customInvoiceNumber: sheetInvoiceLabel,
                 adminNotes: (invoiceState?.adminNotes as string) || (booking as any).adminNotes || '',
                 gstDetails: {
                   gstNumber: prefillGstDetails?.gstNumber || '',
@@ -1250,6 +1315,8 @@ export function BookingInvoice({
   useEffect(() => {
     setHasAttemptedGeneration(false);
     setError(null);
+    setAdoptedSheetInvoice('');
+    setRawHtmlContent(null);
   }, [booking.id]);
 
   const validateGSTDetails = () => {
@@ -1277,7 +1344,7 @@ export function BookingInvoice({
     return true;
   };
 
-  const handleGenerateInvoice = async (isManualRetry = false) => {
+  const handleGenerateInvoice = async (isManualRetry = false, invoiceNumberOverride?: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -1291,6 +1358,12 @@ export function BookingInvoice({
         setLoading(false);
         return;
       }
+      const invoiceNumberForRequest = (
+        invoiceNumberOverride?.trim()
+        || adoptedSheetInvoice.trim()
+        || customInvoiceNumber.trim()
+        || ''
+      ) || undefined;
       
       // #region agent log
       console.log('🔥 INVOICE GENERATION DEBUG:');
@@ -1328,7 +1401,7 @@ export function BookingInvoice({
         isIGST,
         includeTax,
         includeTaxType: typeof includeTax,
-        customInvoiceNumber: customInvoiceNumber.trim() || undefined
+        customInvoiceNumber: invoiceNumberForRequest
       });
       // #endregion
                  
@@ -1337,7 +1410,7 @@ export function BookingInvoice({
         extendedGstDetails, 
         isIGST,
         includeTax,
-        customInvoiceNumber.trim() || undefined,
+        invoiceNumberForRequest,
         (adminNotes || '').trim() || undefined,
         tripSummary,
         billingAddress.trim() || undefined
@@ -1375,7 +1448,9 @@ export function BookingInvoice({
         
         const invoicePayload = {
           ...result.data,
-          invoiceNumber: customInvoiceNumber.trim() || result.data.invoiceNumber || result.data.invoice_number,
+          invoiceNumber: invoiceNumberForRequest || result.data.invoiceNumber || result.data.invoice_number,
+          invoice_number: invoiceNumberForRequest || result.data.invoiceNumber || result.data.invoice_number,
+          invoice_no: Number(invoiceNumberForRequest) > 0 ? Number(invoiceNumberForRequest) : (result.data.invoice_no ?? null),
           invoiceHtml: sanitizedHtml ?? rawHtml,
           invoice_html: sanitizedHtml ?? rawHtml,
           // Normalize field names - use camelCase with fallback to snake_case
@@ -1413,17 +1488,38 @@ export function BookingInvoice({
           igstAmount: invoicePayload.igstAmount,
           raw_response: result.data
         });
-        setInvoiceData(invoicePayload);
-        setRawHtmlContent(sanitizedHtml ?? rawHtml ?? null);
-
         const resolvedInvoiceNumber =
-          customInvoiceNumber.trim() ||
-          String(result.data.invoiceNumber ?? result.data.invoice_number ?? '').trim();
+          invoiceNumberForRequest
+          || String(result.data.invoiceNumber ?? result.data.invoice_number ?? '').trim()
+          || customInvoiceNumber.trim();
+        let htmlToStore = sanitizedHtml ?? rawHtml ?? null;
+        if (htmlToStore && resolvedInvoiceNumber) {
+          htmlToStore = patchInvoiceHtmlInvoiceNumber(htmlToStore, resolvedInvoiceNumber);
+          invoicePayload.invoiceHtml = htmlToStore;
+          invoicePayload.invoice_html = htmlToStore;
+          invoicePayload.invoiceNumber = resolvedInvoiceNumber;
+          invoicePayload.invoice_number = resolvedInvoiceNumber;
+        }
+        if (/^\d+$/.test(resolvedInvoiceNumber)) {
+          setAdoptedSheetInvoice(resolvedInvoiceNumber);
+        }
+        setInvoiceData(invoicePayload);
+        setRawHtmlContent(htmlToStore);
+
         if (resolvedInvoiceNumber) {
           onInvoiceStateChange({
             ...invoiceState,
             customInvoiceNumber: resolvedInvoiceNumber,
           });
+          try {
+            const key = `invoice-settings-${booking.id}`;
+            const raw = localStorage.getItem(key);
+            const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+            parsed.customInvoiceNumber = resolvedInvoiceNumber;
+            localStorage.setItem(key, JSON.stringify(parsed));
+          } catch {
+            // ignore
+          }
         }
 
         toast({
@@ -1498,9 +1594,21 @@ export function BookingInvoice({
       
       const html = await response.text();
       const sanitizedHtml = sanitizeInvoiceHtml(html);
-      const finalHtml = sanitizedHtml ?? html;
+      const freshNo =
+        (displayInvoiceNumber !== 'Generated' ? displayInvoiceNumber : '')
+        || adoptedSheetInvoice
+        || customInvoiceNumber.trim();
+      let finalHtml = sanitizedHtml ?? html;
+      if (finalHtml && freshNo) {
+        finalHtml = patchInvoiceHtmlInvoiceNumber(finalHtml, freshNo);
+      }
       setRawHtmlContent(finalHtml);
-      setInvoiceData(prev => prev ? { ...prev, invoiceHtml: finalHtml, invoice_html: finalHtml } : prev);
+      setInvoiceData(prev => prev ? {
+        ...prev,
+        invoiceHtml: finalHtml,
+        invoice_html: finalHtml,
+        ...(freshNo ? { invoiceNumber: freshNo, invoice_number: freshNo } : {}),
+      } : prev);
       setActiveTab("html"); // Auto-switch to HTML tab as it's more reliable
     } catch (error) {
       console.error("HTML fetch error:", error);
@@ -1690,16 +1798,117 @@ export function BookingInvoice({
     });
   };
 
-  const handleRegenerateInvoice = () => {
+  const applySheetInvoiceLabel = (label: string) => {
+    setAdoptedSheetInvoice(label);
+    onInvoiceStateChange({
+      ...invoiceState,
+      customInvoiceNumber: label,
+    });
+    try {
+      const key = `invoice-settings-${booking.id}`;
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      parsed.customInvoiceNumber = label;
+      localStorage.setItem(key, JSON.stringify(parsed));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleRegenerateInvoice = async () => {
     if (loading || isSubmitting) return;
     
     setRegenerating(true);
     setInvoiceData(null);
     setRawHtmlContent(null);
     setHasAttemptedGeneration(false); // Reset flag to allow retry
+
+    // Force-adopt Google Sheet Invoice no by guest identity before regenerating.
+    let overrideInvoice: string | undefined;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const syncRes = await fetch(getApiUrl('/api/admin/sync-sheet-invoice.php'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ booking_id: booking.id }),
+      });
+      const syncJson = await syncRes.json().catch(() => null) as
+        | {
+            success?: boolean;
+            invoice_no?: number;
+            message?: string;
+            errors?: string[];
+            tab_name?: string;
+            sheet_row?: number;
+            sheet_cost?: number;
+            cost_sync?: { success?: boolean; skipped?: boolean; cost?: number; error?: string };
+          }
+        | null;
+      const sheetNo = Number(syncJson?.invoice_no ?? 0);
+      if (syncJson?.success && Number.isFinite(sheetNo) && sheetNo > 0) {
+        overrideInvoice = String(sheetNo);
+        applySheetInvoiceLabel(overrideInvoice);
+        const costVal = Number(syncJson.sheet_cost ?? syncJson.cost_sync?.cost ?? 0);
+        const costSynced = syncJson.cost_sync?.success && !syncJson.cost_sync?.skipped && costVal > 0;
+        toast({
+          title: costSynced
+            ? `Sheet invoice #${sheetNo} · COST ₹${costVal.toLocaleString('en-IN')}`
+            : `Sheet invoice #${sheetNo}`,
+          description: costSynced
+            ? `Google Sheet COST / % VTH updated to ₹${costVal.toLocaleString('en-IN')}.`
+            : (syncJson.message
+              || (syncJson.tab_name
+                ? `Matched row ${syncJson.sheet_row ?? ''} on tab ${syncJson.tab_name}`
+                : 'Matched from Google Sheet.')),
+        });
+        // Push COST even when invoice adopt already matched (no regenerate required for sheet).
+        if (!costSynced) {
+          try {
+            const costRes = await fetch(getApiUrl('/api/admin/sync-sheet-cost.php'), {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              credentials: 'include',
+              body: JSON.stringify({ booking_id: booking.id }),
+            });
+            const costJson = await costRes.json().catch(() => null) as
+              | { success?: boolean; sheet_cost?: number; message?: string }
+              | null;
+            if (costJson?.success && costJson.sheet_cost != null) {
+              toast({
+                title: 'Google Sheet COST updated',
+                description: `COST set to ₹${Number(costJson.sheet_cost).toLocaleString('en-IN')}.`,
+              });
+            }
+          } catch {
+            // non-fatal
+          }
+        }
+      } else {
+        const err = syncJson?.errors?.filter(Boolean).join(' ') || 'Could not match this booking on the Google Sheet.';
+        toast({
+          title: 'Sheet invoice not updated',
+          description: err,
+          variant: 'destructive',
+        });
+      }
+    } catch (syncError) {
+      console.warn('Sheet invoice sync before refresh failed', syncError);
+      toast({
+        title: 'Sheet invoice sync failed',
+        description: syncError instanceof Error ? syncError.message : 'Network error talking to the sheet sync API.',
+        variant: 'destructive',
+      });
+    }
     
     setTimeout(() => {
-      handleGenerateInvoice(true); // Pass true for manual retry
+      handleGenerateInvoice(true, overrideInvoice);
     }, 100);
   };
 
@@ -1756,7 +1965,7 @@ export function BookingInvoice({
             key={`custom-invoice-${stableFormKey}`}
             value={customInvoiceNumber || ''}
             onChange={(e) => onInvoiceStateChange({...invoiceState, customInvoiceNumber: e.target.value})}
-            placeholder="Optional - Leave blank for auto-generated number"
+            placeholder="Leave blank to use Google Sheet Invoice no"
           />
           <p className="text-xs text-gray-500 mt-1">
             If provided, this will replace the auto-generated invoice number
@@ -2070,7 +2279,12 @@ export function BookingInvoice({
         style={{ height: '400px', overflow: 'auto' }}
       >
         <iframe 
-          srcDoc={htmlContent || invoiceData.invoiceHtml}
+          srcDoc={
+            htmlContent
+            || (displayInvoiceNumber && displayInvoiceNumber !== 'Generated'
+              ? patchInvoiceHtmlInvoiceNumber(String(invoiceData.invoiceHtml || ''), displayInvoiceNumber)
+              : invoiceData.invoiceHtml)
+          }
           title="Invoice Preview" 
           className="w-full h-full"
           style={{ border: 'none' }}
