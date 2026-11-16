@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { TourFormModal } from "./TourFormModal";
+import { TourTestimonialVideosAdmin } from "./TourTestimonialVideosAdmin";
 import { tourManagementAPI, TourData } from '@/services/api/tourManagementAPI';
 import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { Vehicle } from '@/types/vehicle';
@@ -466,6 +467,8 @@ export default function TourManagement() {
         vehicles={vehicles}
         isLoading={isSubmitting}
       />
+
+      <TourTestimonialVideosAdmin />
     </div>
   );
 }

@@ -59,10 +59,18 @@ function slugifyTourLabel(raw: string): string {
 export function generateTourUrl(tour: any): string {
   const tourId = String(tour?.tourId || '').trim();
   const recordId = String(tour?.id || '').trim();
-  const displayName = String(tour?.tourName || tour?.name || '').trim();
+  // API names sometimes include trailing spaces — trim before map lookup.
+  const displayName = String(tour?.tourName || tour?.name || '').replace(/\s+/g, ' ').trim();
 
   if (tourId && tourUrlMapping[tourId]) {
     return tourUrlMapping[tourId];
+  }
+  // Case-insensitive tourId map (API may send araku_vizag_3D_2N vs araku_vizag_3d_2n).
+  const tourIdKey = Object.keys(tourUrlMapping).find(
+    (key) => key.toLowerCase() === tourId.toLowerCase(),
+  );
+  if (tourIdKey) {
+    return tourUrlMapping[tourIdKey];
   }
   if (recordId && tourUrlMapping[recordId]) {
     return tourUrlMapping[recordId];
@@ -129,7 +137,10 @@ export function getTourIdVariantsForSlug(slug: string): string[] {
     'vizag-south-city-tour': ['vizag_south_city_tour', 'vizag-south-city-tour'],
     'arasavalli-srikurmam-tour': ['arasavalli_srikurmam_tour', 'arasavalli_srikurmam', 'arasavalli-srikurmam'],
     'arasavalli-srikurmam': ['arasavalli_srikurmam_tour', 'arasavalli_srikurmam', 'arasavalli-srikurmam'],
-    'araku-vizag-3d-2n': ['araku_vizag_3D_2N', 'araku-vizag-3d-2n']
+    'araku-vizag-3d-2n': ['araku_vizag_3D_2N', 'araku-vizag-3d-2n'],
+    // Slugify fallback when name-map missed (trailing space in API tourName).
+    '3-days-vizag-and-araku-valley-tour': ['araku_vizag_3D_2N', 'araku-vizag-3d-2n'],
+    '3-days-vizag-araku-valley-tour': ['araku_vizag_3D_2N', 'araku-vizag-3d-2n'],
   };
   const mapped = slugToIdMapping[slug];
   if (mapped) return mapped;

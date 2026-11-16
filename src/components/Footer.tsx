@@ -218,7 +218,7 @@ const Footer = () => {
               <a href="https://www.youtube.com/channel/UC2-jFwKuTHB357sBeIY4Urg" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-red-500 transition-colors transform hover:scale-110">
                 <FaYoutube className="text-3xl" />
               </a>
-              <a href="https://twitter.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-200 transition-colors transform hover:scale-110">
+              <a href="https://x.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" aria-label="Vizag Taxi Hub on X" className="text-gray-400 hover:text-gray-200 transition-colors transform hover:scale-110">
                 <IconX className="text-3xl" />
               </a>
             </div>

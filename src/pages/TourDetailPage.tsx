@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BookingSummary } from '@/components/BookingSummary';
 import { GuestDetailsForm } from '@/components/GuestDetailsForm';
 import { TourGallery } from '@/components/tour/TourGallery';
-import { ArakuDayTourLayout } from '@/components/tour/ArakuDayTourLayout';
+import { TourMarketingLayout } from '@/components/tour/TourMarketingLayout';
+import { getTourMarketingContent } from '@/components/tour/tourMarketingContent';
 import { TourEditModule } from '@/components/tour/TourEditModule';
 import { TourVehicleSelection } from '@/components/tour/TourVehicleSelection';
 import { useToast } from '@/components/ui/use-toast';
@@ -39,7 +40,13 @@ import { usePrivileges } from '@/hooks/usePrivileges';
 import { usePDFExport } from '@/hooks/usePDFExport';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { formatDateForAPI } from '@/lib/dateUtils';
-import { getTourIdFromSlug, getTourUrl, getTourIdVariantsForSlug, getTourDisplayName } from '@/utils/tourUrlUtils';
+import {
+  generateTourUrl,
+  getTourIdFromSlug,
+  getTourUrl,
+  getTourIdVariantsForSlug,
+  getTourDisplayName,
+} from '@/utils/tourUrlUtils';
 import { getVehicleData } from '@/services/vehicleDataService';
 import { addTourToBookingWidget, readTourCartCheckout, readTourCartTripExtras, removeTourFromCart } from '@/lib/addTourToBookingWidget';
 import { useTourCart } from '@/hooks/useTourCart';
@@ -70,6 +77,14 @@ const TourDetailPage = () => {
   
   const [tour, setTour] = useState<TourDetail | null>(null);
   const [catalogTours, setCatalogTours] = useState<TourListItem[]>([]);
+  // Resolve by URL slug first; also by loaded tour id/name so a bad slugified URL
+  // (e.g. trailing space in API tourName) still gets the marketing layout.
+  const marketingContent =
+    getTourMarketingContent(tourSlug) ||
+    (tour
+      ? getTourMarketingContent(generateTourUrl(tour)) || getTourMarketingContent(tour.tourId)
+      : null);
+  const useMarketingLayout = marketingContent != null;
   const navigationState = (location.state as TourDetailNavState | null) ?? null;
   const shouldOpenGuestForm =
     Boolean(navigationState?.openGuestForm) || searchParams.get('step') === 'guest';
@@ -83,7 +98,7 @@ const TourDetailPage = () => {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>(
-    tourSlug === 'araku-valley-tour' ? 'round-trip' : 'one-way'
+    marketingContent?.defaultTripMode ?? 'one-way'
   );
   const [aiPrefillDone, setAiPrefillDone] = useState(false);
   const [isEditingPickup, setIsEditingPickup] = useState(false);
@@ -159,7 +174,7 @@ const TourDetailPage = () => {
   const [pickupDate, setPickupDate] = useState(pickupData.date);
 
   useEffect(() => {
-    if (tourSlug !== 'araku-valley-tour') return;
+    if (!useMarketingLayout) return;
     setPickupLocation((current) => {
       const id = String((current as { id?: string })?.id || '');
       const name = String(current?.name || '').trim();
@@ -168,7 +183,12 @@ const TourDetailPage = () => {
       }
       return current;
     });
-  }, [tourSlug]);
+  }, [useMarketingLayout]);
+
+  useEffect(() => {
+    if (!marketingContent) return;
+    setTripMode(marketingContent.defaultTripMode);
+  }, [marketingContent]);
 
   
   const handleReturnToSelectedTours = () => {
@@ -198,7 +218,7 @@ const TourDetailPage = () => {
     handleReturnToSelectedTours();
   };
 
-  const handleArakuBook = () => {
+  const handleMarketingBook = () => {
     if (!selectedVehicle) {
       toast({
         title: 'Choose a vehicle',
@@ -498,6 +518,13 @@ const TourDetailPage = () => {
 
       if (tourDetail) {
         setTour(tourDetail);
+        const canonicalSlug = generateTourUrl(tourDetail);
+        if (canonicalSlug && tourSlug && canonicalSlug !== tourSlug) {
+          navigate(`/tours/${canonicalSlug}${location.search}`, {
+            replace: true,
+            state: location.state,
+          });
+        }
       } else {
         setTour(null);
       }
@@ -766,9 +793,7 @@ const TourDetailPage = () => {
   const seoKeywords = `${tour.tourName.toLowerCase()}, ${tour.category.toLowerCase()} tour, ${tour.duration} package, tour from vizag, ${tour.difficulty.toLowerCase()} tour, vizag taxi hub tours`;
   const tourImage = sharedHead?.ogImage || tour.imageUrl || tour.gallery?.[0]?.url || '/og-image.png';
   const tourUrl = sharedHead?.canonical ?? `https://vizagtaxihub.com${getTourUrl(tour)}`;
-  const pageHeading = tourSlug === 'araku-valley-tour'
-    ? 'Vizag to Araku Valley One Day Tour by Cab'
-    : tour.tourName;
+  const pageHeading = marketingContent?.headline ?? tour.tourName;
   const payableTotal =
     (checkoutLines.length > 1 && checkoutCombinedTotal > 0
       ? checkoutCombinedTotal
@@ -818,8 +843,8 @@ const TourDetailPage = () => {
       <div className="min-h-screen max-w-[100%] overflow-x-clip bg-gray-50 text-[14px] md:text-[15px]">
         <Navbar />
         
-        <div className={`mx-auto max-w-6xl min-w-0 overflow-x-clip md:container md:px-3 md:pb-20 ${tourSlug === 'araku-valley-tour' ? 'pb-0 md:pt-1' : 'pb-24 md:py-4'}`}>
-          {tourSlug !== 'araku-valley-tour' ? (
+        <div className={`mx-auto max-w-6xl min-w-0 overflow-x-clip md:container md:px-3 md:pb-20 ${useMarketingLayout ? 'pb-0 md:pt-1' : 'pb-24 md:py-4'}`}>
+          {!useMarketingLayout ? (
           <Button
             variant="ghost"
             onClick={handleReturnToSelectedTours}
@@ -939,10 +964,10 @@ const TourDetailPage = () => {
           )}
 
           
-          {/* Edit Module with PDF Export for Super Admin. Araku uses the start bar instead. */}
-          {(tourSlug !== 'araku-valley-tour' || isSuperAdmin()) && (
+          {/* Edit Module with PDF Export for Super Admin. Marketing layout uses the start bar instead. */}
+          {(!useMarketingLayout || isSuperAdmin()) && (
           <div className="mb-4 hidden items-center justify-between gap-4 md:flex">
-            {tourSlug !== 'araku-valley-tour' && (
+            {!useMarketingLayout && (
             <div className="flex-1">
               <TourEditModule
                 pickupLocation={pickupLocation.name}
@@ -977,9 +1002,10 @@ const TourDetailPage = () => {
           </div>
           )}
 
-          {tourSlug === 'araku-valley-tour' && !showBookingForm ? (
-            <ArakuDayTourLayout
+          {useMarketingLayout && marketingContent && !showBookingForm ? (
+            <TourMarketingLayout
               tour={tour}
+              content={marketingContent}
               pickup={
                 String(pickupLocation?.name || '').trim()
                   ? pickupAsLocation
@@ -1006,11 +1032,11 @@ const TourDetailPage = () => {
               onVehicleSelect={setSelectedVehicle}
               tripMode={tripMode}
               onTripModeChange={setTripMode}
-              onBook={handleArakuBook}
+              onBook={handleMarketingBook}
             />
           ) : null}
 
-          {tourSlug !== 'araku-valley-tour' && !showBookingForm ? (
+          {!useMarketingLayout && !showBookingForm ? (
             <div className="grid gap-4 lg:grid-cols-3">
               {/* Left Section - Tour Details */}
               <div className="lg:col-span-2 md:space-y-4">
@@ -1367,7 +1393,7 @@ const TourDetailPage = () => {
         </div>
         
         <Footer />
-        {tourSlug === 'araku-valley-tour' && !showBookingForm ? null : <MobileNavigation />}
+        {useMarketingLayout && !showBookingForm ? null : <MobileNavigation />}
       </div>
     </>
   );

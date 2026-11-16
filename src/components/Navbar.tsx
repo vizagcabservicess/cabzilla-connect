@@ -48,6 +48,7 @@ import { CITY_LOOKUP } from '@/lib/cityLookup';
 import { tourAPI } from '@/services/api/tourAPI';
 import { cn } from '@/lib/utils';
 import { dispatchBookingHomeReset } from '@/lib/bookingSessionReset';
+import { isTourMarketingPath } from '@/components/tour/tourMarketingContent';
 import { GetTheAppBanner } from '@/components/header/GetTheAppBanner';
 
 const MEGA_MENU_CATEGORIES = ['Services', 'Tour Packages', 'Fleet', 'Company', 'Support'] as const;
@@ -192,7 +193,7 @@ export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [arakuSearchOpen, setArakuSearchOpen] = useState(false);
-  const compactArakuHeader = location.pathname === '/tours/araku-valley-tour';
+  const compactArakuHeader = isTourMarketingPath(location.pathname);
   const [megaMenuOpen, setMegaMenuOpen] = useState<MegaMenuCategory | null>(null);
   const [activeCategory, setActiveCategory] = useState<MegaMenuCategory>('Services');
   const [activeLeftIndex, setActiveLeftIndex] = useState(0);

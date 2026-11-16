@@ -26,7 +26,7 @@ export function SocialMediaSection() {
     },
     {
       name: 'X',
-      url: 'https://twitter.com/vizagtaxihub',
+      url: 'https://x.com/vizagtaxihub',
       tile: 'bg-[#111111]',
       icon: IconX,
     },
