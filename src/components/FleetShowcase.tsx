@@ -266,6 +266,7 @@ export function FleetShowcase() {
               {/* Previous Arrow - only show if there are multiple slides and not at beginning */}
               {shouldShowNavigation && !isAtBeginning && (
                   <button
+                  aria-label="Previous vehicles"
                   className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
                   onClick={handlePrev}
                 >
@@ -278,6 +279,7 @@ export function FleetShowcase() {
               {/* Next Arrow - only show if there are multiple slides and not at end */}
               {shouldShowNavigation && !isAtEnd && (
                   <button
+                    aria-label="Next vehicles"
                     className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
                     onClick={handleNext}
                   >
@@ -333,8 +335,10 @@ export function FleetShowcase() {
                       return (
                         <button
                           key={index}
+                          type="button"
                           onClick={() => swiperInstance?.slideTo(index)}
                           className="w-2 h-2 bg-gray-300 opacity-60 rounded-full transition-all duration-200 hover:opacity-80"
+                          aria-label={`Go to vehicle ${index + 1}`}
                         />
                       );
                     })}

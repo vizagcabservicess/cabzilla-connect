@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "identifier": "urn:air:vizagtaxihub.com:guide:llms",
+      "displayName": "Vizag Taxi Hub site guide",
+      "type": "application/llms+txt",
+      "url": "https://vizagtaxihub.com/llms.txt",
+      "representativeQueries": [
+        "book a cab in Vizag",
+        "Vizag airport taxi fare",
+        "Araku Valley tour from Visakhapatnam"
+      ]
+    }
+  ]
+}

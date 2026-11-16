@@ -114,6 +114,7 @@ const PoolingAdminDashboard = lazy(() => import('./pages/admin/PoolingAdminDashb
 const GroupToursManagementPage = lazy(() => import('./pages/admin/GroupToursManagementPage'));
 const SharedCarpoolingAdminPage = lazy(() => import('./pages/admin/SharedCarpoolingAdminPage'));
 const SearchAlertsPage = lazy(() => import('./pages/admin/SearchAlertsPage'));
+const PurgeCachePage = lazy(() => import('./pages/admin/PurgeCachePage'));
 const SmartBudgetPage = lazy(() => import('./pages/admin/SmartBudgetPage'));
 const EventsPage = lazy(() => import('./pages/admin/EventsPage'));
 const EventDetailPage = lazy(() => import('./pages/admin/EventDetailPage'));
@@ -501,6 +502,10 @@ const router = createBrowserRouter([
           {
             path: 'search-alerts',
             element: <SearchAlertsPage />,
+          },
+          {
+            path: 'cache',
+            element: <PurgeCachePage />,
           },
           {
             path: 'smart-budget',

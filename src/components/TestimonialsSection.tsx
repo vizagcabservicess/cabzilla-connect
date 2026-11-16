@@ -167,6 +167,7 @@ export function TestimonialsSection() {
           {/* Previous Arrow - only show if there are multiple slides and not at beginning */}
           {shouldShowNavigation && !isAtBeginning && (
             <button
+              aria-label="Previous reviews"
               className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
               onClick={handlePrev}
             >
@@ -179,6 +180,7 @@ export function TestimonialsSection() {
           {/* Next Arrow - only show if there are multiple slides and not at end */}
           {shouldShowNavigation && !isAtEnd && (
             <button
+              aria-label="Next reviews"
               className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
               onClick={handleNext}
             >
@@ -234,8 +236,10 @@ export function TestimonialsSection() {
                 return (
                   <button
                     key={index}
+                    type="button"
                     onClick={() => swiperInstance?.slideTo(index)}
                     className="w-2 h-2 bg-gray-300 opacity-60 rounded-full transition-all duration-200 hover:opacity-80"
+                    aria-label={`Go to review ${index + 1}`}
                   />
                 );
               })}

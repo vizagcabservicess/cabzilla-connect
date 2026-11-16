@@ -10,6 +10,10 @@ RewriteBase /
 RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
 RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
 
+# Keep these as text and JSON. The SPA shell is HTML and fails the agentic-browsing checks.
+RewriteRule ^llms\.txt$ - [L]
+RewriteRule ^\.well-known/ard\.json$ - [L]
+
 # Force HTTPS redirect (optional - only if you want to force HTTPS)
 # RewriteCond %{HTTPS} off
 # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]

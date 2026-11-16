@@ -209,14 +209,14 @@ const Footer = () => {
             </p>
             {/* Social Icons */}
             <div className="flex items-center gap-6">
-              <a href="https://www.facebook.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-500 transition-colors transform hover:scale-110">
-                <FaFacebook className="text-3xl" />
+              <a href="https://www.facebook.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" aria-label="Vizag Taxi Hub on Facebook" className="text-gray-400 hover:text-blue-500 transition-colors transform hover:scale-110">
+                <FaFacebook className="text-3xl" aria-hidden />
               </a>
-              <a href="https://www.instagram.com/vizagtaxihub/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-pink-500 transition-colors transform hover:scale-110">
-                <FaInstagram className="text-3xl" />
+              <a href="https://www.instagram.com/vizagtaxihub/" target="_blank" rel="noopener noreferrer" aria-label="Vizag Taxi Hub on Instagram" className="text-gray-400 hover:text-pink-500 transition-colors transform hover:scale-110">
+                <FaInstagram className="text-3xl" aria-hidden />
               </a>
-              <a href="https://www.youtube.com/channel/UC2-jFwKuTHB357sBeIY4Urg" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-red-500 transition-colors transform hover:scale-110">
-                <FaYoutube className="text-3xl" />
+              <a href="https://www.youtube.com/channel/UC2-jFwKuTHB357sBeIY4Urg" target="_blank" rel="noopener noreferrer" aria-label="Vizag Taxi Hub on YouTube" className="text-gray-400 hover:text-red-500 transition-colors transform hover:scale-110">
+                <FaYoutube className="text-3xl" aria-hidden />
               </a>
               <a href="https://x.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" aria-label="Vizag Taxi Hub on X" className="text-gray-400 hover:text-gray-200 transition-colors transform hover:scale-110">
                 <IconX className="text-3xl" />

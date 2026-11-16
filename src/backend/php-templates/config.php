@@ -74,6 +74,10 @@ define(
 /** Shared secret for cron URLs (e.g. admin tomorrow reminder). Optional; if unset, cron endpoint rejects requests. */
 define('ADMIN_CRON_SECRET', $_ENV['ADMIN_CRON_SECRET'] ?? '');
 
+/** Optional. Admin → Purge cache uses these to clear Cloudflare. Leave empty to skip Cloudflare. */
+define('CLOUDFLARE_API_TOKEN', $_ENV['CLOUDFLARE_API_TOKEN'] ?? '');
+define('CLOUDFLARE_ZONE_ID', $_ENV['CLOUDFLARE_ZONE_ID'] ?? '');
+
 // SECURITY: Fail if critical credentials not configured
 if (!DB_HOST || !DB_NAME || !DB_USER || !DB_PASS || !JWT_SECRET) {
     error_log('CRITICAL: Database or JWT credentials not configured in environment');

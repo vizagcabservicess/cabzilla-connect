@@ -238,8 +238,10 @@ export function DriverSlider({ title, items, type }: DriverSliderProps) {
                 return (
                   <button
                     key={index}
+                    type="button"
                     onClick={() => swiperInstance?.slideTo(index)}
                     className="w-2 h-2 bg-gray-300 opacity-60 rounded-full transition-all duration-200 hover:opacity-80"
+                    aria-label={`Go to driver ${index + 1}`}
                   />
                 );
               })}

@@ -48,6 +48,7 @@ src/backend/**
 !src/backend/php-templates/api/admin/event-duties.php
 !src/backend/php-templates/api/admin/event-documents.php
 !src/backend/php-templates/api/admin/event-share.php
+!src/backend/php-templates/api/admin/purge-cache.php
 !src/backend/php-templates/api/events/
 !src/backend/php-templates/api/events/**
 

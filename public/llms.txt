@@ -1,0 +1,24 @@
+# Vizag Taxi Hub
+
+> Private cab service in Visakhapatnam (Vizag) for local trips, airport transfers, outstation rides and sightseeing tours. Fares are for the cab. Hotel stays, meals and sight tickets are extra.
+
+## Book a cab
+
+- [Home](https://vizagtaxihub.com/): Check a fare and book
+- [Local taxi](https://vizagtaxihub.com/local-taxi): City rides by the hour
+- [Airport taxi](https://vizagtaxihub.com/airport-taxi): Visakhapatnam airport pickup and drop
+- [Outstation taxi](https://vizagtaxihub.com/outstation-taxi): Intercity cabs from Vizag
+- [Fleet](https://vizagtaxihub.com/fleet): Sedan, Ertiga, Innova and tempo traveller
+
+## Tours
+
+- [All tours](https://vizagtaxihub.com/tours): Sightseeing packages from Vizag
+- [Araku Valley day tour](https://vizagtaxihub.com/tours/araku-valley-tour): Same-day Borra Caves and Araku
+- [Araku 2 days 1 night](https://vizagtaxihub.com/tours/araku-valley-package-2d-1n): Overnight in Araku, return the next day
+- [Vizag North City Tour](https://vizagtaxihub.com/tours/vizag-north-city-tour): Simhachalam Temple, Yarada Beach and Dolphin's Nose (3:00 PM–5:00 PM)
+- [Vizag South City Tour](https://vizagtaxihub.com/tours/vizag-south-city-tour): RK Beach, naval museums, Tenneti Park, Kailasagiri, Rushikonda and Kalimatha Temple
+
+## Contact
+
+- Phone and WhatsApp: +91 9966363662
+- [Contact](https://vizagtaxihub.com/contact): Office at Singalammapuram, Visakhapatnam

@@ -10,6 +10,10 @@ RewriteBase /
     RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
 RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
 
+# Keep these as text and JSON. The SPA shell is HTML and fails the agentic-browsing checks.
+RewriteRule ^llms\.txt$ - [L]
+RewriteRule ^\.well-known/ard\.json$ - [L]
+
 # Live sitemap from active tour_fares (must run even if sitemap.xml exists on disk)
 RewriteCond %{DOCUMENT_ROOT}/sitemap.php -f
 RewriteRule ^sitemap\.xml$ /sitemap.php [L]

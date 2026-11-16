@@ -391,7 +391,6 @@ export function HeaderSearchBar({ className }: HeaderSearchBarProps) {
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
-              aria-expanded={showResults || showNoResults}
               aria-autocomplete="list"
               onFocus={() => setIsFocused(true)}
               className="premium-search-input w-full border-0 bg-white py-0 pl-0 pr-2 text-[16px] leading-[1.25] text-gray-800 shadow-none outline-none ring-0 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-0"

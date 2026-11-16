@@ -113,8 +113,9 @@ const CookieConsentBanner: React.FC<CookieConsentBannerProps> = ({
               size="sm"
               onClick={() => setShowBanner(false)}
               className="h-8 w-8 p-0"
+              aria-label="Close cookie preferences"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden />
             </Button>
           </div>
         </CardHeader>

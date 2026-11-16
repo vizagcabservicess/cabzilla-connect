@@ -213,6 +213,7 @@ export function TempoTravellerShowcase() {
           {/* Previous Arrow - show when not at first slide */}
           {currentSlide > 0 && (
             <button
+              aria-label="Previous tempo services"
               className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
               onClick={() => {
                 if (currentSlide > 0) {
@@ -229,6 +230,7 @@ export function TempoTravellerShowcase() {
           {/* Next Arrow - only show if there are additional services and we're not at the end */}
           {tempoTravellerServices.length > 4 && currentSlide < Math.max(0, (tempoTravellerServices.length - 4)) && (
             <button
+              aria-label="Next tempo services"
               className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
               onClick={() => {
                 const maxSlides = Math.max(0, tempoTravellerServices.length - 4);
@@ -395,8 +397,10 @@ export function TempoTravellerShowcase() {
                 return (
                   <button
                     key={index}
+                    type="button"
                     onClick={() => swiperInstance?.slideTo(index)}
                     className="w-2 h-2 bg-gray-300 opacity-60 rounded-full transition-all duration-200 hover:opacity-80"
+                    aria-label={`Go to service ${index + 1}`}
                   />
                 );
               })}

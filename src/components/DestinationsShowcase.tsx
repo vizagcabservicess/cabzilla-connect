@@ -286,6 +286,7 @@ export function DestinationsShowcase() {
 
               {shouldShowNavigation && !isAtBeginning && (
                 <button
+                  aria-label="Previous tours"
                   className="absolute -left-5 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md transition-colors hover:bg-slate-50"
                   onClick={handlePrev}
                 >
@@ -297,6 +298,7 @@ export function DestinationsShowcase() {
 
               {shouldShowNavigation && !isAtEnd && (
                 <button
+                  aria-label="Next tours"
                   className="absolute right-0 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md transition-colors hover:bg-slate-50"
                   onClick={handleNext}
                 >
@@ -347,8 +349,10 @@ export function DestinationsShowcase() {
                     return (
                       <button
                         key={index}
+                        type="button"
                         onClick={() => swiperInstance?.slideTo(index)}
                         className="h-2 w-2 rounded-full bg-gray-300 opacity-60 transition-all duration-200 hover:opacity-80"
+                        aria-label={`Go to tour ${index + 1}`}
                       />
                     );
                   })}

@@ -37,6 +37,7 @@ import {
   Activity,
   MessageCircle,
   Megaphone,
+  RefreshCw,
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -266,6 +267,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <BarChart3 size={20} />, 
       path: '/admin/reports',
       show: checkPrivilege('reports_view')
+    },
+    {
+      id: 'cache',
+      label: 'Purge cache',
+      icon: <RefreshCw size={20} />,
+      path: '/admin/cache',
+      show: isAdmin() || isSuperAdmin(),
     },
     
     // Super Admin Only

@@ -106,8 +106,8 @@ export function VideoTestimonials() {
             <div className="text-gray-900 font-semibold text-base mb-1">{video.title}</div>
             <div className="text-gray-600 text-sm">{video.customer}</div>
           </div>
-          <a href={video.url} target="_blank" rel="noopener noreferrer" className="bg-gray-100 hover:bg-gray-200 rounded-full p-3 shadow transition-all ml-4">
-            <Play className="h-6 w-6 text-red-600" />
+          <a href={video.url} target="_blank" rel="noopener noreferrer" aria-label={`Play ${video.title} on YouTube`} className="bg-gray-100 hover:bg-gray-200 rounded-full p-3 shadow transition-all ml-4">
+            <Play className="h-6 w-6 text-red-600" aria-hidden />
           </a>
         </div>
       </div>
@@ -139,6 +139,8 @@ export function VideoTestimonials() {
           {/* Previous Arrow - show when not at first slide */}
           {currentSlide > 0 && (
             <button
+              type="button"
+              aria-label="Previous videos"
               className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
               onClick={() => {
                 if (currentSlide > 0) {
@@ -155,6 +157,8 @@ export function VideoTestimonials() {
           {/* Next Arrow - only show if there are additional videos and we're not at the end */}
           {sliderVideos.length > 0 && currentSlide < Math.max(0, (gridVideos.length + sliderVideos.length - 3)) && (
             <button
+              type="button"
+              aria-label="Next videos"
               className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
               onClick={() => {
                 const maxSlides = Math.max(0, gridVideos.length + sliderVideos.length - 3);
@@ -215,8 +219,10 @@ export function VideoTestimonials() {
                 return (
                   <button
                     key={index}
+                    type="button"
                     onClick={() => swiperInstance?.slideTo(index)}
                     className="w-2 h-2 bg-gray-300 opacity-60 rounded-full transition-all duration-200 hover:opacity-80"
+                    aria-label={`Go to video ${index + 1}`}
                   />
                 );
               })}

@@ -769,8 +769,8 @@ export function Navbar() {
             </a>
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" className="p-2">
-                  <Menu className="h-6 w-6" />
+                <Button variant="ghost" className="p-2" aria-label="Open menu">
+                  <Menu className="h-6 w-6" aria-hidden />
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="sm:max-w-sm">
