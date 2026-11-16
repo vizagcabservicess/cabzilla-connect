@@ -108,6 +108,7 @@ export function TourMarketingLayout({
   const stops = content.stops;
   const dayGroups = groupStopsByDay(stops);
   const multiDay = dayGroups.length > 1;
+  const twoDayColumns = dayGroups.length === 2;
   const stopMid = Math.ceil(stops.length / 2);
   const stopColumns = multiDay
     ? dayGroups
@@ -750,9 +751,11 @@ export function TourMarketingLayout({
 
               <div
                 className={
-                  multiDay
-                    ? 'mt-5 flex flex-col gap-5'
-                    : 'mt-5 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2'
+                  twoDayColumns
+                    ? 'mt-5 grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-2'
+                    : multiDay
+                      ? 'mt-5 flex flex-col gap-5'
+                      : 'mt-5 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2'
                 }
               >
                 {stopColumns.map((colStops, colIdx) => (
