@@ -4,6 +4,7 @@ import { Button, ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { FaWhatsapp } from "react-icons/fa";
 import { formatPhoneNumber } from '@/services/whatsappService';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 interface WhatsAppButtonProps extends ButtonProps {
   phone: string;
@@ -27,6 +28,7 @@ export function WhatsAppButton({
 }: WhatsAppButtonProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
+    trackContactCta('whatsapp', { name: 'whatsapp_button' });
     
     const formattedPhone = formatPhoneNumber(phone);
     const encodedMessage = encodeURIComponent(message);

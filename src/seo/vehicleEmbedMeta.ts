@@ -233,7 +233,8 @@ function buildDynamicVehicleEmbedConfig(
   slug: string,
   vehicle?: VehicleEmbedVehicleInput | null,
 ): VehicleEmbedConfig {
-  const name = vehicle?.name ?? getVehicleDisplayName(slug);
+  const publicName = getVehicleDisplayName(slug);
+  const name = publicName;
   const capacity = vehicle?.capacity && vehicle.capacity > 0 ? vehicle.capacity : 4;
   const pricePerKm =
     typeof vehicle?.pricePerKm === 'number' && vehicle.pricePerKm > 0
@@ -246,8 +247,13 @@ function buildDynamicVehicleEmbedConfig(
     vehicle?.description ??
     `Book ${name} taxi in Visakhapatnam with professional driver, AC comfort, and transparent rates. Local, airport & outstation trips across Vizag and Andhra Pradesh. Call +91 9966363662.`;
 
-  const isInnova = name.toLowerCase().includes('innova');
+  const isInnova = slug === 'innova-crysta' || slug === 'innova-hycross' || publicName.toLowerCase().includes('innova');
   const sharedHead = resolvePublicHead(`/vehicle/${slug}`);
+  const pageHeadline = slug === 'innova-hycross'
+    ? 'Innova Hycross Rental in Vizag – 7 + Driver'
+    : isInnova
+      ? 'Innova Crysta Rental in Vizag – 7 + Driver'
+      : `${publicName} on Rent in Vizag – ${capacity} Seater`;
   return {
     slug,
     vehicleIds: vehicle?.id ? [vehicle.id] : [],
@@ -260,7 +266,7 @@ function buildDynamicVehicleEmbedConfig(
       capacityKeywordSuffix: capacityKeywordSuffix(capacity),
       canonicalUrl: sharedHead?.canonical ?? `https://vizagtaxihub.com/vehicle/${slug}`,
       ogImageUrl: sharedHead?.ogImage ?? ogImageUrl,
-      pageHeadline: isInnova ? 'Innova Crysta Rental in Vizag – 7 + Driver' : `Book ${name}`,
+      pageHeadline,
       pageSubtitle: buildPageSubtitle(name, capacity),
       structuredDataName: `${name} Taxi Rental in Visakhapatnam`,
       structuredDataDescription: description,

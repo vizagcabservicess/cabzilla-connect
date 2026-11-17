@@ -23,12 +23,18 @@ const tourUrlMapping: Record<string, string> = {
   'arasavalli_srikurmam_tour': 'arasavalli-srikurmam-tour',
   'arasavalli_srikurmam': 'arasavalli-srikurmam-tour',
   'arasavalli-srikurmam': 'arasavalli-srikurmam-tour',
-  'arasavalli-srikurmam-tour': 'arasavalli-srikurmam-tour'
+  'arasavalli-srikurmam-tour': 'arasavalli-srikurmam-tour',
+  'annavaram_temple_tour_vizag': 'annavaram-temple-tour',
+  'annavaram-temple-tour': 'annavaram-temple-tour',
+  'araku_copy': 'araku-valley-package-2d-1n',
+  'araku-valley-package-2d-1n': 'araku-valley-package-2d-1n'
 };
 
 // Mapping from tour names to URL-friendly names
 const tourNameMapping: Record<string, string> = {
   'Araku Valley Tour': 'araku-valley-tour',
+  'Araku Valley Package - 2D/1N': 'araku-valley-package-2d-1n',
+  'Annavaram Temple Tour': 'annavaram-temple-tour',
   'Lambasingi Tour': 'lambasingi-tour',
   'Vanajangi Tour': 'vanajangi-tour',
   'Arasavalli & Srikurmam Temple Tour': 'arasavalli-srikurmam-tour',
@@ -114,6 +120,8 @@ export function getTourDisplayName(slug: string): string {
     'vizag-south-city-tour': 'Vizag South City Tour',
     'arasavalli-srikurmam-tour': 'Arasavalli & Srikurmam Tour',
     'araku-vizag-3d-2n': 'Araku-Vizag 3D/2N Tour',
+    'annavaram-temple-tour': 'Annavaram Temple Tour',
+    'araku-valley-package-2d-1n': 'Araku Valley 2D/1N Package',
   };
   
   return reverseMapping[slug] || slug
@@ -141,6 +149,8 @@ export function getTourIdVariantsForSlug(slug: string): string[] {
     // Slugify fallback when name-map missed (trailing space in API tourName).
     '3-days-vizag-and-araku-valley-tour': ['araku_vizag_3D_2N', 'araku-vizag-3d-2n'],
     '3-days-vizag-araku-valley-tour': ['araku_vizag_3D_2N', 'araku-vizag-3d-2n'],
+    'annavaram-temple-tour': ['annavaram_temple_tour_vizag', 'annavaram-temple-tour'],
+    'araku-valley-package-2d-1n': ['araku_copy', 'araku-valley-package-2d-1n'],
   };
   const mapped = slugToIdMapping[slug];
   if (mapped) return mapped;

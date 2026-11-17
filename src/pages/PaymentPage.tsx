@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import { formatPrice } from '@/lib/cabData';
 import { API_BASE_URL } from '@/config';
+import { trackPaymentSuccess } from '@/utils/trackPaymentSuccess';
 
 const PaymentPage = () => {
   const navigate = useNavigate();
@@ -276,6 +277,21 @@ const PaymentPage = () => {
         paymentMode,
       });
       window.visitorAnalytics?.trackConversion?.('razorpay_payment', amount);
+      trackPaymentSuccess({
+        transactionId: response.razorpay_payment_id,
+        bookingId: bookingDetails.bookingId,
+        bookingNumber: bookingDetails.bookingNumber,
+        amount,
+        paymentMethod: 'razorpay',
+        paymentMode,
+        tripType: bookingDetails.tripType,
+        itemName:
+          bookingDetails.tourName ||
+          bookingDetails.selectedCab?.name ||
+          `${bookingDetails.tripType || 'Cab'} Booking`,
+        itemCategory: bookingDetails.tripType || 'cab_booking',
+        flow: 'booking_payment',
+      });
       
       // Then verify the payment to trigger email sending
       try {

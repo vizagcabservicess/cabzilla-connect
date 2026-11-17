@@ -19,6 +19,7 @@ import {
   openRazorpayCheckout,
   type RazorpayResponse,
 } from '@/services/razorpayService';
+import { trackPaymentSuccess } from '@/utils/trackPaymentSuccess';
 
 export default function SmartBudgetCustomerPayPage() {
   const { token = '' } = useParams<{ token: string }>();
@@ -98,6 +99,17 @@ export default function SmartBudgetCustomerPayPage() {
           const synced = await refresh({ syncPayment: true });
           if (synced && isSmartBudgetContactsUnlocked(synced)) {
             confirmed = true;
+            trackPaymentSuccess({
+              transactionId: razorpay_payment_id || order.razorpay_order_id,
+              bookingId: synced.id ?? token,
+              amount: Number(order.amount) || 0,
+              paymentMethod: 'razorpay',
+              paymentMode: 'partial',
+              tripType: 'smart_budget',
+              itemName: 'Smart Budget Booking Fee',
+              itemCategory: 'smart_budget',
+              flow: 'smart_budget_unlock',
+            });
             toast.success('Payment received — contacts unlocked');
             navigate(`/smart-budget/s/${token}`, { replace: true });
             return;
@@ -114,6 +126,17 @@ export default function SmartBudgetCustomerPayPage() {
           razorpay_signature,
         });
         setSession(updated);
+        trackPaymentSuccess({
+          transactionId: razorpay_payment_id,
+          bookingId: updated?.id ?? session.id ?? token,
+          amount: Number(order.amount) || 0,
+          paymentMethod: 'razorpay',
+          paymentMode: 'partial',
+          tripType: 'smart_budget',
+          itemName: 'Smart Budget Booking Fee',
+          itemCategory: 'smart_budget',
+          flow: 'smart_budget_unlock',
+        });
         toast.success('Payment successful — contacts unlocked');
         navigate(`/smart-budget/s/${token}`, { replace: true });
       };
@@ -144,6 +167,17 @@ export default function SmartBudgetCustomerPayPage() {
             // Modal closed — if Razorpay already captured, sync unlock; otherwise cancel quietly.
             void refresh({ syncPayment: true }).then((updated) => {
               if (updated && isSmartBudgetContactsUnlocked(updated)) {
+                trackPaymentSuccess({
+                  transactionId: order.razorpay_order_id,
+                  bookingId: updated.id ?? token,
+                  amount: Number(order.amount) || 0,
+                  paymentMethod: 'razorpay',
+                  paymentMode: 'partial',
+                  tripType: 'smart_budget',
+                  itemName: 'Smart Budget Booking Fee',
+                  itemCategory: 'smart_budget',
+                  flow: 'smart_budget_unlock',
+                });
                 toast.success('Payment received — contacts unlocked');
                 navigate(`/smart-budget/s/${token}`, { replace: true });
               }

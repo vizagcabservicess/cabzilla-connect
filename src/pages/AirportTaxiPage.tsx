@@ -9,7 +9,6 @@ import {
   CheckCircle,
   Headphones,
   ArrowRight,
-  AlertTriangle,
   Building2,
   Route,
   ChevronRight,
@@ -27,6 +26,7 @@ import { ServiceEmbedShell } from '@/components/service/ServiceEmbedShell';
 import { loadCabTypes } from '@/lib/cabData';
 import type { CabType } from '@/types/cab';
 import { getVehicleImageUrlForDisplay } from '@/utils/vehicleUrlUtils';
+import { trackContactCta } from '@/utils/trackContactCta';
 import {
   AIRPORT_ADVANCE_BENEFITS,
   AIRPORT_DIRECT_CITIES,
@@ -336,20 +336,6 @@ function QuickAccessRow({
   );
 }
 
-function AirportMoveBanner() {
-  return (
-    <div className="border-b border-amber-300 bg-amber-400">
-      <p className="mx-auto flex max-w-7xl items-start gap-2 px-3 py-2.5 text-sm font-medium leading-snug text-amber-950 sm:items-center sm:px-4 sm:text-[0.9375rem]">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" aria-hidden />
-        <span>
-          <span className="font-bold">From 17 August 2026:</span> Scheduled commercial flights
-          move to Bhogapuram Airport (Alluri Sitarama Raju International Airport).
-        </span>
-      </p>
-    </div>
-  );
-}
-
 export function AirportTaxiPage() {
   const [rideOptions, setRideOptions] = useState<AirportRideOption[]>([]);
   const [ridesLoading, setRidesLoading] = useState(true);
@@ -380,7 +366,6 @@ export function AirportTaxiPage() {
     <ServiceEmbedShell
       slug="airport"
       layout="marketing"
-      heroBanner={<AirportMoveBanner />}
       helmetExtra={
         <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
       }
@@ -435,14 +420,20 @@ export function AirportTaxiPage() {
               <Button
                 variant="outline"
                 className="rounded-full border-slate-200 bg-white hover:bg-white"
-                onClick={() => window.open(AIRPORT_TAXI_WHATSAPP_URL, '_blank')}
+                onClick={() => {
+                  trackContactCta('whatsapp', { name: 'airport_help_whatsapp' });
+                  window.open(AIRPORT_TAXI_WHATSAPP_URL, '_blank');
+                }}
               >
                 Chat on WhatsApp
               </Button>
               <Button
                 variant="outline"
                 className="rounded-full border-slate-200 bg-white text-[var(--brand-primary)] hover:bg-white"
-                onClick={() => window.open(`tel:${AIRPORT_TAXI_PHONE_TEL}`)}
+                onClick={() => {
+                  trackContactCta('phone', { name: 'airport_help_call' });
+                  window.open(`tel:${AIRPORT_TAXI_PHONE_TEL}`);
+                }}
               >
                 <Phone className="mr-2 h-4 w-4" />
                 Call {AIRPORT_TAXI_PHONE_DISPLAY}
@@ -901,14 +892,20 @@ export function AirportTaxiPage() {
                 </ul>
                 <Button
                   className="mt-4 w-full rounded-full bg-emerald-600 text-white hover:bg-emerald-700"
-                  onClick={() => window.open(AIRPORT_TAXI_WHATSAPP_URL, '_blank')}
+                  onClick={() => {
+                    trackContactCta('whatsapp', { name: 'airport_sidebar_whatsapp' });
+                    window.open(AIRPORT_TAXI_WHATSAPP_URL, '_blank');
+                  }}
                 >
                   Chat on WhatsApp
                 </Button>
                 <Button
                   variant="outline"
                   className="mt-2 w-full rounded-full"
-                  onClick={() => window.open(`tel:${AIRPORT_TAXI_PHONE_TEL}`)}
+                  onClick={() => {
+                    trackContactCta('phone', { name: 'airport_sidebar_call' });
+                    window.open(`tel:${AIRPORT_TAXI_PHONE_TEL}`);
+                  }}
                 >
                   <Phone className="mr-2 h-4 w-4" />
                   Call {AIRPORT_TAXI_PHONE_DISPLAY}
@@ -959,14 +956,20 @@ export function AirportTaxiPage() {
                 </Button>
                 <Button
                   className="rounded-full bg-emerald-500 px-5 text-white hover:bg-emerald-600"
-                  onClick={() => window.open(AIRPORT_TAXI_WHATSAPP_URL, '_blank')}
+                  onClick={() => {
+                    trackContactCta('whatsapp', { name: 'airport_cta_whatsapp' });
+                    window.open(AIRPORT_TAXI_WHATSAPP_URL, '_blank');
+                  }}
                 >
                   Chat on WhatsApp
                 </Button>
                 <Button
                   variant="outline"
                   className="rounded-full border-white/40 bg-transparent text-white hover:bg-white/10"
-                  onClick={() => window.open(`tel:${AIRPORT_TAXI_PHONE_TEL}`)}
+                  onClick={() => {
+                    trackContactCta('phone', { name: 'airport_cta_call' });
+                    window.open(`tel:${AIRPORT_TAXI_PHONE_TEL}`);
+                  }}
                 >
                   Call {AIRPORT_TAXI_PHONE_DISPLAY}
                 </Button>

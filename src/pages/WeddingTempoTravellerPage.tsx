@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ResponsiveGrid, ServiceCard } from '@/components/MobileSlider';
-import { Car, Users, Phone, Star, CheckCircle, MapPin, Clock, Shield, Wifi, Coffee, Camera, Heart, Building, Bus, Loader2 } from 'lucide-react';
+import { Car, Users, Phone, Star, CheckCircle, MapPin, Clock, Shield, Wifi, Coffee, Camera, Heart, Building, Bus, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { tourAPI } from '@/services/api/tourAPI';
 import { fareAPI } from '@/services/api/fareAPI';
 import { TourInfo } from '@/types/cab';
@@ -16,6 +16,7 @@ import { VehiclePricing } from '@/types/api';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import { Breadcrumb } from '@/components/Breadcrumb';
 import { startingTourPrice } from '@/lib/tourVehiclePrice';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 // Wedding Tour Slider Component
 const WeddingTourSlider = ({ tours }: { tours: TourInfo[] }) => {
@@ -393,136 +394,134 @@ const WeddingTempoTravellerPage = () => {
         </script>
       </Helmet>
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen overflow-x-clip bg-[#F8F9FB]">
         <Navbar />
         
-        <div className="container mx-auto px-4 py-8 max-w-7xl pb-16 md:pb-32">
+        <div className="container mx-auto max-w-7xl px-3 pb-24 pt-3 sm:px-4 sm:pt-5 md:pb-28">
           {/* Breadcrumb */}
           <Breadcrumb items={[
-            { label: 'Services', href: '/services' },
+            { label: 'Fleet', href: '/fleet' },
             { label: 'Tempo Traveller', href: '/tempo-traveller-rental-vizag' },
             { label: 'Wedding Transport' }
           ]} />
           
           {/* Hero Section - Modern Wedding Design */}
-          <div className="relative bg-gradient-to-br from-pink-50 via-white to-rose-50 rounded-3xl p-12 mb-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-pink-600/5 to-rose-600/5"></div>
-            <div className="relative z-10">
-              <div className="flex flex-col lg:flex-row items-center gap-12">
-                <div className="flex-1">
-                  <div className="inline-flex items-center bg-pink-100 text-pink-800 px-4 py-2 rounded-full text-sm font-medium mb-6">
-                    <Heart className="mr-2 h-4 w-4" />
-                    Premium Wedding Transport Service
-                  </div>
-                  <h1 className="text-3xl md:text-4xl font-bold mb-6 leading-tight text-gray-900">
-                    Perfect Wedding Day with Tempo Traveller
-                  </h1>
-                  <p className="text-xl mb-8 text-gray-600 leading-relaxed">
-                    Make your special day unforgettable with our elegant tempo traveller service. Professional drivers, beautifully decorated vehicles, and exceptional service for your wedding celebration.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-4 mb-8">
-                    <Button 
-                      size="lg" 
-                      className="bg-pink-600 hover:bg-pink-700 text-white px-8 py-4 text-lg font-semibold rounded-xl"
-                      onClick={() => window.open('https://vizagtaxihub.com/vehicle/tempo-traveller', '_blank')}
-                    >
-                      <Heart className="mr-3 h-6 w-6" />
+          <div className="relative mb-10 rounded-2xl border border-pink-100 bg-gradient-to-br from-pink-50 via-white to-rose-50 p-4 shadow-sm sm:p-8 lg:mb-12 lg:p-10">
+            <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-12 lg:gap-10">
+              <div className="min-w-0 lg:col-span-7">
+                <div className="mb-4 inline-flex max-w-full flex-wrap items-center rounded-full bg-pink-100 px-3 py-1.5 text-xs font-medium text-pink-800 sm:text-sm">
+                  <Heart className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                  Premium Wedding Transport Service
+                </div>
+                <h1 className="mb-3 text-2xl font-bold leading-tight text-gray-900 sm:mb-4 sm:text-3xl lg:text-4xl">
+                  Perfect Wedding Day with Tempo Traveller
+                </h1>
+                <p className="mb-5 text-sm leading-relaxed text-gray-600 sm:mb-6 sm:text-base lg:text-lg">
+                  Make your special day unforgettable with our elegant tempo traveller service. Professional drivers, beautifully decorated vehicles, and exceptional service for your wedding celebration.
+                </p>
+                <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:flex-wrap">
+                  <Button
+                    asChild
+                    size="lg"
+                    className="h-11 rounded-full bg-pink-600 px-6 text-sm font-semibold text-white hover:bg-pink-700 sm:h-12 sm:text-base"
+                  >
+                    <Link to="/vehicle/tempo-traveller">
+                      <Heart className="mr-2 h-4 w-4" aria-hidden />
                       Book Wedding Transport
-                    </Button>
-                    <Button 
-                      size="lg" 
-                      variant="outline"
-                      className="border-pink-600 text-pink-600 hover:bg-pink-50 px-8 py-4 text-lg font-semibold rounded-xl"
-                      onClick={() => window.open('tel:+919966363662', '_self')}
-                    >
-                      <Phone className="mr-3 h-6 w-6" />
-                      Call +91 9966363662
-                    </Button>
+                    </Link>
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="h-11 rounded-full border-pink-600 px-6 text-sm font-semibold text-pink-600 hover:bg-pink-50 sm:h-12 sm:text-base"
+                    onClick={() => {
+                      trackContactCta('phone', { name: 'wedding_tempo_hero_call' });
+                      window.open('tel:+919966363662', '_self');
+                    }}
+                  >
+                    <Phone className="mr-2 h-4 w-4" aria-hidden />
+                    Call +91 9966363662
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-600 sm:text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4 shrink-0 text-green-500" aria-hidden />
+                    <span>Wedding Decorated</span>
                   </div>
-                  <div className="flex items-center gap-8 text-sm text-gray-500">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <span>Wedding Decorated</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <span>Professional Service</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <span>On-Time Delivery</span>
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4 shrink-0 text-green-500" aria-hidden />
+                    <span>Professional Service</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4 shrink-0 text-green-500" aria-hidden />
+                    <span>On-Time Delivery</span>
                   </div>
                 </div>
-                <div className="flex-1">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-pink-400 to-rose-500 rounded-3xl transform rotate-3"></div>
-                    <div className="relative bg-white rounded-3xl p-8 shadow-2xl">
-                      {/* Image Slider */}
-                      <div className="relative overflow-hidden rounded-2xl">
-                        <div className="flex transition-transform duration-500 ease-in-out" id="wedding-tempo-slider">
-                          <div className="w-full flex-shrink-0">
-                            <img 
-                              src="https://vizagtaxihub.com/uploads/tempo-png.png" 
-                              alt="Wedding Tempo Traveller Exterior" 
-                              className="w-full max-w-md mx-auto transform hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                          <div className="w-full flex-shrink-0">
-                            <img 
-                              src="https://vizagtaxihub.com/uploads/tempo-traveller-seats.jpg" 
-                              alt="Wedding Tempo Traveller Interior Seats" 
-                              className="w-full max-w-md mx-auto transform hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                          <div className="w-full flex-shrink-0">
-                            <img 
-                              src="https://vizagtaxihub.com/uploads/tempo-traveller-amenities.jpg" 
-                              alt="Wedding Tempo Traveller Amenities" 
-                              className="w-full max-w-md mx-auto transform hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                        </div>
-                        
-                        {/* Slider Navigation Dots */}
-                        <div className="flex justify-center mt-4 space-x-2">
-                          <button 
-                            className="w-3 h-3 bg-pink-600 rounded-full slider-dot active"
-                            onClick={() => showSlide(0)}
-                          ></button>
-                          <button 
-                            className="w-3 h-3 bg-gray-300 rounded-full slider-dot"
-                            onClick={() => showSlide(1)}
-                          ></button>
-                          <button 
-                            className="w-3 h-3 bg-gray-300 rounded-full slider-dot"
-                            onClick={() => showSlide(2)}
-                          ></button>
-                        </div>
-                        
-                        {/* Navigation Arrows */}
-                        <button 
-                          className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-2 shadow-lg transition-all duration-200"
-                          onClick={previousSlide}
-                        >
-                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                          </svg>
-                        </button>
-                        <button 
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-2 shadow-lg transition-all duration-200"
-                          onClick={nextSlide}
-                        >
-                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
+              </div>
+              <div className="w-full min-w-0 lg:col-span-5">
+                <div className="relative rounded-2xl border border-pink-100 bg-white p-3 shadow-md sm:p-5">
+                  <div className="absolute right-3 top-3 z-10 rounded-full bg-yellow-400 px-3 py-1 text-xs font-bold text-yellow-900">
+                    Wedding Special
+                  </div>
+                  <div className="relative overflow-hidden rounded-xl bg-slate-50">
+                    <div
+                      className="flex transition-transform duration-500 ease-in-out"
+                      id="wedding-tempo-slider"
+                      style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+                    >
+                      <div className="w-full shrink-0">
+                        <img
+                          src="https://vizagtaxihub.com/uploads/tempo-png.png"
+                          alt="Wedding Tempo Traveller Exterior"
+                          className="mx-auto aspect-[16/10] w-full object-contain p-2"
+                        />
                       </div>
-                      
-                      <div className="absolute -top-4 -right-4 bg-yellow-400 text-yellow-900 px-4 py-2 rounded-full text-sm font-bold">
-                        Wedding Special
+                      <div className="w-full shrink-0">
+                        <img
+                          src="https://vizagtaxihub.com/uploads/tempo-traveller-seats.jpg"
+                          alt="Wedding Tempo Traveller Interior Seats"
+                          className="mx-auto aspect-[16/10] w-full object-contain p-2"
+                        />
+                      </div>
+                      <div className="w-full shrink-0">
+                        <img
+                          src="https://vizagtaxihub.com/uploads/tempo-traveller-amenities.jpg"
+                          alt="Wedding Tempo Traveller Amenities"
+                          className="mx-auto aspect-[16/10] w-full object-contain p-2"
+                        />
                       </div>
                     </div>
+
+                    <button
+                      type="button"
+                      aria-label="Previous photo"
+                      className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow hover:bg-white"
+                      onClick={previousSlide}
+                    >
+                      <ChevronLeft className="h-4 w-4" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Next photo"
+                      className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow hover:bg-white"
+                      onClick={nextSlide}
+                    >
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex justify-center gap-2">
+                    {[0, 1, 2].map((idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        aria-label={`Show photo ${idx + 1}`}
+                        className={`h-2.5 rounded-full transition-all ${
+                          currentSlide === idx ? 'w-6 bg-pink-600' : 'w-2.5 bg-gray-300'
+                        }`}
+                        onClick={() => showSlide(idx)}
+                      />
+                    ))}
                   </div>
                 </div>
               </div>
@@ -854,13 +853,9 @@ const WeddingTempoTravellerPage = () => {
                 </Button>
               </div>
             ) : !getTempoTravellerPricing() ? (
-              <div className="text-center py-12">
-                <p className="text-orange-600 mb-4">Pricing data not available</p>
-                <p className="text-sm text-gray-500 mb-4">Available vehicles: {vehiclePricing.length}</p>
-                <div className="text-xs text-gray-400 mb-4">
-                  Debug: {JSON.stringify(vehiclePricing.map(v => ({ id: v.vehicleId, type: v.vehicleType })))}
-                </div>
-                <Button onClick={() => window.location.reload()} variant="outline">
+              <div className="py-10 text-center">
+                <p className="mb-3 text-sm text-gray-600">Wedding rates are available on request. Call us for an instant quote.</p>
+                <Button onClick={() => window.location.reload()} variant="outline" size="sm">
                   Try Again
                 </Button>
               </div>
@@ -931,7 +926,10 @@ const WeddingTempoTravellerPage = () => {
                     <Button 
                       size="lg" 
                       className="bg-pink-600 hover:bg-pink-700 text-white px-8 py-3"
-                      onClick={() => window.open('tel:+919966363662', '_self')}
+                      onClick={() => {
+                        trackContactCta('phone', { name: 'wedding_tempo_footer_call' });
+                        window.open('tel:+919966363662', '_self');
+                      }}
                     >
                       <Phone className="mr-2 h-5 w-5" />
                       Call +91 9966363662

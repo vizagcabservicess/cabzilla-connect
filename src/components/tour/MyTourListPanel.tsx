@@ -1084,8 +1084,8 @@ export function MyTourListPanel() {
             'fixed z-[10030] max-w-[calc(50%-0.75rem)] rounded-full bg-blue-600 font-semibold text-white shadow-[0_10px_24px_-6px_rgba(37,99,235,0.55)] hover:bg-blue-700',
             'right-3',
             'bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px)+var(--vth-chat-clearance,0px))]',
-            'md:bottom-[calc(5.25rem+var(--vth-chat-clearance,0px))] md:right-6',
-            'flex items-center gap-2 py-1.5 pl-1.5 pr-2.5 text-left'
+            'md:bottom-[calc(1rem+var(--vth-chat-clearance,0px))] md:right-[10rem]',
+            'flex items-center gap-2 py-1.5 pl-1.5 pr-2.5 text-left md:py-1 md:pl-1.5 md:pr-2.5'
           )}
           onClick={() => {
             if (items.length === 0) {
@@ -1095,8 +1095,8 @@ export function MyTourListPanel() {
             openTourListPanel();
           }}
         >
-          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
-            <Briefcase className="h-5 w-5" />
+          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 md:h-8 md:w-8">
+            <Briefcase className="h-5 w-5 md:h-4 md:w-4" />
             {items.length > 0 ? (
               <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-0.5 text-[10px] font-bold text-blue-600">
                 {items.length}

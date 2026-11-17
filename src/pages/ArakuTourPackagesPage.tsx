@@ -9,6 +9,7 @@ import { ServiceEmbedShell } from '@/components/service/ServiceEmbedShell';
 import { tourAPI } from '@/services/api/tourAPI';
 import { TourInfo } from '@/types/cab';
 import { getTourUrl } from '@/utils/tourUrlUtils';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 const ArakuTourPackagesPage = () => {
   const [tours, setTours] = useState<TourInfo[]>([]);
@@ -191,7 +192,10 @@ const ArakuTourPackagesPage = () => {
               </ul>
               <Button
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => window.open('tel:+919966363662')}
+                onClick={() => {
+                  trackContactCta('phone', { name: 'araku_sidebar_call' });
+                  window.open('tel:+919966363662');
+                }}
               >
                 <Phone className="w-4 h-4 mr-2" />
                 Call +91 9966363662

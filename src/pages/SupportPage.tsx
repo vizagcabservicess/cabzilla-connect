@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Phone, Mail, Clock, CheckCircle, Headphones } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 export function SupportPage() {
   const supportChannels = [
@@ -135,7 +136,14 @@ export function SupportPage() {
                     </div>
                     <Button 
                       className="w-full bg-gray-900 hover:bg-gray-800 text-white"
-                      onClick={() => window.open(channel.link, '_blank')}
+                      onClick={() => {
+                        if (channel.link.startsWith('tel:')) {
+                          trackContactCta('phone', { name: 'support_channel_call' });
+                        } else if (channel.link.includes('wa.me/')) {
+                          trackContactCta('whatsapp', { name: 'support_channel_whatsapp' });
+                        }
+                        window.open(channel.link, '_blank');
+                      }}
                     >
                       {channel.action}
                     </Button>
@@ -193,7 +201,10 @@ export function SupportPage() {
             <Button 
               size="lg" 
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4"
-              onClick={() => window.open(`tel:+91-9966363662`)}
+              onClick={() => {
+                trackContactCta('phone', { name: 'support_call' });
+                window.open(`tel:+91-9966363662`);
+              }}
             >
               <Phone className="w-5 h-5 mr-2" />
               Call Support Now

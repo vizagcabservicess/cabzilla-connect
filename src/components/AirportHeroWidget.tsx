@@ -106,6 +106,21 @@ export function AirportHeroWidget({
         autoTriggerSearch: autoFromQuery,
       };
       sessionStorage.setItem('routePrefillData', JSON.stringify(prefillData));
+    } else {
+      try {
+        const rawPrefill = sessionStorage.getItem('routePrefillData');
+        if (rawPrefill) {
+          const parsed = JSON.parse(rawPrefill) as { tripType?: string };
+          if (parsed?.tripType && parsed.tripType !== 'airport') {
+            sessionStorage.removeItem('routePrefillData');
+            sessionStorage.removeItem('pickupLocation');
+            sessionStorage.removeItem('dropLocation');
+            sessionStorage.removeItem('intermediateStops');
+          }
+        }
+      } catch {
+        sessionStorage.removeItem('routePrefillData');
+      }
     }
   }
 
@@ -118,6 +133,7 @@ export function AirportHeroWidget({
         onStepChange={onStepChange}
         onTripEditOpenChange={onTripEditOpenChange}
         visibleTabs={['airport']}
+        pageDefaultTripType="airport"
         hideBackground={true}
         embedCompactLayout
         embedStretchToShell={embedStretchToShell}

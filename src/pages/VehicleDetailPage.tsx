@@ -17,7 +17,7 @@ import {
 import { GalleryItem } from '@/types/cab';
 import { vehicleGalleryAPI } from '@/services/api/vehicleGalleryAPI';
 import { Helmet } from 'react-helmet-async';
-import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
+import { getVehicleDisplayName, getVehicleUrl } from '@/utils/vehicleUrlUtils';
 import type { VehicleLoaderData } from '@/loaders/vehicleLoader';
 import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 import { resolvePublicHead } from '@/seo/publicPageMeta';
@@ -446,7 +446,7 @@ const VehicleDetailPage = () => {
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbPage>{vehicle.name}</BreadcrumbPage>
+                <BreadcrumbPage>{vehicleSlug ? getVehicleDisplayName(vehicleSlug) : vehicle.name}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
@@ -483,7 +483,7 @@ const VehicleDetailPage = () => {
                   >
                     <img
                       src={embedHeroIllustrationSrc}
-                      alt=""
+                      alt={embedConfig.seo.pageHeadline}
                       width={680}
                       height={560}
                       sizes="(max-width: 640px) 100vw, min(680px, 100vw)"
@@ -506,8 +506,14 @@ const VehicleDetailPage = () => {
                 </div>
 
                 <div className="vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-4 max-lg:pb-3 max-lg:pt-0 lg:border-0 lg:bg-transparent lg:p-0">
-                  <p className="sr-only max-lg:hidden" aria-hidden="true">{embedConfig.seo.pageHeadline}</p>
-                  <p className="sr-only max-lg:hidden">{embedConfig.seo.pageSubtitle}</p>
+                  <div className="mb-4 hidden max-w-xl lg:block">
+                    <h1 className="text-left font-sans text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[#001b3a]">
+                      {embedConfig.seo.pageHeadline}
+                    </h1>
+                    <p className="mt-1 text-left text-[0.9375rem] leading-snug text-gray-700">
+                      {embedConfig.seo.pageSubtitle}
+                    </p>
+                  </div>
                   <Hero
                     hideBackground
                     embedCompactLayout
@@ -781,18 +787,11 @@ const VehicleDetailPage = () => {
               <div className="min-h-[32rem]">
                 <Suspense
                   fallback={
-                    <div
-                      className="mb-8 min-h-[32rem] animate-pulse rounded-xl border border-gray-200 bg-white p-4 sm:p-5"
-                      aria-hidden
-                    >
-                      <div className="mb-2 h-7 w-56 rounded bg-gray-200" />
-                      <div className="mb-6 h-4 w-full max-w-md rounded bg-gray-100" />
-                      <div className="grid gap-3">
-                        {[1, 2, 3].map((i) => (
-                          <div
-                            key={i}
-                            className="min-h-[14rem] rounded-lg border border-gray-100 bg-gray-50 p-3 sm:min-h-[15rem] sm:p-4"
-                          />
+                    <div className="mb-8 min-h-[32rem]" aria-hidden>
+                      <div className="mb-3 h-6 w-56 rounded bg-gray-200" />
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div key={i} className="h-72 animate-pulse rounded-2xl bg-gray-200" />
                         ))}
                       </div>
                     </div>

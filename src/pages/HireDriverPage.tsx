@@ -18,6 +18,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { FaWhatsapp } from 'react-icons/fa';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 const services = [
   {
@@ -127,10 +128,12 @@ export default function HireDriverPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleCall = () => {
+    trackContactCta('phone', { name: 'hire_driver_call' });
     window.open('tel:+919966363662', '_self');
   };
 
   const handleWhatsApp = () => {
+    trackContactCta('whatsapp', { name: 'hire_driver_whatsapp' });
     const message = encodeURIComponent('Hi Kumar! I would like to hire a driver');
     window.open(`https://wa.me/919966363662?text=${message}`, '_blank');
   };

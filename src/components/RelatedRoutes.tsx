@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight, Clock, MapPin } from 'lucide-react';
 import { popularRoutes } from '@/lib/routeData';
 import { slugify } from '@/lib/utils';
 
@@ -45,42 +46,61 @@ export const RelatedRoutes: React.FC<RelatedRoutesProps> = ({
   }
 
   return (
-    <div className="bg-gray-50 rounded-lg p-6 mt-8">
-      <h3 className="text-xl font-semibold text-gray-900 mb-4">
-        {currentRoute ? `Other Routes from ${currentRoute.from}` : 'Popular Routes'}
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 sm:text-xl">
+            {currentRoute ? `Other Routes from ${currentRoute.from}` : 'Popular Outstation Routes'}
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+            Explore more one-way and round-trip highway routes from Vizag
+          </p>
+        </div>
+        <Link
+          to="/outstation-taxi"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-primary)] hover:underline sm:text-sm"
+        >
+          All outstation cabs
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {relatedRoutes.map((route, index) => {
           const routeSlug = `${slugify(route.from)}-to-${slugify(route.to)}`;
           return (
             <Link
               key={index}
               to={`/outstation-taxi/${routeSlug}`}
-              className="block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200"
+              className="group flex flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/60 p-4 transition-all duration-200 hover:border-blue-300 hover:bg-white hover:shadow-md"
             >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="font-medium text-gray-900">
-                    {route.from} to {route.to}
-                  </h4>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {route.distance} • {route.time}
-                  </p>
-                  <p className="text-sm text-gray-500 mt-2 line-clamp-2">
-                    {route.description}
-                  </p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900 transition-colors group-hover:text-[var(--brand-primary)] sm:text-base">
+                    {route.from} → {route.to}
+                  </h3>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+                      {route.distance}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+                      {route.time}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-right ml-4">
-                  <p className="text-sm font-medium text-blue-600">
-                    From ₹{route.fares.sedan.replace('₹', '')}
-                  </p>
-                </div>
+                <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[var(--brand-primary)]">
+                  From ₹{route.fares.sedan.replace('₹', '')}
+                </span>
               </div>
+              <p className="mt-2.5 line-clamp-2 text-xs leading-relaxed text-slate-600 sm:text-sm">
+                {route.description}
+              </p>
             </Link>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 };
 

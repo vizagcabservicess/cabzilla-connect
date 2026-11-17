@@ -140,8 +140,12 @@ function purge_normalize_path(string $raw): ?string
 /** @return array{configured: bool, purged: bool, message: string} */
 function purge_cloudflare(bool $everything, ?string $path): array
 {
-    $token = defined('CLOUDFLARE_API_TOKEN') ? trim((string) CLOUDFLARE_API_TOKEN) : '';
-    $zone = defined('CLOUDFLARE_ZONE_ID') ? trim((string) CLOUDFLARE_ZONE_ID) : '';
+    $token = defined('CLOUDFLARE_API_TOKEN')
+        ? trim((string) CLOUDFLARE_API_TOKEN)
+        : trim((string) ($_ENV['CLOUDFLARE_API_TOKEN'] ?? getenv('CLOUDFLARE_API_TOKEN') ?: ''));
+    $zone = defined('CLOUDFLARE_ZONE_ID')
+        ? trim((string) CLOUDFLARE_ZONE_ID)
+        : trim((string) ($_ENV['CLOUDFLARE_ZONE_ID'] ?? getenv('CLOUDFLARE_ZONE_ID') ?: ''));
     if ($token === '' || $zone === '') {
         return [
             'configured' => false,

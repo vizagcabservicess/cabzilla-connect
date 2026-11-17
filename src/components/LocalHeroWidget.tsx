@@ -46,10 +46,26 @@ export function LocalHeroWidget({
     const effectivePickup = initialPickup || pickupFromQuery;
     const effectiveDrop = initialDrop || dropFromQuery;
 
-    // Prefer full routePrefillData written by cross-page redirects (Hero).
-    // Fall back to query/slug names when present.
+    // Prefer full routePrefillData written by cross-page redirects (Hero) when it is for local.
+    // Clear stale prefill left over from another service (e.g., an outstation route page).
     const existingPrefill = sessionStorage.getItem('routePrefillData');
-    if (!existingPrefill && effectivePickup) {
+    let hasLocalPrefill = false;
+    if (existingPrefill) {
+      try {
+        const parsed = JSON.parse(existingPrefill) as { tripType?: string };
+        if (parsed?.tripType === 'local') {
+          hasLocalPrefill = true;
+        } else {
+          sessionStorage.removeItem('routePrefillData');
+          sessionStorage.removeItem('pickupLocation');
+          sessionStorage.removeItem('dropLocation');
+          sessionStorage.removeItem('intermediateStops');
+        }
+      } catch {
+        sessionStorage.removeItem('routePrefillData');
+      }
+    }
+    if (!hasLocalPrefill && effectivePickup) {
       const pickupDate = dateFromQuery ? new Date(dateFromQuery) : undefined;
       const prefillData = {
         pickupLocation: {
@@ -94,6 +110,7 @@ export function LocalHeroWidget({
         onStepChange={onStepChange}
         onTripEditOpenChange={onTripEditOpenChange}
         visibleTabs={['local']}
+        pageDefaultTripType="local"
         hideBackground={true}
         embedCompactLayout
         embedStretchToShell={embedStretchToShell}

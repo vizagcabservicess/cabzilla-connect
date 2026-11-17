@@ -17,6 +17,7 @@ import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import { responsiveUploadImage, showOriginalOnImageError, sizedUploadImage } from '@/lib/responsiveImage';
 import { resolveSmartBudgetMediaUrl } from '@/lib/smartBudgetUpload';
+import { trackContactCta } from '@/utils/trackContactCta';
 import {
   SHARED_TOUR_TESTIMONIAL_VIDEOS,
   TOUR_TESTIMONIALS_YOUTUBE_URL,
@@ -309,6 +310,7 @@ export function TourMarketingLayout({
     : 1250;
 
   const askWhatsApp = () => {
+    trackContactCta('whatsapp', { name: 'tour_detail_whatsapp' });
     const vehicleBit = active ? ` in a ${active.name}` : '';
     const filled = content.whatsAppMessage
       .replace('{vehicle}', vehicleBit)
@@ -939,7 +941,7 @@ export function TourMarketingLayout({
       {active && !bookingInView ? (
         <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-[#E2E8F0] bg-white px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] md:hidden">
           <div className="flex items-center gap-2">
-            <a href="tel:+919966363662" aria-label="Call" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-700">
+            <a href="tel:+919966363662" aria-label="Call" data-cta-name="tour_sticky_call" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-700">
               <Phone className="h-4 w-4" aria-hidden />
             </a>
             <a
@@ -947,6 +949,7 @@ export function TourMarketingLayout({
               target="_blank"
               rel="noopener noreferrer"
               aria-label="WhatsApp"
+              data-cta-name="tour_sticky_whatsapp"
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[#25D366]"
             >
               <FaWhatsapp className="h-5 w-5" aria-hidden />

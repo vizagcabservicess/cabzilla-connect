@@ -254,6 +254,7 @@ export function OutstationHeroWidget({
         onStepChange={onStepChange}
         onTripEditOpenChange={onTripEditOpenChange}
         visibleTabs={['outstation']}
+        pageDefaultTripType="outstation"
         hideBackground={true}
         embedCompactLayout
         embedStretchToShell={embedStretchToShell}

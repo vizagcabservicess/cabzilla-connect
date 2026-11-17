@@ -5,16 +5,48 @@ import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Car, Users, Phone, Star, CheckCircle, MapPin, Clock, Shield, Wifi, Coffee, Camera, Heart, Building, Bus, Loader2 } from 'lucide-react';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
+  Car,
+  Users,
+  Phone,
+  Star,
+  CheckCircle,
+  MapPin,
+  Clock,
+  Shield,
+  Heart,
+  Building,
+  Bus,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Play,
+  ArrowRight,
+  MessageCircle,
+  Luggage,
+  Snowflake,
+  Fuel,
+  Tv,
+  Speaker,
+  Zap,
+  Headphones,
+  X,
+} from 'lucide-react';
 import { tourAPI } from '@/services/api/tourAPI';
 import { fareAPI } from '@/services/api/fareAPI';
 import { TourInfo } from '@/types/cab';
 import { VehiclePricing } from '@/types/api';
 import { Breadcrumb } from '@/components/Breadcrumb';
-import {
-  getAirportTierDistanceLabelForDisplayPrice,
-} from '@/services/fareManagementService';
+import { trackContactCta } from '@/utils/trackContactCta';
+import { getTourUrl } from '@/utils/tourUrlUtils';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import 'swiper/css';
 
 interface TempoTravellerPageProps {
   pageType: string;
@@ -30,14 +62,117 @@ interface TempoTravellerPageProps {
   subtitle?: string;
 }
 
+type FareTab = 'local' | 'outstation' | 'airport';
+
+const URBANIA_SLIDES = [
+  {
+    src: 'https://vizagtaxihub.com/uploads/urbania-illustrator-vth.png',
+    alt: 'Force Urbania van in Visakhapatnam',
+  },
+  {
+    src: 'https://vizagtaxihub.com/uploads/og-image-urbania.jpg',
+    alt: 'Force Urbania group van for hire in Vizag',
+  },
+];
+
+const SLIDER_IMAGES = [
+  {
+    src: 'https://vizagtaxihub.com/uploads/tempo-png.png',
+    alt: 'AC Tempo Traveller exterior in Visakhapatnam',
+  },
+  {
+    src: 'https://vizagtaxihub.com/uploads/tempo-traveller-seats.jpg',
+    alt: 'Push-back AC seats inside Tempo Traveller',
+  },
+  {
+    src: 'https://vizagtaxihub.com/uploads/tempo-traveller-amenities.jpg',
+    alt: 'Tempo Traveller cabin and travel amenities',
+  },
+];
+
+const INCLUDED = [
+  'AC tempo traveller with a professional driver',
+  'Pickup and drop inside Visakhapatnam',
+  'Live trip support on call and WhatsApp',
+  'Package or per-km fare shared before you confirm',
+];
+
+const EXCLUDED = [
+  'Toll, parking, and state entry tax — paid on actuals',
+  'Driver night halt when the trip stays overnight',
+  'Kilometres or hours beyond the booked package',
+  'Sightseeing tickets and hotel stays',
+];
+
+const FAQS = [
+  {
+    q: 'How many people can travel in one tempo?',
+    a: 'A 12-seater suits families and small groups. 17 and 18 seaters suit weddings, office teams, and pilgrimage groups. Tell us the headcount and luggage, and we will match the coach.',
+  },
+  {
+    q: 'Is the fare per kilometre or a fixed package?',
+    a: 'City trips use 4-hour and 8-hour packages. Outstation trips are charged per kilometre with a daily minimum. Airport drops are a one-way fare. Extra kilometres and extra hours are listed on the rate card.',
+  },
+  {
+    q: 'What is charged extra?',
+    a: 'Toll, parking, and permits are extra. An overnight trip adds a driver night halt. Anything beyond the booked hours or kilometres is billed at the extra-hour and extra-km rate.',
+  },
+  {
+    q: 'Can I book for a wedding, office, or temple trip?',
+    a: 'Yes. The same AC tempo fleet covers guest pickups, staff shuttles, and temple circuits. Share the date, pickup points, and return time for a fixed quote.',
+  },
+];
+
+const GLASS =
+  'border border-white/70 bg-white/50 shadow-[0_10px_32px_-18px_rgba(37,99,235,0.4)] backdrop-blur-xl';
+
+function capacityLabel(pageType: string): string {
+  if (pageType === '12-seater') return '12 seats';
+  if (pageType === '18-seater-tempo-traveller') return '18 seats';
+  if (pageType === 'rental') return '12, 17 & 18 seats';
+  if (pageType === 'urbania') return '16 seats';
+  if (pageType === 'mini-bus' || pageType === 'vizag-araku-bus') return 'Mini bus';
+  return 'Group seating';
+}
+
+const AIRPORT_FARE = {
+  label: 'One-way airport drop',
+  price: '₹7,500 onwards',
+};
+
+function flattenVehiclePricing(vehicle: VehiclePricing | undefined): VehiclePricing | undefined {
+  if (!vehicle) return undefined;
+  const nested = (
+    vehicle as VehiclePricing & {
+      pricing?: {
+        local?: Partial<VehiclePricing>;
+        outstation?: Partial<VehiclePricing>;
+        airport?: Partial<VehiclePricing>;
+      };
+    }
+  ).pricing;
+  if (!nested) return vehicle;
+  return {
+    ...vehicle,
+    ...nested.airport,
+    ...nested.outstation,
+    ...nested.local,
+  };
+}
+
+function inr(value: number | string | undefined, fallback: string): string {
+  if (value === undefined || value === null || value === '') return fallback;
+  const amount = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(amount)) return fallback;
+  return amount.toLocaleString('en-IN');
+}
+
 const TempoTravellerPage: React.FC<TempoTravellerPageProps> = ({
   pageType,
   title,
   description,
   keywords,
   url,
-  color,
-  icon,
   headline,
   subtitle,
 }) => {
@@ -45,891 +180,912 @@ const TempoTravellerPage: React.FC<TempoTravellerPageProps> = ({
   const [vehiclePricing, setVehiclePricing] = useState<VehiclePricing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [videoTitles, setVideoTitles] = useState<{[key: string]: string}>({});
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [fareTab, setFareTab] = useState<FareTab>('outstation');
+  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
+  const [videoPlayer, setVideoPlayer] = useState<'mobile' | 'desktop' | null>(null);
+  const isUrbania = pageType === 'urbania';
+  const slides = isUrbania ? URBANIA_SLIDES : SLIDER_IMAGES;
+  const bookPath = isUrbania ? '/vehicle/urbania' : '/vehicle/tempo-traveller';
 
-  // YouTube video IDs
-  const videoIds = ['wrgfamvCkns', 'ROa7qu67ECA', 'QUUuoF04zfk'];
-
-  // Static video titles (since YouTube API requires authentication)
-  const videoTitlesStatic = {
-    'wrgfamvCkns': 'Luxury Tempo Traveller Experience',
-    'ROa7qu67ECA': 'Thailand Team 5-Star Service',
-    'QUUuoF04zfk': 'Professional Tempo Service Review'
+  const videoTitles: Record<string, string> = {
+    wrgfamvCkns: 'Luxury Tempo Traveller Experience',
+    ROa7qu67ECA: 'Thailand Team 5-Star Service',
+    QUUuoF04zfk: 'Professional Tempo Service Review',
   };
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       try {
         setLoading(true);
         const [tourData, pricingData] = await Promise.all([
           tourAPI.getAvailableTours(),
-          fareAPI.getVehiclePricing()
+          fareAPI.getVehiclePricing(),
         ]);
-        setTours(tourData);
-        setVehiclePricing(pricingData);
-        setVideoTitles(videoTitlesStatic);
+        if (!cancelled) {
+          setTours(tourData);
+          setVehiclePricing(pricingData);
+        }
       } catch (err) {
         console.error('Error fetching data:', err);
-        setError('Failed to load data');
+        if (!cancelled) setError('Failed to load data');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchData();
+    void fetchData();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Slider functions
-  const showSlide = (index: number) => {
-    setCurrentSlide(index);
-    const slider = document.getElementById('tempo-slider');
-    if (slider) {
-      slider.style.transform = `translateX(-${index * 100}%)`;
-    }
-  };
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [slides.length]);
 
   const nextSlide = () => {
-    const next = (currentSlide + 1) % 3;
-    showSlide(next);
+    setCurrentSlide((prev) => (prev + 1) % slides.length);
   };
 
   const previousSlide = () => {
-    const prev = currentSlide === 0 ? 2 : currentSlide - 1;
-    showSlide(prev);
+    setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
   };
 
-  // Auto-play slider
-  useEffect(() => {
-    const interval = setInterval(() => {
-      nextSlide();
-    }, 4000); // Change slide every 4 seconds
+  const openWhatsApp = (name: string) => {
+    trackContactCta('whatsapp', { name });
+    window.open(
+      'https://wa.me/919966363662?text=' + encodeURIComponent(`Hi! I want to book ${title}`),
+      '_blank',
+    );
+  };
 
-    return () => clearInterval(interval);
-  }, [currentSlide]);
+  const callNow = (name: string) => {
+    trackContactCta('phone', { name });
+    window.open('tel:+919966363662', '_self');
+  };
 
   const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "name": `Vizag Taxi Hub - ${title}`,
-    "description": description,
-    "url": url,
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
-      "addressLocality": "Visakhapatnam",
-      "addressRegion": "Andhra Pradesh",
-      "postalCode": "530024",
-      "addressCountry": "IN"
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: `Vizag Taxi Hub - ${title}`,
+    description,
+    url,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: '44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram',
+      addressLocality: 'Visakhapatnam',
+      addressRegion: 'Andhra Pradesh',
+      postalCode: '530024',
+      addressCountry: 'IN',
     },
-    "telephone": "+91-9966363662",
-    "openingHours": "Mo-Su 00:00-23:59",
-    "paymentAccepted": "Cash, Credit Card, UPI, Net Banking",
-    "areaServed": {
-      "@type": "City",
-      "name": "Visakhapatnam"
+    telephone: '+91-9966363662',
+    openingHours: 'Mo-Su 00:00-23:59',
+    paymentAccepted: 'Cash, Credit Card, UPI, Net Banking',
+    areaServed: {
+      '@type': 'City',
+      name: 'Visakhapatnam',
     },
-    "hasOfferCatalog": {
-      "@type": "OfferCatalog",
-      "name": `${title} Services`,
-      "itemListElement": [
+    hasOfferCatalog: {
+      '@type': 'OfferCatalog',
+      name: `${title} Services`,
+      itemListElement: [
         {
-          "@type": "Offer",
-          "itemOffered": {
-            "@type": "Service",
-            "name": title,
-            "description": description
+          '@type': 'Offer',
+          itemOffered: {
+            '@type': 'Service',
+            name: title,
+            description,
           },
-          "price": "35",
-          "priceCurrency": "INR",
-          "priceSpecification": {
-            "@type": "UnitPriceSpecification",
-            "price": "35",
-            "priceCurrency": "INR",
-            "unitText": "per kilometer"
-          }
-        }
-      ]
-    }
+          price: '35',
+          priceCurrency: 'INR',
+          priceSpecification: {
+            '@type': 'UnitPriceSpecification',
+            price: '35',
+            priceCurrency: 'INR',
+            unitText: 'per kilometer',
+          },
+        },
+      ],
+    },
   };
 
-  // Helper function to get tour type based on name
   const getTourType = (tourName: string): string => {
     const name = tourName.toLowerCase();
-    if (name.includes('araku') || name.includes('lambasingi')) return 'HILL STATION';
+    if (name.includes('araku') || name.includes('lambasingi') || name.includes('vanajangi')) return 'HILL STATION';
     if (name.includes('borra') || name.includes('cave')) return 'ADVENTURE';
-    if (name.includes('temple') || name.includes('simhachalam')) return 'PILGRIMAGE';
+    if (name.includes('temple') || name.includes('simhachalam') || name.includes('annavaram') || name.includes('arasavalli')) return 'PILGRIMAGE';
     if (name.includes('beach') || name.includes('rushikonda')) return 'BEACH';
     return 'TOUR';
   };
 
-  // Helper function to get tempo traveller pricing from API
   const getTempoTravellerPricing = () => {
-    // Try multiple ways to find tempo traveller pricing
-    const tempoTraveller = vehiclePricing.find(vehicle => {
+    const tempoTraveller = vehiclePricing.find((vehicle) => {
       const vehicleId = vehicle.vehicleId?.toLowerCase() || '';
       const vehicleType = vehicle.vehicleType?.toLowerCase() || '';
-      
-      return vehicleId.includes('tempo') || 
-             vehicleId.includes('traveller') ||
-             vehicleType.includes('tempo') ||
-             vehicleType.includes('traveller') ||
-             vehicleId === 'tempo_traveller' ||
-             vehicleId === 'tempo-traveller';
+      if (isUrbania) {
+        return vehicleId.includes('urbania') || vehicleId === 'bus' || vehicleType.includes('urbania');
+      }
+      return (
+        vehicleId.includes('tempo') ||
+        vehicleId.includes('traveller') ||
+        vehicleType.includes('tempo') ||
+        vehicleType.includes('traveller') ||
+        vehicleId === 'tempo_traveller' ||
+        vehicleId === 'tempo-traveller'
+      );
     });
-    
-    // If not found, try to get the first available pricing as fallback
-    if (!tempoTraveller && vehiclePricing.length > 0) {
-      console.log('Tempo traveller pricing not found, using first available:', vehiclePricing[0]);
-      return vehiclePricing[0];
-    }
-    
-    return tempoTraveller;
+
+    const match = tempoTraveller || (!isUrbania && vehiclePricing.length > 0 ? vehiclePricing[0] : undefined);
+    return flattenVehiclePricing(match);
   };
 
-  // Helper function to get tempo traveller price
   const getTempoTravellerPrice = (tour: TourInfo): string => {
-    // Look for tempo traveller pricing in the tour data
     if (tour.pricing) {
-      // Try to find tempo traveller pricing (vehicle_id might be 'tempo_traveller' or similar)
-      const tempoPrice = tour.pricing['tempo_traveller'] || 
-                        tour.pricing['tempo-traveller'] || 
-                        Object.values(tour.pricing)[0];
+      const tempoPrice = isUrbania
+        ? tour.pricing['urbania'] ||
+          tour.pricing['force_urbania'] ||
+          tour.pricing['force-urbania'] ||
+          tour.pricing['bus']
+        : tour.pricing['tempo_traveller'] ||
+          tour.pricing['tempo-traveller'] ||
+          Object.values(tour.pricing)[0];
       if (tempoPrice) {
-        return `₹${tempoPrice.toLocaleString()}`;
+        return `₹${Number(tempoPrice).toLocaleString('en-IN')}`;
       }
     }
-    // Fallback to estimated pricing based on distance
-    const estimatedPrice = tour.distance * 35; // ₹35 per km
-    return `₹${estimatedPrice.toLocaleString()}`;
+    const estimatedPrice = tour.distance * (isUrbania ? 40 : 35);
+    return `₹${estimatedPrice.toLocaleString('en-IN')}`;
   };
+
+  const tempoPricing = getTempoTravellerPricing();
+  const perKm = inr(tempoPricing?.pricePerKm, isUrbania ? '40' : '35');
+  const local8 = inr(tempoPricing?.price8hrs80km, isUrbania ? '8,000' : '7,500');
+  const local10Amount = Number(tempoPricing?.price10hrs100km);
+  const local10 =
+    Number.isFinite(local10Amount) && local10Amount > 0
+      ? local10Amount.toLocaleString('en-IN')
+      : '';
+  const extraKm = inr(tempoPricing?.priceExtraKm, isUrbania ? '40' : '35');
+  const extraHour = inr(tempoPricing?.priceExtraHour, isUrbania ? '900' : '750');
+  const airportFare = isUrbania
+    ? {
+        label: 'One-way airport drop',
+        price:
+          tempoPricing?.airportBasePrice && tempoPricing.airportBasePrice > 0
+            ? `₹${tempoPricing.airportBasePrice.toLocaleString('en-IN')} onwards`
+            : 'On request',
+      }
+    : AIRPORT_FARE;
+  const includedItems = isUrbania
+    ? ['AC Force Urbania with a professional driver', ...INCLUDED.slice(1)]
+    : INCLUDED;
+  const faqs = isUrbania
+    ? [
+        {
+          q: 'How many people can travel in one Urbania?',
+          a: 'The Force Urbania seats 16 passengers, with room for luggage. Share the headcount and we will confirm the van.',
+        },
+        FAQS[1],
+        FAQS[2],
+        {
+          q: 'Can I book an Urbania for a wedding, office, or temple trip?',
+          a: 'Yes. The Urbania covers guest pickups, staff shuttles, and temple circuits. Share the date, pickup points, and return time for a fixed quote.',
+        },
+      ]
+    : FAQS;
+  const driverAllowance = tempoPricing?.driverAllowance
+    ? `₹${tempoPricing.driverAllowance.toLocaleString('en-IN')}`
+    : null;
+  const nightHalt = tempoPricing?.nightHaltCharge
+    ? `₹${tempoPricing.nightHaltCharge.toLocaleString('en-IN')}`
+    : null;
+
+  const specs = [
+    { icon: Users, label: capacityLabel(pageType) },
+    { icon: Snowflake, label: 'AC cabin' },
+    { icon: Tv, label: 'TV' },
+    { icon: Speaker, label: 'Sound system' },
+    { icon: Luggage, label: 'Luggage space' },
+  ];
+
+  const heroFeatures = [
+    { icon: Zap, title: 'Easy booking', description: 'Book online or send the trip on WhatsApp.' },
+    { icon: Fuel, title: 'Clear fares', description: '8 hr, 10 hr, and per-km rates up front.' },
+    { icon: Tv, title: 'TV & sound', description: 'AC coach with a screen and music.' },
+    { icon: Headphones, title: '24/7 support', description: 'Call or WhatsApp any hour.' },
+  ];
+
+  const relatedLinks = [
+    { to: '/tempo-traveller-rental-vizag', title: 'Tempo Traveller Rental', desc: '12, 17 & 18 seater vans in Vizag', icon: Car, bg: 'bg-blue-50 text-blue-600' },
+    { to: '/17-seater-tempo-traveller-vizag', title: '17 Seater Tempo Traveller', desc: 'Popular choice for large group travel', icon: Users, bg: 'bg-emerald-50 text-emerald-600' },
+    { to: '/12-seater-tempo-traveller-vizag', title: '12 Seater Tempo Traveller', desc: 'Ideal for medium families & groups', icon: Users, bg: 'bg-purple-50 text-purple-600' },
+    { to: '/group-travel-tempo-traveller-vizag', title: 'Group Travel', desc: 'Customised group tour transport', icon: Users, bg: 'bg-orange-50 text-orange-600' },
+    { to: '/corporate-tempo-traveller-vizag', title: 'Corporate Transport', desc: 'Staff shuttles & corporate events', icon: Building, bg: 'bg-indigo-50 text-indigo-600' },
+    { to: '/wedding-tempo-traveller-vizag', title: 'Wedding Transport', desc: 'Guest pickups & venue transfers', icon: Heart, bg: 'bg-pink-50 text-pink-600' },
+    { to: '/pilgrimage-tempo-traveller-vizag', title: 'Pilgrimage Tours', desc: 'Temple circuits & group darshan', icon: MapPin, bg: 'bg-amber-50 text-amber-600' },
+    { to: '/mini-bus-travels-vizag', title: 'Mini Bus Travels', desc: 'AC mini bus rental services', icon: Bus, bg: 'bg-teal-50 text-teal-600' },
+  ];
+
+  const testimonialVideos = [
+    { id: 'wrgfamvCkns', label: '@vizagtaxihub' },
+    { id: 'ROa7qu67ECA', label: '@vizagtaxihub' },
+    { id: 'QUUuoF04zfk', label: '@Vizag Taxi Hub' },
+  ];
+
+  const fareTabs: { id: FareTab; label: string }[] = [
+    { id: 'outstation', label: 'Outstation' },
+    { id: 'local', label: 'Local' },
+    { id: 'airport', label: 'Airport' },
+  ];
 
   return (
     <>
       <Helmet>
-        <title>{title} | Vizag Taxi Hub</title>
-        <meta name="description" content={description} />
         <meta name="keywords" content={keywords} />
-        <link rel="canonical" href={url} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={url} />
         <meta property="twitter:url" content={url} />
-        <script type="application/ld+json">
-          {JSON.stringify(structuredData)}
-        </script>
+        <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
       </Helmet>
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="relative min-h-screen overflow-x-clip bg-gradient-to-b from-[#d7e8ff] via-[#eef4fb] to-[#f7f9fc]">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(ellipse_at_top_left,rgba(59,130,246,0.35),transparent_58%),radial-gradient(ellipse_at_top_right,rgba(125,211,252,0.45),transparent_52%)]"
+        />
+        <div className="relative">
         <Navbar />
-        
-        <div className="container mx-auto px-4 py-8 max-w-7xl pb-16 md:pb-32">
-          {/* Breadcrumb */}
-          <Breadcrumb items={[
-            { label: 'Services', href: '/services' },
-            { label: 'Tempo Traveller', href: '/tempo-traveller-rental-vizag' },
-            { label: title }
-          ]} />
-          
-          {/* Hero Section - Modern Design */}
-          <div className="relative bg-gradient-to-br from-blue-50 via-white to-blue-50 rounded-3xl p-12 mb-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-purple-600/5"></div>
-            <div className="relative z-10">
-              <div className="flex flex-col lg:flex-row items-center gap-12">
-                <div className="flex-1">
-                  <div className="inline-flex items-center bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium mb-6">
-                    <Star className="mr-2 h-4 w-4" />
-                    ⚡ INSTANT BOOKING • 🔥 LIMITED TIME OFFER
-                  </div>
-                  <h1 className="text-3xl md:text-4xl font-bold mb-6 leading-tight text-gray-900">
-                    {headline || `Perfect Group Travel with ${title}`}
-                  </h1>
-                  <p className="text-xl mb-8 text-gray-600 leading-relaxed">
-                    {subtitle ||
-                      'Experience comfortable and reliable tempo traveller service for your group travel needs. Professional drivers, well-maintained vehicles, and exceptional service.'}
-                  </p>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8">
-                    <p className="text-yellow-800 font-semibold">🎉 SPECIAL OFFER: Book now and get 5% discount on your first booking!</p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-4 mb-8">
-                    <Button 
-                      size="lg" 
-                      className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 text-lg font-semibold rounded-full shadow-lg"
-                      onClick={() => window.open('https://wa.me/919966363662?text=Hi! I want to book ' + title + ' - Special Offer', '_blank')}
-                    >
-                      📞 CALL NOW - 9966363662
-                    </Button>
-                    <Button 
-                      size="lg" 
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 text-lg font-semibold rounded-full shadow-lg"
-                      onClick={() => window.open('https://vizagtaxihub.com/vehicle/tempo-traveller', '_blank')}
-                    >
-                      🚐 BOOK ONLINE
-                    </Button>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-4">✅ Instant Confirmation • ✅ Best Rates • ✅ 24/7 Support</p>
-                  <div className="flex items-center gap-8 text-sm text-gray-500">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <span>24/7 Service</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <span>Professional Drivers</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <span>Well Maintained</span>
-                    </div>
-                  </div>
+
+        <main id="main-content" className="mx-auto max-w-7xl px-3 pb-24 pt-3 sm:px-4 sm:pt-5 md:pb-28 lg:px-6">
+          <Breadcrumb
+            items={
+              pageType === 'rental'
+                ? [
+                    { label: 'Fleet', href: '/fleet' },
+                    { label: 'Tempo Traveller' },
+                  ]
+                : pageType === 'urbania'
+                ? [
+                    { label: 'Fleet', href: '/fleet' },
+                    { label: 'Urbania' },
+                  ]
+                : [
+                    { label: 'Fleet', href: '/fleet' },
+                    { label: 'Tempo Traveller', href: '/tempo-traveller-rental-vizag' },
+                    { label: title },
+                  ]
+            }
+          />
+
+          <section className="relative mb-4 overflow-hidden rounded-2xl border border-white/30 bg-gradient-to-br from-[#1e4fa8]/75 via-[#2563eb]/65 to-[#38bdf8]/55 shadow-[0_18px_50px_-24px_rgba(29,78,216,0.65)] backdrop-blur-xl">
+            <div className="grid grid-cols-1 lg:grid-cols-2">
+              <div className="m-3 rounded-xl border border-white/25 bg-white/10 p-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-md sm:m-4 sm:p-5">
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+                  <Star className="h-3 w-3 fill-current" aria-hidden />
+                  {isUrbania ? 'Force Urbania · Driver included' : 'AC tempo · Driver included'}
+                </span>
+                <h1 className="mt-2 text-lg font-bold leading-snug sm:text-xl">
+                  {headline || title}
+                </h1>
+                <p className="mt-1 max-w-md text-xs leading-snug text-white/80 sm:text-sm">
+                  {subtitle ||
+                    'Book an AC tempo traveller with a professional driver. Fares are confirmed before you travel.'}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {specs.map((spec) => {
+                    const Icon = spec.icon;
+                    return (
+                      <span
+                        key={spec.label}
+                        className="inline-flex items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-[11px] font-medium"
+                      >
+                        <Icon className="h-3 w-3" aria-hidden />
+                        {spec.label}
+                      </span>
+                    );
+                  })}
                 </div>
-                <div className="flex-1">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-500 rounded-3xl transform rotate-3"></div>
-                    <div className="relative bg-white rounded-3xl p-8 shadow-2xl">
-                      {/* Image Slider */}
-                      <div className="relative overflow-hidden rounded-2xl">
-                        <div className="flex transition-transform duration-500 ease-in-out" id="tempo-slider">
-                          <div className="w-full flex-shrink-0">
-                            <img 
-                              src="https://vizagtaxihub.com/uploads/tempo-png.png" 
-                              alt="Tempo Traveller Exterior" 
-                              className="w-full max-w-md mx-auto transform hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                          <div className="w-full flex-shrink-0">
-                            <img 
-                              src="https://vizagtaxihub.com/uploads/tempo-traveller-seats.jpg" 
-                              alt="Tempo Traveller Interior Seats" 
-                              className="w-full max-w-md mx-auto transform hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                          <div className="w-full flex-shrink-0">
-                            <img 
-                              src="https://vizagtaxihub.com/uploads/tempo-traveller-amenities.jpg" 
-                              alt="Tempo Traveller Amenities" 
-                              className="w-full max-w-md mx-auto transform hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                        </div>
-                        
-                        {/* Slider Navigation Dots */}
-                        <div className="flex justify-center mt-4 space-x-2">
-                          <button 
-                            className="w-3 h-3 bg-blue-600 rounded-full slider-dot active"
-                            onClick={() => showSlide(0)}
-                          ></button>
-                          <button 
-                            className="w-3 h-3 bg-gray-300 rounded-full slider-dot"
-                            onClick={() => showSlide(1)}
-                          ></button>
-                          <button 
-                            className="w-3 h-3 bg-gray-300 rounded-full slider-dot"
-                            onClick={() => showSlide(2)}
-                          ></button>
-                        </div>
-                        
-                        {/* Navigation Arrows */}
-                        <button 
-                          className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-2 shadow-lg transition-all duration-200"
-                          onClick={previousSlide}
-                        >
-                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                          </svg>
-                        </button>
-                        <button 
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-2 shadow-lg transition-all duration-200"
-                          onClick={nextSlide}
-                        >
-                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </div>
-                      
-                      <div className="absolute -top-4 -right-4 bg-yellow-400 text-yellow-900 px-4 py-2 rounded-full text-sm font-bold">
-                        Most Popular
-                      </div>
+                <p className="mt-3 text-xs text-white/70">
+                  Outstation from <span className="text-lg font-bold text-white">₹{perKm}</span>/km
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    asChild
+                    className="h-9 rounded-full bg-white px-4 text-sm font-semibold text-[#0B3A7A] hover:bg-blue-50"
+                  >
+                    <Link to={bookPath}>
+                      Book online
+                      <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden />
+                    </Link>
+                  </Button>
+                  <Button
+                    className="h-9 rounded-full bg-emerald-500 px-4 text-sm font-semibold text-white hover:bg-emerald-600"
+                    onClick={() => openWhatsApp('tempo_hero_whatsapp')}
+                  >
+                    <MessageCircle className="mr-1.5 h-4 w-4" aria-hidden />
+                    WhatsApp
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => callNow('tempo_hero_call')}
+                    className="inline-flex items-center gap-1 px-1 text-xs font-semibold text-white"
+                  >
+                    <Phone className="h-3.5 w-3.5" aria-hidden />
+                    9966363662
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative min-h-[180px] overflow-hidden lg:min-h-[260px]">
+                <div
+                  className="flex h-full transition-transform duration-500 ease-in-out"
+                  style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+                >
+                  {slides.map((img, idx) => (
+                    <div key={img.src} className="flex w-full min-w-full shrink-0 items-center justify-center">
+                      <img
+                        src={img.src}
+                        alt={img.alt}
+                        className="h-44 w-full object-contain p-3 sm:h-52 lg:h-64"
+                        loading={idx === 0 ? 'eager' : 'lazy'}
+                        decoding="async"
+                      />
                     </div>
-                  </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Previous vehicle photo"
+                  onClick={previousSlide}
+                  className="absolute left-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700"
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next vehicle photo"
+                  onClick={nextSlide}
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700"
+                >
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </button>
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                  {slides.map((img, idx) => (
+                    <button
+                      key={img.src}
+                      type="button"
+                      aria-label={`View photo ${idx + 1}`}
+                      onClick={() => setCurrentSlide(idx)}
+                      className={`h-1.5 rounded-full ${
+                        currentSlide === idx ? 'w-5 bg-white' : 'w-1.5 bg-white/50'
+                      }`}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Features Section - Modern Design */}
-          <div className="text-center mb-16">
-            <h2 className="text-2xl md:text-3xl font-bold mb-6 text-gray-900">
-              Master Every Journey, Instantly
-            </h2>
-            <p className="text-xl text-gray-600 mb-12 max-w-3xl mx-auto">
-              Experience the best tempo traveller service with our comprehensive features designed for your comfort and convenience.
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {/* Feature 1 */}
-              <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                  <Users className="h-8 w-8 text-blue-600" />
+          <section className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {heroFeatures.slice(0, 4).map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <div key={feature.title} className={`rounded-xl px-3 py-3 ${GLASS}`}>
+                  <Icon className="h-4 w-4 text-[var(--brand-primary)]" aria-hidden />
+                  <h2 className="mt-1.5 text-xs font-semibold text-slate-900 sm:text-sm">{feature.title}</h2>
+                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500 sm:text-xs">{feature.description}</p>
                 </div>
-                <h3 className="text-xl font-bold mb-4 text-gray-900">Group Travel Expert</h3>
-                <p className="text-gray-600">Perfect for family trips, corporate outings, and group tours with spacious seating and comfort.</p>
-              </div>
+              );
+            })}
+          </section>
 
-              {/* Feature 2 */}
-              <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                  <Shield className="h-8 w-8 text-green-600" />
-                </div>
-                <h3 className="text-xl font-bold mb-4 text-gray-900">Safe & Reliable</h3>
-                <p className="text-gray-600">Professional drivers with clean records and well-maintained vehicles for your safety.</p>
+          <section className="mb-5">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Fares</h2>
+                <p className="mt-0.5 text-xs text-slate-500">Toll and parking are extra. Confirm before you travel.</p>
               </div>
-
-              {/* Feature 3 */}
-              <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                  <Clock className="h-8 w-8 text-purple-600" />
-                </div>
-                <h3 className="text-xl font-bold mb-4 text-gray-900">24/7 Service</h3>
-                <p className="text-gray-600">Round-the-clock availability for airport transfers, late-night pickups, and emergency travel.</p>
-              </div>
-
-              {/* Feature 4 */}
-              <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                  <MapPin className="h-8 w-8 text-orange-600" />
-                </div>
-                <h3 className="text-xl font-bold mb-4 text-gray-900">Route Expertise</h3>
-                <p className="text-gray-600">Local drivers who know the best routes, traffic patterns, and scenic spots for your journey.</p>
-              </div>
-
-              {/* Feature 5 */}
-              <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <div className="w-16 h-16 bg-pink-100 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                  <Wifi className="h-8 w-8 text-pink-600" />
-                </div>
-                <h3 className="text-xl font-bold mb-4 text-gray-900">Modern Amenities</h3>
-                <p className="text-gray-600">AC comfort, charging ports, and modern facilities for a comfortable travel experience.</p>
-              </div>
-
-              {/* Feature 6 */}
-              <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                  <Star className="h-8 w-8 text-indigo-600" />
-                </div>
-                <h3 className="text-xl font-bold mb-4 text-gray-900">Premium Service</h3>
-                <p className="text-gray-600">Exceptional customer service with personalized attention to make your journey memorable.</p>
-              </div>
+              {error ? (
+                <p className="text-xs font-medium text-amber-700">Standard rates. Call for a live quote.</p>
+              ) : null}
             </div>
-          </div>
 
-          {/* Tour Packages Section */}
-          <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              Explore Top Tour Packages from Visakhapatnam
-            </h2>
-            <p className="text-lg text-gray-600 mb-8">
-              Discover amazing destinations with our curated tour packages
-            </p>
-          </div>
+            <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/60 bg-white/35 p-1 backdrop-blur-md lg:hidden" role="tablist" aria-label="Fare type">
+              {fareTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={fareTab === tab.id}
+                  onClick={() => setFareTab(tab.id)}
+                  className={`rounded-lg px-2 py-2 text-sm font-semibold ${
+                    fareTab === tab.id
+                      ? 'bg-white/80 text-[#0B1F3A] shadow-sm backdrop-blur'
+                      : 'text-slate-600'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-          {/* Tour Packages Grid - MakeMyTrip Card Style */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
             {loading ? (
-              <div className="col-span-full flex justify-center items-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                <span className="ml-2 text-gray-600">Loading tours...</span>
-              </div>
-            ) : error ? (
-              <div className="col-span-full text-center py-12">
-                <p className="text-red-600 mb-4">Failed to load tour data</p>
-                <Button onClick={() => window.location.reload()} variant="outline">
-                  Try Again
-                </Button>
-              </div>
-            ) : tours.length === 0 ? (
-              <div className="col-span-full text-center py-12">
-                <p className="text-gray-600">No tours available at the moment</p>
+              <div className="mt-3 flex items-center justify-center rounded-2xl border border-white/70 bg-white/50 shadow-[0_10px_32px_-18px_rgba(37,99,235,0.4)] backdrop-blur-xl py-10">
+                <Loader2 className="h-5 w-5 animate-spin text-[var(--brand-primary)]" />
+                <span className="ml-2 text-sm text-slate-600">Loading fares...</span>
               </div>
             ) : (
-              tours.map((tour) => (
-                <div key={tour.id} className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group">
-                  <div className="relative">
-                    <img 
-                      src={tour.image || `/tours/${tour.id}.jpg`} 
-                      alt={tour.name}
-                      className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop';
-                      }}
-                    />
-                    <Badge className="absolute top-3 left-3 bg-red-500 text-white">
-                      {getTourType(tour.name)}
-                    </Badge>
-                  </div>
-                  <div className="p-6">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{tour.name}</h3>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm text-gray-500">Tempo Traveller Starting @</span>
-                      <span className="text-2xl font-bold text-blue-600">{getTempoTravellerPrice(tour)}*</span>
-                    </div>
-                    <div className="flex items-center justify-between mb-4 text-sm text-gray-500">
-                      <span>{tour.distance} km</span>
-                      <span>{tour.days} {tour.days === 1 ? 'Day' : 'Days'}</span>
-                    </div>
-                    <button 
-                      className="w-full bg-white border border-gray-300 rounded-full px-4 py-2 text-gray-800 font-medium hover:bg-gray-50 transition-colors shadow-sm text-sm"
-                      onClick={() => window.open('https://vizagtaxihub.com/vehicle/tempo-traveller', '_blank')}
-                    >
-                      Book Now
-                    </button>
-                  </div>
-                </div>
-              ))
+              <div className="mt-3 lg:hidden">
+                {fareTab === 'local' ? (
+                  <LocalHireCard local8={local8} local10={local10} extraKm={extraKm} extraHour={extraHour} />
+                ) : null}
+                {fareTab === 'outstation' ? (
+                  <FarePackage
+                    name="Outstation"
+                    price={`₹${perKm}/km`}
+                    detail="Minimum 300 km per day"
+                    extras={
+                      [
+                        driverAllowance ? `Driver allowance ${driverAllowance}/day` : 'Driver allowance as per trip',
+                        nightHalt ? `Night halt ${nightHalt}` : 'Night halt if the coach stays overnight',
+                      ].join(' · ')
+                    }
+                  />
+                ) : null}
+                {fareTab === 'airport' ? (
+                  <FarePackage
+                    name={airportFare.label}
+                    price={airportFare.price}
+                    detail="Visakhapatnam city to the airport"
+                    extras="One way · driver included · toll extra"
+                  />
+                ) : null}
+                {fareTab !== 'local' && fareTab !== 'outstation' && fareTab !== 'airport' ? (
+                  <UnreachableFareTab tab={fareTab} />
+                ) : null}
+              </div>
             )}
-          </div>
 
-          {/* Real Customer Stories Section */}
-          <div className="bg-gray-50 rounded-xl p-8 mb-12">
-            <div className="text-center mb-8">
-              <Button className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-full mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-white rounded-full"></div>
-                  VIDEO TESTIMONIALS
+            {!loading ? (
+              <div className="mt-3 hidden gap-3 lg:grid lg:grid-cols-3">
+                <FarePackage
+                  name="Outstation"
+                  price={`₹${perKm}/km`}
+                  detail="Minimum 300 km a day"
+                  extras={driverAllowance ? `Driver allowance ${driverAllowance}` : 'Driver allowance extra'}
+                />
+                <LocalHireCard local8={local8} local10={local10} extraKm={extraKm} extraHour={extraHour} />
+                <div className="rounded-xl border border-white/70 bg-white/50 shadow-[0_10px_32px_-18px_rgba(37,99,235,0.4)] backdrop-blur-xl p-4">
+                  <p className="text-xs font-semibold text-slate-500">Airport</p>
+                  <p className="mt-2 text-lg font-bold text-[#0B1F3A]">{airportFare.price}</p>
+                  <p className="mt-1 text-sm text-slate-700">City to airport, one way</p>
+                  <p className="mt-3 text-xs text-slate-500">Driver included · toll extra</p>
                 </div>
+              </div>
+            ) : null}
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button
+                asChild
+                className="h-9 w-full rounded-full bg-[var(--brand-primary)] px-2 text-xs text-white hover:bg-[var(--brand-primary-dark)] sm:text-sm"
+              >
+                <Link to={bookPath} className="whitespace-nowrap">
+                  {isUrbania ? 'Book this Urbania' : 'Book this tempo'}
+                </Link>
               </Button>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Real Customer Stories</h3>
-              <p className="text-lg text-gray-600">Watch what our customers say about their experience with Vizag Taxi Hub</p>
+              <Button
+                variant="outline"
+                className="h-9 w-full whitespace-nowrap rounded-full border-white/80 bg-white/50 px-2 text-xs backdrop-blur-md sm:text-sm"
+                onClick={() => callNow('tempo_rates_call')}
+              >
+                <Phone className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Call for this route
+              </Button>
             </div>
+          </section>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              {/* Testimonial 1 - Real YouTube Video */}
-              <div className="bg-white rounded-xl overflow-hidden shadow-lg">
-                <div className="relative group">
-                  <img 
-                    src="https://img.youtube.com/vi/wrgfamvCkns/maxresdefault.jpg" 
-                    alt="Customer Video Testimonial"
-                    className="w-full aspect-video object-cover"
-                  />
-                  <a 
-                    href="https://www.youtube.com/shorts/wrgfamvCkns" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                  >
-                    <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
-                      <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z"/>
-                      </svg>
-                    </div>
-                  </a>
-                  <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-                    @vizagtaxihub
-                  </div>
-                </div>
-                <div className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{videoTitles['wrgfamvCkns'] || 'Customer Video Testimonial'}</h4>
-                      <p className="text-sm text-gray-600">YouTube Shorts</p>
-                    </div>
-                    <a 
-                      href="https://www.youtube.com/shorts/wrgfamvCkns" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-colors"
-                    >
-                      <div className="w-0 h-0 border-l-3 border-l-white border-t-2 border-t-transparent border-b-2 border-b-transparent ml-1"></div>
-                    </a>
-                  </div>
-                </div>
+          <section className="mb-8 overflow-hidden rounded-2xl border border-white/70 bg-white/50 shadow-[0_10px_32px_-18px_rgba(37,99,235,0.4)] backdrop-blur-xl">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x md:divide-slate-100">
+              <div className="p-4 sm:p-5">
+                <h2 className="text-sm font-bold text-slate-900">Included</h2>
+                <ul className="mt-3 space-y-2">
+                  {includedItems.map((item) => (
+                    <li key={item} className="flex items-start gap-2 text-sm text-slate-700">
+                      <CheckCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
               </div>
-
-              {/* Testimonial 2 - Real YouTube Video */}
-              <div className="bg-white rounded-xl overflow-hidden shadow-lg">
-                <div className="relative group">
-                  <img 
-                    src="https://img.youtube.com/vi/ROa7qu67ECA/maxresdefault.jpg" 
-                    alt="Customer Video Testimonial"
-                    className="w-full aspect-video object-cover"
-                  />
-                  <a 
-                    href="https://www.youtube.com/shorts/ROa7qu67ECA" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                  >
-                    <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
-                      <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z"/>
-                      </svg>
-                    </div>
-                  </a>
-                  <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-                    @vizagtaxihub
-                  </div>
-                </div>
-                <div className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{videoTitles['ROa7qu67ECA'] || 'Customer Video Testimonial'}</h4>
-                      <p className="text-sm text-gray-600">YouTube Shorts</p>
-                    </div>
-                    <a 
-                      href="https://www.youtube.com/shorts/ROa7qu67ECA" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-colors"
-                    >
-                      <div className="w-0 h-0 border-l-3 border-l-white border-t-2 border-t-transparent border-b-2 border-b-transparent ml-1"></div>
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              {/* Testimonial 3 - Real YouTube Video */}
-              <div className="bg-white rounded-xl overflow-hidden shadow-lg">
-                <div className="relative group">
-                  <img 
-                    src="https://img.youtube.com/vi/QUUuoF04zfk/maxresdefault.jpg" 
-                    alt="Customer Video Testimonial"
-                    className="w-full aspect-video object-cover"
-                  />
-                  <a 
-                    href="https://www.youtube.com/shorts/QUUuoF04zfk" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                  >
-                    <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
-                      <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z"/>
-                      </svg>
-                    </div>
-                  </a>
-                  <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-                    @Vizag Taxi Hub
-                  </div>
-                </div>
-                <div className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{videoTitles['QUUuoF04zfk'] || 'Customer Video Testimonial'}</h4>
-                      <p className="text-sm text-gray-600">YouTube Shorts</p>
-                    </div>
-                    <a 
-                      href="https://www.youtube.com/shorts/QUUuoF04zfk" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-colors"
-                    >
-                      <div className="w-0 h-0 border-l-3 border-l-white border-t-2 border-t-transparent border-b-2 border-b-transparent ml-1"></div>
-                    </a>
-                  </div>
-                </div>
+              <div className="border-t border-slate-100 p-4 sm:p-5 md:border-t-0">
+                <h2 className="text-sm font-bold text-slate-900">Charged extra</h2>
+                <ul className="mt-3 space-y-2">
+                  {EXCLUDED.map((item) => (
+                    <li key={item} className="flex items-start gap-2 text-sm text-slate-700">
+                      <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
+            <ol className="grid grid-cols-1 gap-3 border-t border-slate-100 px-4 py-4 sm:grid-cols-3 sm:px-5">
+              {[
+                { step: '1', title: 'Share the trip', text: 'Date, pickup, and group size.' },
+                { step: '2', title: 'Get the fare', text: 'We confirm the price before you pay.' },
+                { step: '3', title: 'Travel', text: isUrbania ? 'The driver arrives with the AC Urbania.' : 'The driver arrives with the AC tempo.' },
+              ].map((item) => (
+                <li key={item.step} className="flex gap-2.5">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-[var(--brand-primary)]">
+                    {item.step}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-900">{item.title}</span>
+                    <span className="block text-xs text-slate-500">{item.text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
 
-            <div className="text-center">
-              <Button 
-                size="lg" 
-                className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 text-base font-semibold"
+          <section className="mb-8">
+            <div className="mb-3">
+              <h2 className="text-base font-bold text-slate-900">{isUrbania ? 'Tours by Urbania' : 'Tours by tempo'}</h2>
+              <p className="text-xs text-slate-500">
+                {isUrbania
+                  ? 'Sightseeing from Visakhapatnam. Price is the Urbania fare.'
+                  : 'Sightseeing from Visakhapatnam. Price is the tempo fare.'}
+              </p>
+            </div>
+            <div className="md:hidden">
+              {loading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="h-7 w-7 animate-spin text-[var(--brand-primary)]" />
+                  <span className="ml-2 text-sm text-slate-600">Loading tours...</span>
+                </div>
+              ) : error ? (
+                <div className="py-8 text-center">
+                  <p className="mb-3 text-sm text-red-600">Tour prices could not be loaded.</p>
+                  <Button onClick={() => window.location.reload()} variant="outline" size="sm">
+                    Try again
+                  </Button>
+                </div>
+              ) : tours.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-600">
+                  No tours available at the moment. Call us for a custom route.
+                </p>
+              ) : (
+                <Swiper spaceBetween={12} slidesPerView={1.12}>
+                  {tours.map((tour) => (
+                    <SwiperSlide key={tour.id}>
+                      <TempoTourCard
+                        tour={tour}
+                        typeLabel={getTourType(tour.name)}
+                        price={getTempoTravellerPrice(tour)}
+                      />
+                    </SwiperSlide>
+                  ))}
+                </Swiper>
+              )}
+            </div>
+            <div className="hidden gap-3 md:grid md:grid-cols-2 lg:grid-cols-3">
+              {loading ? (
+                <div className="col-span-full flex items-center justify-center py-10">
+                  <Loader2 className="h-7 w-7 animate-spin text-[var(--brand-primary)]" />
+                  <span className="ml-2 text-sm text-slate-600">Loading tours...</span>
+                </div>
+              ) : error ? (
+                <div className="col-span-full py-8 text-center">
+                  <p className="mb-3 text-sm text-red-600">Tour prices could not be loaded.</p>
+                  <Button onClick={() => window.location.reload()} variant="outline" size="sm">
+                    Try again
+                  </Button>
+                </div>
+              ) : tours.length === 0 ? (
+                <div className="col-span-full py-8 text-center text-sm text-slate-600">
+                  No tours available at the moment. Call us for a custom route.
+                </div>
+              ) : (
+                tours.map((tour) => (
+                  <TempoTourCard
+                    key={tour.id}
+                    tour={tour}
+                    typeLabel={getTourType(tour.name)}
+                    price={getTempoTravellerPrice(tour)}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="mb-10">
+            <div className="mb-5 text-center">
+              <h2 className="text-lg font-bold text-[#0B1F3A]">Traveller videos</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Short reviews from groups who travelled with Vizag Taxi Hub.
+              </p>
+            </div>
+            <div className="md:hidden">
+              <Swiper
+                spaceBetween={12}
+                slidesPerView={1.15}
+                onSlideChange={() => {
+                  setPlayingVideoId(null);
+                  setVideoPlayer(null);
+                }}
+              >
+                {testimonialVideos.map((video) => (
+                  <SwiperSlide key={video.id}>
+                    <VideoStoryCard
+                      videoId={video.id}
+                      title={videoTitles[video.id] || 'Customer video'}
+                      playing={videoPlayer === 'mobile' && playingVideoId === video.id}
+                      onPlay={() => {
+                        setVideoPlayer('mobile');
+                        setPlayingVideoId(video.id);
+                      }}
+                      tall
+                    />
+                  </SwiperSlide>
+                ))}
+              </Swiper>
+            </div>
+            <div className="mx-auto hidden max-w-3xl items-end justify-center gap-4 md:flex">
+              {testimonialVideos.map((video, index) => (
+                <div key={video.id} className={index === 1 ? 'w-[34%]' : 'w-[28%]'}>
+                  <VideoStoryCard
+                    videoId={video.id}
+                    title={videoTitles[video.id] || 'Customer video'}
+                    playing={videoPlayer === 'desktop' && playingVideoId === video.id}
+                    onPlay={() => {
+                      setVideoPlayer('desktop');
+                      setPlayingVideoId(video.id);
+                    }}
+                    tall={index === 1}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                className="text-xs font-semibold text-[var(--brand-primary)]"
                 onClick={() => window.open('https://www.youtube.com/@vizagtaxihub', '_blank')}
               >
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                    <div className="w-0 h-0 border-l-2 border-l-red-600 border-t-1 border-t-transparent border-b-1 border-b-transparent"></div>
-                  </div>
-                  Watch More on YouTube
-                  <div className="w-4 h-4">
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                      <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
-                    </svg>
-                  </div>
-                </div>
-              </Button>
+                More on YouTube
+              </button>
             </div>
-          </div>
+          </section>
 
+          <section className="mb-10 rounded-2xl border border-white/70 bg-white/50 shadow-[0_10px_32px_-18px_rgba(37,99,235,0.4)] backdrop-blur-xl px-5 py-2 shadow-sm sm:px-6">
+            <h2 className="py-4 text-base font-bold text-slate-900 sm:text-lg">Questions before you book</h2>
+            <Accordion type="single" collapsible>
+              {faqs.map((faq) => (
+                <AccordionItem key={faq.q} value={faq.q}>
+                  <AccordionTrigger className="text-left text-sm font-semibold text-slate-900 hover:no-underline">
+                    {faq.q}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-sm leading-relaxed text-slate-600">
+                    {faq.a}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </section>
 
-          {/* Dynamic Rate Card Section */}
-          <div className="bg-white rounded-xl p-8 shadow-lg mb-12">
-            <h3 className="text-xl font-bold text-gray-900 mb-6 text-center">Tempo Traveller Rate Card</h3>
-            {loading ? (
-              <div className="flex justify-center items-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                <span className="ml-2 text-gray-600">Loading rate card...</span>
-              </div>
-            ) : error ? (
-              <div className="text-center py-12">
-                <p className="text-red-600 mb-4">Failed to load rate card</p>
-                <Button onClick={() => window.location.reload()} variant="outline">
-                  Try Again
-                </Button>
-              </div>
-            ) : !getTempoTravellerPricing() ? (
-              <div className="text-center py-12">
-                <p className="text-orange-600 mb-4">Pricing data not available</p>
-                <p className="text-sm text-gray-500 mb-4">Available vehicles: {vehiclePricing.length}</p>
-                <Button onClick={() => window.location.reload()} variant="outline">
-                  Try Again
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[600px]">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="text-left py-4 px-4 font-semibold text-gray-900">Trip Type</th>
-                        <th className="text-right py-4 px-4 font-semibold text-gray-900">Base Fare</th>
-                        <th className="text-right py-4 px-4 font-semibold text-gray-900">Distance</th>
-                        <th className="text-right py-4 px-4 font-semibold text-gray-900">Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {getTempoTravellerPricing() && (
-                        <>
-                          <tr className="hover:bg-gray-50">
-                            <td className="py-4 px-4 text-gray-900">City Tour (4hr/40km)</td>
-                            <td className="py-4 px-4 text-right font-semibold text-blue-600">
-                              ₹{getTempoTravellerPricing()?.price4hrs40km?.toLocaleString() || '6,500'}
-                            </td>
-                            <td className="py-4 px-4 text-right text-gray-600">
-                              Extra @ ₹{getTempoTravellerPricing()?.priceExtraKm || '35'}/km
-                            </td>
-                            <td className="py-4 px-4 text-right text-gray-600">
-                              Extra @ ₹{getTempoTravellerPricing()?.priceExtraHour || '750'}/hr
-                            </td>
-                          </tr>
-                          <tr className="hover:bg-gray-50">
-                            <td className="py-4 px-4 text-gray-900">City Tour (8hr/80km)</td>
-                            <td className="py-4 px-4 text-right font-semibold text-blue-600">
-                              ₹{getTempoTravellerPricing()?.price8hrs80km?.toLocaleString() || '7,500'}
-                            </td>
-                            <td className="py-4 px-4 text-right text-gray-600">
-                              Extra @ ₹{getTempoTravellerPricing()?.priceExtraKm || '35'}/km
-                            </td>
-                            <td className="py-4 px-4 text-right text-gray-600">
-                              Extra @ ₹{getTempoTravellerPricing()?.priceExtraHour || '750'}/hr
-                            </td>
-                          </tr>
-                          <tr className="hover:bg-gray-50">
-                            <td className="py-4 px-4 text-gray-900">Outstation</td>
-                            <td className="py-4 px-4 text-right font-semibold text-blue-600">
-                              ₹{getTempoTravellerPricing()?.pricePerKm || '35'}/km
-                            </td>
-                            <td className="py-4 px-4 text-right text-gray-600">Min 300 km</td>
-                            <td className="py-4 px-4 text-right text-gray-600">13 hours</td>
-                          </tr>
-                          <tr className="hover:bg-gray-50">
-                            <td className="py-4 px-4 text-gray-900">Airport Transfer</td>
-                            <td className="py-4 px-4 text-right font-semibold text-blue-600">
-                              ₹{getTempoTravellerPricing()?.airportBasePrice?.toLocaleString() || '3,000'}
-                            </td>
-                            <td className="py-4 px-4 text-right text-gray-600">
-                              {(() => {
-                                const tp = getTempoTravellerPricing();
-                                const n =
-                                  (tp?.airportBasePrice && tp.airportBasePrice > 0
-                                    ? tp.airportBasePrice
-                                    : null) ??
-                                  (tp?.airportPickupPrice && tp.airportPickupPrice > 0
-                                    ? tp.airportPickupPrice
-                                    : null) ??
-                                  (tp?.airportTier1Price && tp.airportTier1Price > 0
-                                    ? tp.airportTier1Price
-                                    : null) ??
-                                  3000;
-                                return getAirportTierDistanceLabelForDisplayPrice(tp, n);
-                              })()}
-                            </td>
-                            <td className="py-4 px-4 text-right text-gray-600">N/A</td>
-                          </tr>
-                        </>
-                      )}
-                      {/* Tour packages from API */}
-                      {tours.map((tour) => (
-                        <tr key={tour.id} className="hover:bg-gray-50">
-                          <td className="py-4 px-4 text-gray-900">{tour.name}</td>
-                          <td className="py-4 px-4 text-right font-semibold text-blue-600">{getTempoTravellerPrice(tour)}</td>
-                          <td className="py-4 px-4 text-right text-gray-600">{tour.distance} km</td>
-                          <td className="py-4 px-4 text-right text-gray-600">{tour.days} {tour.days === 1 ? 'Day' : 'Days'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="mt-6 text-center">
-                  <p className="text-sm text-gray-600 mb-4">*Rates are subject to change. Contact us for current pricing.</p>
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <Button 
-                      size="lg" 
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3"
-                      onClick={() => window.open('tel:+919966363662', '_self')}
-                    >
-                      <Phone className="mr-2 h-5 w-5" />
-                      Call +91 9966363662
-                    </Button>
-                    <Button 
-                      size="lg" 
-                      variant="outline" 
-                      className="border-blue-600 text-blue-600 hover:bg-blue-50 px-8 py-3"
-                      onClick={() => window.open('https://vizagtaxihub.com/vehicle/tempo-traveller', '_blank')}
-                    >
-                      <Car className="mr-2 h-5 w-5" />
-                      Book Now
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Custom Add-Ons Section */}
-          <div className="bg-white rounded-xl p-8 shadow-lg mb-12">
-            <h3 className="text-xl font-bold text-gray-900 mb-6 text-center">Custom Add-Ons</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="text-center">
-                <div className="bg-blue-100 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                  <Car className="h-8 w-8 text-blue-600" />
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">New Vehicle Guarantee</h4>
-                <p className="text-gray-600 text-sm">Travel in up-to-date tempo traveller models that fit your needs</p>
-              </div>
-              <div className="text-center">
-                <div className="bg-green-100 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                  <Bus className="h-8 w-8 text-green-600" />
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Extra Luggage Space</h4>
-                <p className="text-gray-600 text-sm">Get extra space for your luggage and belongings</p>
-              </div>
-              <div className="text-center">
-                <div className="bg-purple-100 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                  <Users className="h-8 w-8 text-purple-600" />
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Driver Language Preference</h4>
-                <p className="text-gray-600 text-sm">Ride with a driver who speaks your preferred language</p>
-              </div>
-              <div className="text-center">
-                <div className="bg-orange-100 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                  <MapPin className="h-8 w-8 text-orange-600" />
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Personalised Round Trips</h4>
-                <p className="text-gray-600 text-sm">Enjoy hassle-free and convenient trips with multicity stops</p>
-              </div>
+          <section className="mb-8">
+            <h2 className="mb-4 text-base font-bold text-slate-900 sm:text-lg">
+              {isUrbania ? 'Other group transport' : 'Other tempo services'}
+            </h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {relatedLinks.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className="flex items-start gap-3 rounded-xl border border-white/70 bg-white/50 shadow-[0_10px_32px_-18px_rgba(37,99,235,0.4)] backdrop-blur-xl p-4 hover:border-blue-300"
+                  >
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${item.bg}`}>
+                      <Icon className="h-5 w-5" aria-hidden />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-slate-900">{item.title}</span>
+                      <span className="mt-0.5 block text-xs text-slate-600">{item.desc}</span>
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
-          </div>
+          </section>
 
-          {/* Related Services */}
-          <div className="bg-white rounded-xl shadow-lg p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">Explore Our Tempo Traveller Services</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Link to="/tempo-traveller-rental-vizag" className="block p-6 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors group">
-                <div className="bg-blue-100 p-3 rounded-full w-12 h-12 mb-4 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                  <Car className="h-6 w-6 text-blue-600" />
+          <section className="grid grid-cols-2 gap-2 rounded-2xl border border-white/70 bg-white/50 shadow-[0_10px_32px_-18px_rgba(37,99,235,0.4)] backdrop-blur-xl px-3 py-3 sm:grid-cols-4">
+            {[
+              { icon: Shield, label: 'Verified drivers', detail: 'Highway chauffeurs' },
+              { icon: Tv, label: 'TV & sound', detail: 'In every coach' },
+              { icon: Clock, label: '8 hr & 10 hr', detail: 'Local packages' },
+              { icon: Phone, label: '24/7 support', detail: '9966363662' },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="flex items-center gap-2 px-1">
+                  <Icon className="h-4 w-4 shrink-0 text-[var(--brand-primary)]" aria-hidden />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-semibold text-slate-900">{item.label}</span>
+                    <span className="block text-[11px] text-slate-500">{item.detail}</span>
+                  </span>
                 </div>
-                <h4 className="font-semibold text-blue-900 mb-2">Tempo Traveller Rental</h4>
-                <p className="text-sm text-blue-700">Best tempo traveller rental service in Vizag</p>
-              </Link>
-              <Link to="/17-seater-tempo-traveller-vizag" className="block p-6 bg-green-50 rounded-xl hover:bg-green-100 transition-colors group">
-                <div className="bg-green-100 p-3 rounded-full w-12 h-12 mb-4 flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                  <Users className="h-6 w-6 text-green-600" />
-                </div>
-                <h4 className="font-semibold text-green-900 mb-2">17 Seater Tempo Traveller</h4>
-                <p className="text-sm text-green-700">Perfect for large group travel</p>
-              </Link>
-              <Link to="/12-seater-tempo-traveller-vizag" className="block p-6 bg-purple-50 rounded-xl hover:bg-purple-100 transition-colors group">
-                <div className="bg-purple-100 p-3 rounded-full w-12 h-12 mb-4 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                  <Users className="h-6 w-6 text-purple-600" />
-                </div>
-                <h4 className="font-semibold text-purple-900 mb-2">12 Seater Tempo Traveller</h4>
-                <p className="text-sm text-purple-700">Ideal for medium group travel</p>
-              </Link>
-              <Link to="/group-travel-tempo-traveller-vizag" className="block p-6 bg-orange-50 rounded-xl hover:bg-orange-100 transition-colors group">
-                <div className="bg-orange-100 p-3 rounded-full w-12 h-12 mb-4 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-                  <Users className="h-6 w-6 text-orange-600" />
-                </div>
-                <h4 className="font-semibold text-orange-900 mb-2">Group Travel</h4>
-                <p className="text-sm text-orange-700">Specialized group travel solutions</p>
-              </Link>
-              <Link to="/corporate-tempo-traveller-vizag" className="block p-6 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition-colors group">
-                <div className="bg-indigo-100 p-3 rounded-full w-12 h-12 mb-4 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-                  <Building className="h-6 w-6 text-indigo-600" />
-                </div>
-                <h4 className="font-semibold text-indigo-900 mb-2">Corporate Transport</h4>
-                <p className="text-sm text-indigo-700">Business travel and corporate events</p>
-              </Link>
-              <Link to="/wedding-tempo-traveller-vizag" className="block p-6 bg-pink-50 rounded-xl hover:bg-pink-100 transition-colors group">
-                <div className="bg-pink-100 p-3 rounded-full w-12 h-12 mb-4 flex items-center justify-center group-hover:bg-pink-200 transition-colors">
-                  <Heart className="h-6 w-6 text-pink-600" />
-                </div>
-                <h4 className="font-semibold text-pink-900 mb-2">Wedding Transport</h4>
-                <p className="text-sm text-pink-700">Wedding party transportation</p>
-              </Link>
-              <Link to="/pilgrimage-tempo-traveller-vizag" className="block p-6 bg-yellow-50 rounded-xl hover:bg-yellow-100 transition-colors group">
-                <div className="bg-yellow-100 p-3 rounded-full w-12 h-12 mb-4 flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
-                  <MapPin className="h-6 w-6 text-yellow-600" />
-                </div>
-                <h4 className="font-semibold text-yellow-900 mb-2">Pilgrimage Tours</h4>
-                <p className="text-sm text-yellow-700">Religious and pilgrimage tours</p>
-              </Link>
-              <Link to="/mini-bus-travels-vizag" className="block p-6 bg-teal-50 rounded-xl hover:bg-teal-100 transition-colors group">
-                <div className="bg-teal-100 p-3 rounded-full w-12 h-12 mb-4 flex items-center justify-center group-hover:bg-teal-200 transition-colors">
-                  <Bus className="h-6 w-6 text-teal-600" />
-                </div>
-                <h4 className="font-semibold text-teal-900 mb-2">Mini Bus Travels</h4>
-                <p className="text-sm text-teal-700">Mini bus rental services</p>
-              </Link>
-            </div>
-          </div>
+              );
+            })}
+          </section>
+        </main>
 
-          {/* Quick Links Section */}
-          <div className="bg-blue-50 rounded-xl p-6 mt-8">
-            <h3 className="text-lg font-semibold text-blue-900 mb-4">Quick Links</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-              <Link to="/tempo-traveller-rental-vizag" className="text-blue-700 hover:text-blue-900">Tempo Rental</Link>
-              <Link to="/17-seater-tempo-traveller-vizag" className="text-blue-700 hover:text-blue-900">17 Seater</Link>
-              <Link to="/12-seater-tempo-traveller-vizag" className="text-blue-700 hover:text-blue-900">12 Seater</Link>
-              <Link to="/group-travel-tempo-traveller-vizag" className="text-blue-700 hover:text-blue-900">Group Travel</Link>
-              <Link to="/corporate-tempo-traveller-vizag" className="text-blue-700 hover:text-blue-900">Corporate</Link>
-              <Link to="/wedding-tempo-traveller-vizag" className="text-blue-700 hover:text-blue-900">Wedding</Link>
-              <Link to="/pilgrimage-tempo-traveller-vizag" className="text-blue-700 hover:text-blue-900">Pilgrimage</Link>
-              <Link to="/mini-bus-travels-vizag" className="text-blue-700 hover:text-blue-900">Mini Bus</Link>
-              <Link to="/araku-tour-packages-vizag" className="text-blue-700 hover:text-blue-900">Araku Tours</Link>
-              <Link to="/vizag-to-araku-bus" className="text-blue-700 hover:text-blue-900">Vizag Araku Bus</Link>
-            </div>
-          </div>
-
-          {/* Call to Action */}
-          <div className="text-center mt-12">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Ready to Book Your {title}?</h3>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button 
-                size="lg" 
-                className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-base font-semibold rounded-full shadow-lg"
-                onClick={() => window.open('https://wa.me/919966363662?text=Hi! I want to book ' + title, '_blank')}
-              >
-                📞 CALL NOW - 9966363662
-              </Button>
-              <Button 
-                size="lg" 
-                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-base font-semibold rounded-full shadow-lg"
-                onClick={() => window.open('https://vizagtaxihub.com/vehicle/tempo-traveller', '_blank')}
-              >
-                🚐 BOOK ONLINE
-              </Button>
-            </div>
-            <p className="text-sm text-gray-600 mt-4">✅ Instant Confirmation • ✅ Best Rates • ✅ 24/7 Support</p>
-          </div>
-        </div>
-        
         <Footer />
         <MobileNavigation />
+        </div>
       </div>
     </>
   );
 };
+
+function TempoTourCard({
+  tour,
+  typeLabel,
+  price,
+}: {
+  tour: TourInfo;
+  typeLabel: string;
+  price: string;
+}) {
+  return (
+    <Link
+      to={getTourUrl(tour)}
+      className="group relative block h-72 overflow-hidden rounded-2xl shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+    >
+      <img
+        src={tour.image || `/tours/${tour.id}.jpg`}
+        alt={tour.name}
+        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        loading="lazy"
+        decoding="async"
+        onError={(e) => {
+          const target = e.target as HTMLImageElement;
+          target.src = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop';
+        }}
+      />
+      <span className="absolute inset-x-0 bottom-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.72)_46%,transparent)] px-3 pb-3 pt-16 text-white">
+        <span className="flex items-center gap-1 text-[11px] text-white/80">
+          <MapPin className="h-3 w-3" aria-hidden />
+          {typeLabel}
+        </span>
+        <span className="mt-1 flex items-end justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold leading-snug">{tour.name}</span>
+            <span className="mt-0.5 block text-[11px] text-white/75">
+              {tour.days} {tour.days === 1 ? 'day' : 'days'} · {tour.distance} km
+            </span>
+          </span>
+          <span className="shrink-0 text-lg font-bold">{price}</span>
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+function VideoStoryCard({
+  videoId,
+  title,
+  playing,
+  onPlay,
+  tall,
+}: {
+  videoId: string;
+  title: string;
+  playing: boolean;
+  onPlay: () => void;
+  tall: boolean;
+}) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-[1.4rem] shadow-[0_16px_40px_-24px_rgba(15,23,42,0.55)] ${
+        tall ? 'h-80 md:h-[26rem]' : 'h-72 md:h-[22rem]'
+      }`}
+    >
+      {playing ? (
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&playsinline=1`}
+          title={title}
+          className="absolute inset-0 h-full w-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      ) : (
+        <button type="button" className="absolute inset-0 text-left" onClick={onPlay} aria-label={`Play ${title}`}>
+          <img
+            src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+            alt={title}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+          <span className="absolute left-1/2 top-2.5 h-1.5 w-8 -translate-x-1/2 rounded-full bg-black/35" />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/15">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-900 shadow-md">
+              <Play className="ml-0.5 h-4 w-4 fill-current" aria-hidden />
+            </span>
+          </span>
+          <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-3 pt-10 text-white">
+            <span className="block text-xs font-semibold leading-snug sm:text-sm">{title}</span>
+            <span className="mt-2 inline-flex rounded-full border border-white/50 px-2 py-0.5 text-[10px] font-semibold tracking-wide">
+              Play
+            </span>
+          </span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function LocalHireCard({
+  local8,
+  local10,
+  extraKm,
+  extraHour,
+}: {
+  local8: string;
+  local10: string;
+  extraKm: string;
+  extraHour: string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/70 bg-white/50 shadow-[0_10px_32px_-18px_rgba(37,99,235,0.4)] backdrop-blur-xl px-4 py-3">
+      <p className="text-xs font-semibold text-slate-500">Local hire</p>
+      <div className="mt-1 divide-y divide-slate-100">
+        <div className="flex items-center justify-between gap-3 py-1.5">
+          <span className="text-sm text-slate-700">8 hr / 80 km</span>
+          <span className="text-sm font-bold text-[#0B1F3A]">₹{local8}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 py-1.5">
+          <span className="text-sm text-slate-700">10 hr / 100 km</span>
+          <span className="text-sm font-bold text-[#0B1F3A]">{local10 ? `₹${local10}` : 'On request'}</span>
+        </div>
+      </div>
+      <p className="pt-1 text-xs text-slate-500">
+        Extra km ₹{extraKm} · extra hour ₹{extraHour}
+      </p>
+    </div>
+  );
+}
+
+function FarePackage({
+  name,
+  price,
+  detail,
+  extras,
+}: {
+  name: string;
+  price: string;
+  detail: string;
+  extras: string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/70 bg-white/50 shadow-[0_10px_32px_-18px_rgba(37,99,235,0.4)] backdrop-blur-xl p-4">
+      <p className="text-xs font-semibold text-slate-500">{name}</p>
+      <p className="mt-1 text-lg font-bold text-[#0B1F3A]">{price}</p>
+      <p className="mt-1 text-sm text-slate-700">{detail}</p>
+      <p className="mt-2 text-xs text-slate-500">{extras}</p>
+    </div>
+  );
+}
+
+function UnreachableFareTab({ tab }: { tab: never }): null {
+  void tab;
+  return null;
+}
 
 export default TempoTravellerPage;

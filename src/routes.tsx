@@ -10,7 +10,10 @@ import { UserRole, EnhancedUser } from '@/types/privileges';
 import { HeroSkeleton, PageSkeleton } from './components/SkeletonLoader';
 import { Button } from '@/components/ui/button';
 import { FaWhatsapp } from 'react-icons/fa';
-import { trackContactCta } from './utils/trackContactCta';
+import {
+  installGlobalContactCtaGaListener,
+  trackContactCta,
+} from './utils/trackContactCta';
 import { captureGclidFromSearch } from '@/lib/gclid';
 import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
@@ -336,6 +339,8 @@ function Root() {
     captureGclidFromSearch(location.search);
   }, [location.search]);
 
+  useEffect(() => installGlobalContactCtaGaListener(), []);
+
   // Stop session recording when entering admin (prevents vehicles edit freeze)
   useEffect(() => {
     if (!location.pathname.startsWith('/admin')) return;
@@ -351,9 +356,16 @@ function Root() {
     || location.pathname.startsWith('/driver')
     || location.pathname.startsWith('/event/share')
     || location.pathname.startsWith('/ride/');
-  const onTourDetail = /^\/tours\/[^/]+\/?$/.test(location.pathname);
+  const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
+  const onBuildTripPage =
+    normalizedPath === '/'
+    || normalizedPath === '/tours'
+    || normalizedPath.startsWith('/tours/')
+    || normalizedPath === '/araku-tour-packages-vizag'
+    || normalizedPath === '/vizag-to-araku-bus'
+    || normalizedPath === '/group-tours';
   const publicChrome = !isStaff && !onStaffPath;
-  const showBuildTrip = !onStaffPath && !onTourDetail && (user?.role === 'super_admin' || !isStaff);
+  const showBuildTrip = !onStaffPath && onBuildTripPage && (user?.role === 'super_admin' || !isStaff);
 
   return (
     <>
@@ -372,13 +384,12 @@ function Root() {
 
       {/* Global WhatsApp Floating Button - Desktop Only (public pages) */}
       {publicChrome && (
-      <div className="hidden md:block fixed right-6 bottom-6 z-50">
+      <div className="hidden md:block fixed right-4 bottom-4 z-50">
         <Button
           onClick={handleWhatsApp}
-          size="lg"
-          className="rounded-full shadow-lg bg-green-500 hover:bg-green-600 text-white"
+          className="h-10 rounded-full bg-green-500 px-4 text-white shadow-lg hover:bg-green-600"
         >
-          <FaWhatsapp className="h-5 w-5 mr-2" />
+          <FaWhatsapp className="mr-2 h-4 w-4" />
           WhatsApp
         </Button>
       </div>

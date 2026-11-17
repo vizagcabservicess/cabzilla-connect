@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Car, Calendar, Shield, Users, Phone, Clock, MapPin, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 const RentalsPage = () => {
   const rentalPackages = [
@@ -251,7 +252,10 @@ const RentalsPage = () => {
                   variant="outline" 
                   size="lg" 
                   className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-blue-600"
-                  onClick={() => window.open('tel:+919966363662', '_self')}
+                  onClick={() => {
+                    trackContactCta('phone', { name: 'rentals_cta_call' });
+                    window.open('tel:+919966363662', '_self');
+                  }}
                 >
                   <Phone className="mr-2 h-5 w-5" />
                   Call: +91 9966363662

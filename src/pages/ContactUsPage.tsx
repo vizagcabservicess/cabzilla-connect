@@ -12,6 +12,7 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { useToast } from '@/components/ui/use-toast';
 import { contactAPI } from '@/services/api/contactAPI';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 export function ContactUsPage() {
   const { toast } = useToast();
@@ -185,7 +186,7 @@ export function ContactUsPage() {
       <section className="bg-white pt-20 pb-12">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 1, y: 0 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
@@ -369,7 +370,10 @@ export function ContactUsPage() {
                   </div>
                   <Button 
                     className="w-full bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => window.open(`tel:+91-9966363662`)}
+                    onClick={() => {
+                      trackContactCta('phone', { name: 'contact_us_call' });
+                      window.open(`tel:+91-9966363662`);
+                    }}
                   >
                     Call +91-9966363662
                   </Button>
@@ -389,7 +393,10 @@ export function ContactUsPage() {
                   </div>
                   <Button 
                     className="w-full bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => window.open(`https://wa.me/919966363662`)}
+                    onClick={() => {
+                      trackContactCta('whatsapp', { name: 'contact_us_whatsapp' });
+                      window.open(`https://wa.me/919966363662`);
+                    }}
                   >
                     Chat on WhatsApp
                   </Button>

@@ -4,10 +4,13 @@ RewriteEngine On
 # Set the base directory
 RewriteBase /
 
+ErrorDocument 404 /404.html
+
 # Never rewrite real SEO shell assets into the SPA (must stay static/JSON/PHP).
 RewriteRule ^seo/ - [L]
 RewriteRule ^seo-head\.json$ - [L]
 RewriteRule ^seo-shell\.php$ - [L]
+RewriteRule ^404\.html$ - [L]
 RewriteRule ^index-vehicle-.*\.html$ - [L]
 
 # Android App Links. Must stay JSON on both www and apex, including for Google's crawler.
@@ -113,6 +116,20 @@ RewriteRule .* - [R=200,L]
     Header always set Cache-Control "no-cache, no-store, must-revalidate"
     Header always set Pragma "no-cache"
     Header always set Expires "0"
+
+    # Built route SEO shells (/seo/*.html) & static privacy policy: allow LiteSpeed / CDN edge caching while browsers still revalidate; cleared via /admin/cache
+    SetEnvIf Request_URI "^/seo/.*\.html$" VTH_SEO_SHELL=1
+    Header always set Cache-Control "public, max-age=0, s-maxage=3600, must-revalidate" env=VTH_SEO_SHELL
+    Header always set X-LiteSpeed-Cache-Control "public,max-age=3600" env=VTH_SEO_SHELL
+    Header always unset Pragma env=VTH_SEO_SHELL
+    Header always unset Expires env=VTH_SEO_SHELL
+
+    <Files "privacy-policy.html">
+        Header always set Cache-Control "public, max-age=3600, s-maxage=86400"
+        Header always set X-LiteSpeed-Cache-Control "public,max-age=86400"
+        Header always unset Pragma
+        Header always unset Expires
+    </Files>
     
     # Photos must stay cacheable. The default above would mark every upload no-store, so Cloudflare bypasses them.
     <FilesMatch "\.(jpg|jpeg|png|gif|webp|avif|svg|ico)$">
@@ -155,8 +172,11 @@ RewriteRule .* - [R=200,L]
     # Explicitly set HTML content type for SEO handler
     Header always set Content-Type "text/html; charset=utf-8"
     SetHandler application/x-httpd-php
-    # No caching for SEO handler
-    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    # Cache crawler HTML at LiteSpeed / CDN edge; cleared via /admin/cache
+    Header always set Cache-Control "public, max-age=300, s-maxage=3600"
+    Header always set X-LiteSpeed-Cache-Control "public,max-age=3600"
+    Header always unset Pragma
+    Header always unset Expires
 </Files>
 
 # Fix content type for OG image
@@ -545,16 +565,20 @@ RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{DOCUMENT_ROOT}/seo/$1.html -f
 RewriteRule ^(.+?)/?$ /seo/$1.html [L]
 
-# Send all other requests to index.html for React to handle
+# Send known dynamic SPA / app / booking routes to index.html for React to handle.
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{DOCUMENT_ROOT}/seo-shell.php -f
+RewriteCond %{REQUEST_URI} ^/$ [OR]
+RewriteCond %{REQUEST_URI} ^/(admin|login|signup|reset-password|verify-email|dashboard|customer|driver|ride|event|vendor|smart-budget|booking|booking-confirmation|receipt|payment|pooling|shared-carpooling|group-tours)(/.*)?$ [NC,OR]
+RewriteCond %{REQUEST_URI} ^/(local-taxi|outstation-taxi|airport-taxi)/[a-z0-9-]+-to-[a-z0-9-]+/?$ [NC,OR]
+RewriteCond %{REQUEST_URI} ^/tours/[a-z0-9_-]+/?$ [NC,OR]
+RewriteCond %{REQUEST_URI} ^/vehicle/[a-z0-9_-]+/?$ [NC]
 RewriteRule ^(.*)$ /index.html [L]
 
-# Last resort SPA shell (private routes / missing seo-shell.php).
+# Any unknown non-file URL returns a real HTTP 404 (not 200 index.html).
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ /index.html [L]
+RewriteRule ^ - [R=404,L]
 
 # Set PHP settings
 <IfModule mod_php7.c>

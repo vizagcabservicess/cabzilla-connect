@@ -25,6 +25,7 @@ import { loadCabTypes } from '@/lib/cabData';
 import { parseNumericValue } from '@/services/fareManagementService';
 import type { CabType } from '@/types/cab';
 import { getVehicleImageUrlForDisplay } from '@/utils/vehicleUrlUtils';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 const WHATSAPP_URL =
   'https://wa.me/919966363662?text=' +
@@ -118,29 +119,6 @@ export function OutstationTaxiPage() {
     },
   ];
 
-  const popularRoutes = [
-    {
-      to: 'Araku Valley',
-      distance: '115 km',
-      href: '/outstation-taxi/visakhapatnam-to-araku-valley',
-    },
-    {
-      to: 'Annavaram',
-      distance: '130 km',
-      href: '/outstation-taxi/visakhapatnam-to-annavaram',
-    },
-    {
-      to: 'Hyderabad',
-      distance: '625 km',
-      href: '/outstation-taxi/visakhapatnam-to-hyderabad',
-    },
-    {
-      to: 'Chennai',
-      distance: '780 km',
-      href: '/outstation-taxi/visakhapatnam-to-chennai',
-    },
-  ];
-
   const otherServices = [
     { name: 'Local Taxi', description: 'City rides & packages', href: '/local-taxi', Icon: Car },
     { name: 'Airport Transfer', description: 'Airport pickup & drop', href: '/airport-taxi', Icon: Plane },
@@ -172,8 +150,8 @@ export function OutstationTaxiPage() {
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {features.map((f) => (
-              <div key={f.title} className="flex gap-3 rounded-lg bg-emerald-50/80 p-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white">
+              <div key={f.title} className="flex gap-3 rounded-lg bg-blue-50/80 p-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary)] text-white">
                   {f.icon}
                 </div>
                 <div>
@@ -186,49 +164,43 @@ export function OutstationTaxiPage() {
         </section>
 
         <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
-          <h2 className="mb-4 text-lg font-bold text-gray-900">Popular Outstation Routes</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {popularRoutes.map((r) => (
-              <Link
-                key={r.to}
-                to={r.href}
-                className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5 hover:border-emerald-200"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Vizag → {r.to}</p>
-                  <p className="text-xs text-gray-500">{r.distance}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
-          <h2 className="mb-4 text-lg font-bold text-gray-900">Vehicle Options</h2>
+          <h2 className="mb-4 text-lg font-bold text-gray-900">Choose Your Ride</h2>
           {ridesLoading ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="h-28 animate-pulse rounded-lg bg-slate-100" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-24 animate-pulse rounded-lg bg-slate-100" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {rideOptions.slice(0, 3).map((v) => (
-                <div key={v.id} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-gray-900">{v.label}</h3>
-                    <Car className="h-5 w-5 shrink-0 text-emerald-500" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {rideOptions.slice(0, 4).map((v) => (
+                <div
+                  key={v.id}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3"
+                >
+                  <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-lg bg-white p-1">
+                    <img
+                      src={v.image}
+                      alt={v.label}
+                      className="max-h-12 w-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
-                  <p className="text-lg font-bold text-emerald-600">{formatInr(v.pricePerKm)}/km</p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-semibold text-slate-900">{v.label}</h3>
+                    <p className="mt-0.5 text-base font-bold text-[var(--brand-primary)]">
+                      {formatInr(v.pricePerKm)}/km
+                    </p>
+                    <p className="text-[11px] text-slate-500">One-way outstation rate</p>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </section>
 
-        <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
-          <PopularDestinations />
-        </section>
+        <PopularDestinations limit={6} />
       </div>
 
       <aside className="space-y-4">
@@ -238,14 +210,17 @@ export function OutstationTaxiPage() {
           <ul className="mb-4 space-y-2 text-sm text-gray-700">
             {['Door-to-door pickup', 'Professional drivers', 'Sedan to luxury options'].map((item) => (
               <li key={item} className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
+                <CheckCircle className="h-4 w-4 shrink-0 text-[var(--brand-primary)]" />
                 {item}
               </li>
             ))}
           </ul>
           <Button
-            className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
-            onClick={() => window.open('tel:+919966363662')}
+            className="w-full bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary-dark)]"
+            onClick={() => {
+              trackContactCta('phone', { name: 'outstation_mobile_sidebar_call' });
+              window.open('tel:+919966363662');
+            }}
           >
             <Phone className="mr-2 h-4 w-4" />
             Call +91 9966363662
@@ -277,15 +252,21 @@ export function OutstationTaxiPage() {
         <div className="flex flex-wrap items-center gap-2.5">
           <Button
             variant="outline"
-            className="rounded-full border-slate-200 bg-white hover:bg-white"
-            onClick={() => window.open(WHATSAPP_URL, '_blank')}
+            className="rounded-full border-slate-200 bg-white hover:bg-slate-50"
+            onClick={() => {
+              trackContactCta('whatsapp', { name: 'outstation_help_whatsapp' });
+              window.open(WHATSAPP_URL, '_blank');
+            }}
           >
             Chat on WhatsApp
           </Button>
           <Button
             variant="outline"
-            className="rounded-full border-slate-200 bg-white text-[var(--brand-primary)] hover:bg-white"
-            onClick={() => window.open('tel:+919966363662')}
+            className="rounded-full border-slate-200 bg-white text-[var(--brand-primary)] hover:bg-slate-50"
+            onClick={() => {
+              trackContactCta('phone', { name: 'outstation_help_call' });
+              window.open('tel:+919966363662');
+            }}
           >
             <Phone className="mr-2 h-4 w-4" />
             Call +91 9966363662
@@ -332,7 +313,7 @@ export function OutstationTaxiPage() {
             {rideOptions.map((v) => (
               <div
                 key={v.id}
-                className="rounded-2xl border border-[var(--home-card-border)] bg-white p-4 shadow-[var(--home-card-shadow)]"
+                className="rounded-2xl border border-[var(--home-card-border)] bg-white p-4 shadow-[var(--home-card-shadow)] transition-colors hover:border-blue-200"
               >
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold text-slate-900">{v.label}</h3>
@@ -357,55 +338,40 @@ export function OutstationTaxiPage() {
         )}
       </section>
 
-      <section className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] gap-5 xl:gap-6">
-        <div className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 shadow-[var(--home-card-shadow)] xl:p-6">
-          <h2 className="mb-4 text-xl font-bold text-slate-900">Popular Outstation Routes</h2>
-          <div className="grid grid-cols-2 gap-2.5">
-            {popularRoutes.map((r) => (
-              <Link
-                key={r.to}
-                to={r.href}
-                className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-3 transition-colors hover:border-blue-200 hover:bg-white"
-              >
-                <p className="text-sm font-semibold text-slate-900">Vizag → {r.to}</p>
-                <p className="mt-0.5 text-xs text-slate-500">{r.distance}</p>
-              </Link>
-            ))}
-          </div>
-          <div className="mt-5">
-            <PopularDestinations />
-          </div>
-        </div>
+      <section>
+        <PopularDestinations limit={8} />
+      </section>
 
-        <div className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 shadow-[var(--home-card-shadow)] xl:p-6">
-          <h2 className="mb-4 text-xl font-bold text-slate-900">Other Services</h2>
-          <div className="grid grid-cols-2 gap-2.5">
-            {otherServices.map(({ name, description, href, Icon }) => (
-              <Link
-                key={href}
-                to={href}
-                className="group flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-3 hover:border-blue-200 hover:bg-white"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary-light)] text-[var(--brand-primary)]">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-slate-900">{name}</span>
-                  <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
-                </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
-              </Link>
-            ))}
-          </div>
-          <div className="mt-4 text-center">
+      <section className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 shadow-[var(--home-card-shadow)] xl:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xl font-bold text-slate-900">Other Services</h2>
+          <Link
+            to="/fleet"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--brand-primary)] hover:underline"
+          >
+            View All Services
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {otherServices.map(({ name, description, href, Icon }) => (
             <Link
-              to="/fleet"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--brand-primary)] hover:underline"
+              key={href}
+              to={href}
+              className="group flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3.5 transition-colors hover:border-blue-200 hover:bg-white"
             >
-              View All Services
-              <ArrowRight className="h-4 w-4" />
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary-light)] text-[var(--brand-primary)]">
+                <Icon className="h-4 w-4" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-slate-900 group-hover:text-[var(--brand-primary)]">
+                  {name}
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-[var(--brand-primary)]" aria-hidden />
             </Link>
-          </div>
+          ))}
         </div>
       </section>
 

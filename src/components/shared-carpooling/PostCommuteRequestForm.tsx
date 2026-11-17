@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { BRAND_GREEN, BRAND_GREEN_LIGHT, GroupPreference } from './constants';
 import { CARPOOL_FIELD_INPUT_CLASS } from './carpoolFormStyles';
+import { trackContactCta } from '@/utils/trackContactCta';
 import type { CarpoolSearchParams } from './types';
 import { commuteScheduleLabel, groupPreferenceLabel } from './searchUtils';
 import { VIZAG_TAXI_HUB_PHONE_E164, buildWhatsAppMeUrl } from '@/utils/whatsappPrefillMessage';
@@ -122,6 +123,7 @@ export function PostCommuteRequestForm({ search }: PostCommuteRequestFormProps) 
     ].join('\n');
 
   const submitWhatsApp = (prefix: string) => {
+    trackContactCta('whatsapp', { name: 'carpool_request_whatsapp' });
     const url = `https://wa.me/${VIZAG_TAXI_HUB_PHONE_E164}?text=${encodeURIComponent(buildMessage(prefix))}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };

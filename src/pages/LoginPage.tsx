@@ -5,13 +5,13 @@ import Footer from '@/components/Footer';
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gray-50 pt-20">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
-      
-      <div className="container mx-auto py-20 px-4">
+
+      <div className="mx-auto w-full max-w-md px-4 pb-8 pt-6 sm:pt-8">
         <div className="flex flex-col items-center justify-center">
-          <div className="w-full max-w-md">
-            <div className="text-center mb-8">
+          <div className="w-full">
+            <div className="mb-5 text-center">
               <h1 className="text-3xl font-medium">Log in to your account</h1>
               <p className="mt-2 text-gray-600">
                 Welcome back! Please enter your details

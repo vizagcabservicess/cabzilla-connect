@@ -21,6 +21,7 @@ import { RatingSystem } from './RatingSystem';
 import { NotificationCenter } from './NotificationCenter';
 import GoogleMapComponent from '@/components/GoogleMapComponent';
 import { BookingList } from '@/components/guest/BookingList';
+import { trackPaymentSuccess } from '@/utils/trackPaymentSuccess';
 
 interface SearchParams {
   type: string;
@@ -325,6 +326,17 @@ export default function GuestDashboard() {
         });
         const verifyData = await verifyRes.json();
         if (verifyData.success) {
+          trackPaymentSuccess({
+            transactionId: response.razorpay_payment_id,
+            bookingId: userRequest.id,
+            amount: Number(order_amount) / 100,
+            paymentMethod: 'razorpay',
+            paymentMode: 'full',
+            tripType: 'pooling',
+            itemName: `Pooling Ride ${ride.fromLocation} to ${ride.toLocation}`,
+            itemCategory: 'pooling',
+            flow: 'pooling_ride_payment',
+          });
           toast.success('Payment successful!');
           loadUserData(); // Reload bookings/requests
           setShowBookingFlow(false);

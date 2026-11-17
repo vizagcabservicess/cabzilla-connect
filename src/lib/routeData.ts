@@ -547,8 +547,8 @@ export const popularRoutes: RouteInfo[] = [
   {
     from: 'Visakhapatnam',
     to: 'Narasannapeta',
-    distance: '70 KM',
-    time: '2 Hours',
+    distance: '140 KM',
+    time: '3 Hours',
     description: 'Visit Narasannapeta, known for its temples and cultural heritage.',
     image: '',
     fares: { sedan: '₹2,000', suv: '₹2,800' },
@@ -557,8 +557,8 @@ export const popularRoutes: RouteInfo[] = [
       description: 'Book a reliable taxi from Visakhapatnam to Narasannapeta. Explore the temples and cultural heritage of this historic town.',
       keywords: 'visakhapatnam to narasannapeta taxi, vizag to narasannapeta cabs, narasannapeta travel',
       faq: [
-        { question: 'What is the distance from Visakhapatnam to Narasannapeta?', answer: 'The distance is approximately 70 KM by road.' },
-        { question: 'How long does it take to reach Narasannapeta from Vizag?', answer: 'It usually takes about 2 hours depending on traffic conditions.' },
+        { question: 'What is the distance from Visakhapatnam to Narasannapeta?', answer: 'The distance is approximately 140 KM by road.' },
+        { question: 'How long does it take to reach Narasannapeta from Vizag?', answer: 'It usually takes about 3 hours depending on traffic conditions.' },
         { question: 'What is Narasannapeta famous for?', answer: 'Narasannapeta is famous for its temples and cultural heritage.' }
       ],
       extraContent: '<p><strong>Travel Tip:</strong> Visit the ancient temples and explore the rich cultural heritage of this historic town.</p>'
@@ -568,8 +568,8 @@ export const popularRoutes: RouteInfo[] = [
   {
     from: 'Visakhapatnam',
     to: 'Palakollu',
-    distance: '90 KM',
-    time: '2.5 Hours',
+    distance: '275 KM',
+    time: '6 Hours',
     description: 'Visit Palakollu, known for its ancient temples and cultural significance.',
     image: '',
     fares: { sedan: '₹2,400', suv: '₹3,200' },
@@ -578,8 +578,8 @@ export const popularRoutes: RouteInfo[] = [
       description: 'Book a reliable taxi from Visakhapatnam to Palakollu. Explore the ancient temples and cultural significance of this historic town.',
       keywords: 'visakhapatnam to palakollu taxi, vizag to palakollu cabs, palakollu travel',
       faq: [
-        { question: 'What is the distance from Visakhapatnam to Palakollu?', answer: 'The distance is approximately 90 KM by road.' },
-        { question: 'How long does it take to reach Palakollu from Vizag?', answer: 'It usually takes about 2.5 hours depending on traffic conditions.' },
+        { question: 'What is the distance from Visakhapatnam to Palakollu?', answer: 'The distance is approximately 275 KM by road.' },
+        { question: 'How long does it take to reach Palakollu from Vizag?', answer: 'It usually takes about 6 hours depending on traffic conditions.' },
         { question: 'What is Palakollu famous for?', answer: 'Palakollu is famous for its ancient temples and cultural significance.' }
       ],
       extraContent: '<p><strong>Travel Tip:</strong> Explore the ancient temples and learn about the cultural significance of this historic town.</p>'
@@ -610,8 +610,8 @@ export const popularRoutes: RouteInfo[] = [
   {
     from: 'Visakhapatnam',
     to: 'Palasa',
-    distance: '130 KM',
-    time: '3.5 Hours',
+    distance: '197 KM',
+    time: '4 Hours',
     description: 'Visit Palasa, known for its cashew industry and cultural heritage.',
     image: '',
     fares: { sedan: '₹3,200', suv: '₹4,400' },
@@ -620,8 +620,8 @@ export const popularRoutes: RouteInfo[] = [
       description: 'Book a reliable taxi from Visakhapatnam to Palasa. Explore the cashew industry and cultural heritage of this industrial town.',
       keywords: 'visakhapatnam to palasa taxi, vizag to palasa cabs, palasa travel',
       faq: [
-        { question: 'What is the distance from Visakhapatnam to Palasa?', answer: 'The distance is approximately 130 KM by road.' },
-        { question: 'How long does it take to reach Palasa from Vizag?', answer: 'It usually takes about 3.5 hours depending on traffic conditions.' },
+        { question: 'What is the distance from Visakhapatnam to Palasa?', answer: 'The distance is approximately 197 KM by road.' },
+        { question: 'How long does it take to reach Palasa from Vizag?', answer: 'It usually takes about 4 hours depending on traffic conditions.' },
         { question: 'What is Palasa famous for?', answer: 'Palasa is famous for its cashew industry and cultural heritage.' }
       ],
       extraContent: '<p><strong>Travel Tip:</strong> Learn about the cashew industry and explore the cultural heritage of this industrial town.</p>'
@@ -673,8 +673,8 @@ export const popularRoutes: RouteInfo[] = [
   {
     from: 'Visakhapatnam',
     to: 'Ravulapalem',
-    distance: '150 KM',
-    time: '3.5 Hours',
+    distance: '236 KM',
+    time: '5.5 Hours',
     description: 'Visit Ravulapalem, known for its agricultural significance and cultural heritage.',
     image: '',
     fares: { sedan: '₹3,500', suv: '₹4,800' },
@@ -683,8 +683,8 @@ export const popularRoutes: RouteInfo[] = [
       description: 'Book a reliable taxi from Visakhapatnam to Ravulapalem. Explore the agricultural significance and cultural heritage of this town.',
       keywords: 'visakhapatnam to ravulapalem taxi, vizag to ravulapalem cabs, ravulapalem travel',
       faq: [
-        { question: 'What is the distance from Visakhapatnam to Ravulapalem?', answer: 'The distance is approximately 150 KM by road.' },
-        { question: 'How long does it take to reach Ravulapalem from Vizag?', answer: 'It usually takes about 3.5 hours depending on traffic conditions.' },
+        { question: 'What is the distance from Visakhapatnam to Ravulapalem?', answer: 'The distance is approximately 236 KM by road.' },
+        { question: 'How long does it take to reach Ravulapalem from Vizag?', answer: 'It usually takes about 5.5 hours depending on traffic conditions.' },
         { question: 'What is Ravulapalem famous for?', answer: 'Ravulapalem is famous for its agricultural significance and cultural heritage.' }
       ],
       extraContent: '<p><strong>Travel Tip:</strong> Learn about the agricultural practices and explore the cultural heritage of this town.</p>'
@@ -715,8 +715,8 @@ export const popularRoutes: RouteInfo[] = [
   {
     from: 'Visakhapatnam',
     to: 'Sompeta',
-    distance: '60 KM',
-    time: '1.5 Hours',
+    distance: '230 KM',
+    time: '5 Hours',
     description: 'Visit Sompeta, known for its coastal beauty and cultural heritage.',
     image: '',
     fares: { sedan: '₹1,800', suv: '₹2,400' },
@@ -725,8 +725,8 @@ export const popularRoutes: RouteInfo[] = [
       description: 'Book a reliable taxi from Visakhapatnam to Sompeta. Explore the coastal beauty and cultural heritage of this charming town.',
       keywords: 'visakhapatnam to sompeta taxi, vizag to sompeta cabs, sompeta travel',
       faq: [
-        { question: 'What is the distance from Visakhapatnam to Sompeta?', answer: 'The distance is approximately 60 KM by road.' },
-        { question: 'How long does it take to reach Sompeta from Vizag?', answer: 'It usually takes about 1.5 hours depending on traffic conditions.' },
+        { question: 'What is the distance from Visakhapatnam to Sompeta?', answer: 'The distance is approximately 230 KM by road.' },
+        { question: 'How long does it take to reach Sompeta from Vizag?', answer: 'It usually takes about 5 hours depending on traffic conditions.' },
         { question: 'What is Sompeta famous for?', answer: 'Sompeta is famous for its coastal beauty and cultural heritage.' }
       ],
       extraContent: '<p><strong>Travel Tip:</strong> Enjoy the coastal beauty and explore the cultural heritage of this charming coastal town.</p>'

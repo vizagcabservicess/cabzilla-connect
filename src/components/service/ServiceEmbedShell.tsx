@@ -29,8 +29,6 @@ export interface ServiceEmbedShellProps {
   belowFold: React.ReactNode;
   /** Optional Helmet override; defaults to serviceEmbedMeta SEO. */
   helmetExtra?: React.ReactNode;
-  /** Compact notice rendered immediately above the hero (e.g. airport move alert). */
-  heroBanner?: React.ReactNode;
   /**
    * `embed` = Tempo/Urbania compact headline + illustration.
    * `marketing` = Local mockup hero on desktop; previous compact hero on mobile.
@@ -93,7 +91,6 @@ export function ServiceEmbedShell({
   hero,
   belowFold,
   helmetExtra,
-  heroBanner,
   layout = 'embed',
 }: ServiceEmbedShellProps) {
   const config = getServiceEmbedConfig(slug);
@@ -178,7 +175,6 @@ export function ServiceEmbedShell({
         {heroStep === 1 && (
           <HomeOfferCampaignPopup enabled categories={offerCategories} />
         )}
-        {heroBanner}
         <main
           id="main-content"
           className={`overflow-x-clip bg-white max-lg:max-w-[100vw] ${
@@ -190,7 +186,7 @@ export function ServiceEmbedShell({
               <section
                 className={
                   marketingLanding
-                    ? 'vehicle-urbania-hero max-lg:mb-3 max-lg:px-2.5 max-lg:pt-2 sm:max-lg:mb-4 lg:relative lg:mb-0 lg:overflow-hidden lg:bg-gradient-to-b lg:from-[#F4F5F7] lg:via-[#F8F9FB] lg:to-[#F8F9FB] lg:pb-10 lg:pt-10'
+                    ? 'vehicle-urbania-hero max-lg:mb-3 max-lg:px-2.5 max-lg:pt-2 sm:max-lg:mb-4 lg:relative lg:mb-0 lg:overflow-hidden lg:bg-gradient-to-b lg:from-[#F4F5F7] lg:via-[#F8F9FB] lg:to-[#F8F9FB] lg:pb-8 lg:pt-6'
                     : 'vehicle-urbania-hero container mx-auto mb-3 max-w-7xl px-4 pt-2 sm:mb-4 lg:mb-8 lg:pt-8'
                 }
                 data-vth-service-embed-hero={slug}
@@ -216,20 +212,16 @@ export function ServiceEmbedShell({
                     {marketingLanding && (
                       <div className="relative isolate bg-white lg:hidden">
                         <div className="flex flex-col gap-0">
-                          {slug === 'airport' ? (
-                            <p className="sr-only" aria-hidden="true">{config.seo.pageHeadline}</p>
-                          ) : (
-                            <div className="relative z-[3] shrink-0 bg-white px-2.5 pb-0 pt-2 sm:px-3 sm:pt-2">
-                              <div className="max-w-xl">
-                                <h1 className="text-left font-sans text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#001b3a] sm:text-[2.125rem]">
-                                  {config.seo.pageHeadline}
-                                </h1>
-                                <p className="mt-0.5 max-w-xl text-left font-sans text-sm font-normal leading-snug text-gray-700 sm:text-[0.9375rem]">
-                                  {config.seo.pageSubtitle}
-                                </p>
-                              </div>
+                          <div className="relative z-[3] shrink-0 bg-white px-2.5 pb-0 pt-2 sm:px-3 sm:pt-2">
+                            <div className="max-w-xl">
+                              <h1 className="text-left font-sans text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#001b3a] sm:text-[2.125rem]">
+                                {config.seo.pageHeadline}
+                              </h1>
+                              <p className="mt-0.5 max-w-xl text-left font-sans text-sm font-normal leading-snug text-gray-700 sm:text-[0.9375rem]">
+                                {config.seo.pageSubtitle}
+                              </p>
                             </div>
-                          )}
+                          </div>
 
                           <div
                             className="relative z-0 flex w-full min-h-[min(13rem,44vw)] items-center justify-center bg-white px-2.5 pb-2 pt-2 sm:min-h-[min(15rem,40vw)] sm:px-3"
@@ -265,15 +257,9 @@ export function ServiceEmbedShell({
                           <span className="inline-flex items-center rounded-full border border-blue-200/80 bg-white/90 px-3.5 py-1 text-sm font-semibold tracking-wide text-[var(--brand-primary)] shadow-sm">
                             {marketing.badge}
                           </span>
-                          {slug === 'airport' ? (
-                            <h1 className="mt-4 text-left font-sans text-[1.875rem] font-bold leading-[1.12] tracking-tight text-[#0B1F3A] xl:text-[2.25rem]">
-                              {renderAccentHeadline(config.seo.pageHeadline, marketing.accentWord)}
-                            </h1>
-                          ) : (
-                            <p className="mt-4 text-left font-sans text-[1.875rem] font-bold leading-[1.12] tracking-tight text-[#0B1F3A] xl:text-[2.25rem]" aria-hidden="true">
-                              {renderAccentHeadline(config.seo.pageHeadline, marketing.accentWord)}
-                            </p>
-                          )}
+                          <h1 className="mt-4 text-left font-sans text-[1.875rem] font-bold leading-[1.12] tracking-tight text-[#0B1F3A] xl:text-[2.25rem]">
+                            {renderAccentHeadline(config.seo.pageHeadline, marketing.accentWord)}
+                          </h1>
                           <p className="mt-2.5 max-w-md text-left font-sans text-sm font-normal leading-relaxed text-slate-600 xl:text-base">
                             {config.seo.pageSubtitle}
                           </p>
@@ -365,9 +351,9 @@ export function ServiceEmbedShell({
 
                   <div className="mb-5 hidden lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-center lg:gap-8">
                     <div className="min-w-0">
-                      <p className="text-left font-sans text-4xl font-bold leading-[1.08] tracking-tight text-[#001b3a] xl:text-5xl" aria-hidden="true">
+                      <h1 className="text-left font-sans text-4xl font-bold leading-[1.08] tracking-tight text-[#001b3a] xl:text-5xl">
                         {config.seo.pageHeadline}
-                      </p>
+                      </h1>
                       <p className="mt-2 max-w-xl text-left font-sans text-base font-normal leading-snug text-gray-700 xl:text-lg">
                         {config.seo.pageSubtitle}
                       </p>

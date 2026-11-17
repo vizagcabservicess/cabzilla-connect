@@ -24,6 +24,7 @@ import {
   verifyRazorpayPayment, 
   RazorpayResponse 
 } from '@/services/razorpayService';
+import { trackPaymentSuccess } from '@/utils/trackPaymentSuccess';
 
 interface PaymentGatewayProps {
   totalAmount: number;
@@ -124,6 +125,18 @@ export function PaymentGateway({ totalAmount, onPaymentComplete, bookingDetails 
       );
       
       if (verified) {
+        trackPaymentSuccess({
+          transactionId: response.razorpay_payment_id,
+          bookingId: bookingDetails?.id,
+          bookingNumber: bookingDetails?.bookingNumber,
+          amount: totalAmount,
+          paymentMethod: 'razorpay',
+          paymentMode: 'full',
+          tripType: bookingDetails?.tripType,
+          itemName: bookingDetails?.cabType || 'Cab Booking',
+          itemCategory: bookingDetails?.tripType || 'cab_booking',
+          flow: 'gateway_razorpay',
+        });
         toast.success(`Your payment of ₹${totalAmount.toLocaleString('en-IN')} was successful!`);
         onPaymentComplete();
       } else {
@@ -169,6 +182,18 @@ export function PaymentGateway({ totalAmount, onPaymentComplete, bookingDetails 
         title: "Payment Successful",
         description: `Your payment of ₹${totalAmount.toLocaleString('en-IN')} was successful!`,
         duration: 5000,
+      });
+
+      trackPaymentSuccess({
+        bookingId: bookingDetails?.id,
+        bookingNumber: bookingDetails?.bookingNumber,
+        amount: totalAmount,
+        paymentMethod,
+        paymentMode: 'full',
+        tripType: bookingDetails?.tripType,
+        itemName: bookingDetails?.cabType || 'Cab Booking',
+        itemCategory: bookingDetails?.tripType || 'cab_booking',
+        flow: `gateway_${paymentMethod}`,
       });
       
       onPaymentComplete();

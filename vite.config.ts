@@ -7,6 +7,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { join } from "path";
 import {
   buildSeoHeadDocument,
+  buildStructuredData,
   listSitemapPaths,
   resolvePublicHead,
   validatePublicHead,
@@ -86,11 +87,11 @@ function escapeHtmlText(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
-/** Same app shell as index.html, with this route's head tags plus crawlable H1/main text in #root. */
+/** Same app shell as index.html, with this route's head tags, JSON-LD, plus crawlable H1/main text in #root. */
 function injectRouteHead(
   html: string,
   routePath: string,
-  head: { title: string; description: string; ogImage: string; h1?: string; mainText?: string },
+  head: { title: string; description: string; ogImage: string; h1?: string; mainText?: string; robots?: string },
 ): string {
   const canonical = routePath === "/"
     ? "https://vizagtaxihub.com/"
@@ -101,18 +102,32 @@ function injectRouteHead(
   const canonicalAttr = escapeHtmlAttr(canonical);
   const h1 = escapeHtmlText(head.h1 || head.title.split("|")[0]?.trim() || head.title);
   const mainText = escapeHtmlText(head.mainText || head.description);
+  const schemas = buildStructuredData(routePath, {
+    title: head.title,
+    description: head.description,
+    canonical,
+    ogImage: head.ogImage,
+    h1: head.h1 || head.title.split("|")[0]?.trim() || head.title,
+  });
+  const schemaTags = schemas
+    .map((block) => `<script type="application/ld+json">${JSON.stringify(block).replace(/<\//g, "<\\/")}</script>`)
+    .join("\n    ");
+  const robotsTag = head.robots ? `\n    <meta name="robots" content="${escapeHtmlAttr(head.robots)}" />` : "";
   const block = [
-    `<meta name="description" content="${description}" />`,
+    `<meta name="description" content="${description}" />${robotsTag}`,
     `<link rel="canonical" href="${canonicalAttr}" />`,
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${canonicalAttr}" />`,
     `<meta property="og:image" content="${image}" />`,
-  ].join("\n    ");
+    schemaTags,
+  ].filter(Boolean).join("\n    ");
   const stripped = html
     .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>\s*/gi, "")
+    .replace(/<meta\s+name="robots"\s+content="[^"]*"\s*\/?>\s*/gi, "")
     .replace(/<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>\s*/gi, "")
-    .replace(/<meta\s+property="og:(?:title|description|url|image)"\s+content="[^"]*"\s*\/?>\s*/gi, "");
+    .replace(/<meta\s+property="og:(?:title|description|url|image)"\s+content="[^"]*"\s*\/?>\s*/gi, "")
+    .replace(/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>\s*/gi, "");
   const withHead = stripped.replace(
     /<title>[^<]*<\/title>/i,
     `<title>${title}</title>\n    ${block}`,
@@ -369,6 +384,21 @@ export default defineConfig(({ mode }) => ({
             const file = join(distDir, 'seo', `${relative}.html`);
             mkdirSync(join(file, '..'), { recursive: true });
             writeFileSync(file, injectRouteHead(shell, routePath, head), 'utf8');
+            written += 1;
+          }
+          // Emit static noindex shell for /group-tours/search without adding it to sitemap.xml
+          const searchHead = resolvePublicHead('/group-tours/search');
+          if (searchHead) {
+            const searchFile = join(distDir, 'seo', 'group-tours', 'search.html');
+            mkdirSync(join(searchFile, '..'), { recursive: true });
+            writeFileSync(
+              searchFile,
+              injectRouteHead(shell, '/group-tours/search', {
+                ...searchHead,
+                robots: 'noindex, follow',
+              }),
+              'utf8',
+            );
             written += 1;
           }
           console.log(`✅ Wrote ${written} route HTML files in dist/seo (head + H1 for crawlers)`);

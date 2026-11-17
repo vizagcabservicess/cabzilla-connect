@@ -7,6 +7,7 @@ import { MobileNavigation } from '@/components/MobileNavigation';
 import { Button } from '@/components/ui/button';
 import { ResponsiveGrid, ServiceCard } from '@/components/MobileSlider';
 import { Car, Users, Phone, Star, CheckCircle } from 'lucide-react';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 const SeventeenSeaterTempoTravellerPage = () => {
   const structuredData = {
@@ -64,19 +65,22 @@ const SeventeenSeaterTempoTravellerPage = () => {
         </script>
       </Helmet>
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen overflow-x-clip bg-[#F8F9FB]">
         <Navbar />
         
-        <div className="container mx-auto px-4 py-8 max-w-7xl pb-16 md:pb-32">
+        <div className="container mx-auto max-w-7xl px-3 pb-24 pt-4 sm:px-4 md:pb-32">
           {/* Hero Section */}
-          <div className="bg-gradient-to-r from-green-600 to-green-800 text-white rounded-xl p-8 mb-8">
-            <h1 className="text-2xl md:text-3xl font-bold mb-4">17 Seater Vehicle — Tempo Traveller in Vizag</h1>
-            <p className="text-xl mb-6">Hire a 17 seater AC tempo traveller for large group travel with professional drivers</p>
+          <div className="mb-8 rounded-2xl bg-gradient-to-r from-green-600 to-green-800 p-5 text-white shadow-sm sm:p-8">
+            <h1 className="mb-3 text-2xl font-bold sm:mb-4 md:text-3xl">17 Seater Vehicle — Tempo Traveller in Vizag</h1>
+            <p className="mb-6 text-base text-white/95 sm:text-xl">Hire a 17 seater AC tempo traveller for large group travel with professional drivers</p>
             <div className="flex flex-col sm:flex-row gap-4">
               <Button 
                 size="lg" 
                 className="bg-white text-green-600 hover:bg-gray-100"
-                onClick={() => window.open('tel:+919966363662', '_self')}
+                onClick={() => {
+                  trackContactCta('phone', { name: '17_seater_tempo_call' });
+                  window.open('tel:+919966363662', '_self');
+                }}
               >
                 <Phone className="mr-2 h-5 w-5" />
                 Call +91 9966363662

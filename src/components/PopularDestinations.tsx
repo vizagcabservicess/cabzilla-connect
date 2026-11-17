@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight, Clock, MapPin } from 'lucide-react';
 import { popularRoutes } from '@/lib/routeData';
 import { slugify } from '@/lib/utils';
 
@@ -7,57 +8,76 @@ interface PopularDestinationsProps {
   title?: string;
   limit?: number;
   showFares?: boolean;
+  showViewAll?: boolean;
 }
 
-export const PopularDestinations: React.FC<PopularDestinationsProps> = ({ 
-  title = "Popular Destinations from Visakhapatnam",
+export const PopularDestinations: React.FC<PopularDestinationsProps> = ({
+  title = 'Popular Destinations from Visakhapatnam',
   limit = 8,
-  showFares = true
+  showFares = true,
+  showViewAll = false,
 }) => {
-  // Get most popular routes (you can customize this logic)
   const popularDestinations = popularRoutes.slice(0, limit);
 
   return (
-    <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-      <h3 className="text-xl font-semibold text-gray-900 mb-6">{title}</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 shadow-[var(--home-card-shadow)] xl:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 sm:text-xl">{title}</h2>
+          <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+            One-way &amp; round-trip highway routes with distance and travel time
+          </p>
+        </div>
+        {showViewAll && (
+          <Link
+            to="/outstation-taxi"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-primary)] hover:underline sm:text-sm"
+          >
+            View All Routes
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {popularDestinations.map((route, index) => {
           const routeSlug = `${slugify(route.from)}-to-${slugify(route.to)}`;
           return (
             <Link
               key={index}
               to={`/outstation-taxi/${routeSlug}`}
-              className="block p-4 bg-gray-50 rounded-lg hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-all duration-200 group"
+              className="group flex min-w-0 flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 transition-all duration-200 hover:border-blue-300 hover:bg-white hover:shadow-md"
             >
-              <div className="text-center">
-                <h4 className="font-medium text-gray-900 group-hover:text-blue-700 transition-colors">
-                  {route.to}
-                </h4>
-                <p className="text-sm text-gray-600 mt-1">
-                  {route.distance} • {route.time}
-                </p>
-                {showFares && (
-                  <p className="text-sm font-medium text-blue-600 mt-2">
-                    From ₹{route.fares.sedan.replace('₹', '')}
-                  </p>
-                )}
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-bold text-slate-900 transition-colors group-hover:text-[var(--brand-primary)] sm:text-base">
+                  Vizag → {route.to}
+                </h3>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                    {route.distance}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                    {route.time}
+                  </span>
+                </div>
               </div>
+              {showFares && (
+                <div className="mt-3 flex items-center justify-between border-t border-slate-200/70 pt-2.5 text-xs">
+                  <span className="font-semibold text-[var(--brand-primary)]">
+                    From ₹{route.fares.sedan.replace('₹', '')}
+                  </span>
+                  <span className="inline-flex items-center gap-0.5 font-medium text-slate-500 transition-colors group-hover:text-[var(--brand-primary)]">
+                    Book
+                    <ArrowRight className="h-3 w-3" aria-hidden />
+                  </span>
+                </div>
+              )}
             </Link>
           );
         })}
       </div>
-      <div className="text-center mt-6">
-        <Link
-          to="/outstation-taxi"
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          View All Routes
-          <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-      </div>
     </div>
   );
 };
-

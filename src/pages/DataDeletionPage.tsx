@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Mail, Phone, MessageCircle, AlertTriangle, Shield, Clock, Trash2, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 export default function DataDeletionPage() {
   const handleEmailDeletion = () => {
@@ -170,7 +171,10 @@ Thank you.`);
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => window.open('tel:+91-9966363662')}
+                        onClick={() => {
+                          trackContactCta('phone', { name: 'data_deletion_call' });
+                          window.open('tel:+91-9966363662');
+                        }}
                       >
                         Call Now
                       </Button>

@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { initRazorpay, createRazorpayOrder, openRazorpayCheckout, verifyRazorpayPayment } from '@/services/razorpayService';
 import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 import { toast } from 'sonner';
+import { trackPaymentSuccess } from '@/utils/trackPaymentSuccess';
 
 interface WalletManagerProps {
   wallet: PoolingWallet | null;
@@ -56,6 +57,16 @@ export function WalletManager({ wallet, transactions, userRole, onDeposit, onWit
             response.razorpay_signature
           );
           if (verified) {
+            trackPaymentSuccess({
+              transactionId: response.razorpay_payment_id,
+              amount,
+              paymentMethod: 'razorpay',
+              paymentMode: 'full',
+              tripType: 'pooling_wallet',
+              itemName: 'Pooling Wallet Top-up',
+              itemCategory: 'pooling_wallet',
+              flow: 'pooling_wallet_deposit',
+            });
             await onDeposit(amount);
             setDepositAmount('');
           } else {

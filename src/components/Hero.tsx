@@ -351,6 +351,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const heroMobileFormShellWrap =
     urbaniaMobileEmbedShell || heroMobileUnifiedShell || isServiceLandingEmbed;
   
+  const lockedPageTripType: TripType | undefined =
+    pageDefaultTripType ??
+    (visibleTabs && visibleTabs.length === 1 ? (visibleTabs[0] as TripType) : undefined);
+
   const loadFromSessionStorage = () => {
     try {
       // Check for route prefill data first
@@ -360,7 +364,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         const prefillTrip = (prefillData.tripType || 'outstation') as TripType;
         const pageOwnsDrop = Boolean(pageDefaultDrop);
         const staleOtherService =
-          Boolean(pageDefaultTripType) && prefillTrip !== pageDefaultTripType;
+          Boolean(lockedPageTripType) && prefillTrip !== lockedPageTripType;
         if (!pageOwnsDrop && !staleOtherService) {
         // sessionStorage.removeItem('routePrefillData'); // Do NOT clear after use
         const prePick = prefillData.pickupLocation as Location | undefined;
@@ -428,12 +432,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       const cabData = sessionStorage.getItem('selectedCab');
       
       // Determine default trip type based on visibleTabs
-      let defaultTripType: TripType = pageDefaultTripType ?? 'outstation';
-      if (!pageDefaultTripType && visibleTabs && visibleTabs.length === 1) {
+      let defaultTripType: TripType = lockedPageTripType ?? 'outstation';
+      if (!lockedPageTripType && visibleTabs && visibleTabs.length === 1) {
         defaultTripType = visibleTabs[0] as TripType;
       }
       const sessionMatchesPage =
-        !pageDefaultTripType || !tripTypeData || tripTypeData === pageDefaultTripType;
+        !lockedPageTripType || !tripTypeData || tripTypeData === lockedPageTripType;
       const keepSessionLocations = !pageDefaultDrop && sessionMatchesPage;
       
       return {
@@ -467,7 +471,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
               return isValidTripDate(parsedReturn) ? parsedReturn : null;
             })()
           : null,
-        tripType: pageDefaultTripType ?? ((tripTypeData as TripType) || defaultTripType),
+        tripType: lockedPageTripType ?? ((tripTypeData as TripType) || defaultTripType),
         tripMode: pageDefaultTripMode ?? ((tripModeData as TripMode) || 'one-way'),
         hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
         selectedCab: keepSessionLocations && cabData ? JSON.parse(cabData) as CabType : null,
@@ -496,8 +500,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       console.error("Error loading data from session storage:", error);
       
       // Determine default trip type based on visibleTabs
-      let defaultTripType: TripType = pageDefaultTripType ?? 'outstation';
-      if (!pageDefaultTripType && visibleTabs && visibleTabs.length === 1) {
+      let defaultTripType: TripType = lockedPageTripType ?? 'outstation';
+      if (!lockedPageTripType && visibleTabs && visibleTabs.length === 1) {
         defaultTripType = visibleTabs[0] as TripType;
       }
       

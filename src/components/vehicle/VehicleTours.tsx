@@ -1,9 +1,5 @@
-
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock, Calendar } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import { tourAPI } from '@/services/api/tourAPI';
@@ -29,6 +25,15 @@ interface TourData {
 }
 
 type TourWithPrice = TourData & { displayPrice: number };
+
+function tourTypeLabel(tourName: string): string {
+  const name = tourName.toLowerCase();
+  if (name.includes('araku') || name.includes('lambasingi') || name.includes('vanajangi')) return 'HILL STATION';
+  if (name.includes('borra') || name.includes('cave')) return 'ADVENTURE';
+  if (name.includes('temple') || name.includes('simhachalam') || name.includes('annavaram') || name.includes('arasavalli')) return 'PILGRIMAGE';
+  if (name.includes('beach') || name.includes('rushikonda')) return 'BEACH';
+  return 'TOUR';
+}
 
 const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'Vehicle' }) => {
   const [tours, setTours] = useState<TourWithPrice[]>([]);
@@ -81,43 +86,16 @@ const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'V
     };
   }, [vehicleId, vehicleName]);
 
-  /** Same shell + `grid gap-3` as loaded state so CLS does not spike when data arrives. */
   if (loading) {
     return (
-      <Card className="mb-8">
-        <CardHeader className="space-y-1 p-4 sm:p-5 pb-3">
-          <CardTitle className="text-xl font-semibold">
-            Available Tours for {vehicleName}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 px-4 pb-4 pt-0 sm:px-5">
-          <div className="grid gap-3">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="min-h-[14rem] animate-pulse rounded-lg border border-gray-100 bg-gray-50 p-3 sm:min-h-[15rem] sm:p-4"
-              >
-                <div className="mb-3 flex justify-between gap-4">
-                  <div className="h-5 w-2/3 rounded bg-gray-200" />
-                  <div className="h-6 w-20 rounded bg-gray-200" />
-                </div>
-                <div className="mb-3 space-y-2">
-                  <div className="h-3 w-full rounded bg-gray-100" />
-                  <div className="h-3 w-[85%] rounded bg-gray-100" />
-                </div>
-                <div className="mb-3 flex flex-wrap gap-6 border-b border-gray-100 pb-3">
-                  <div className="h-4 w-24 rounded bg-gray-100" />
-                  <div className="h-4 w-20 rounded bg-gray-100" />
-                </div>
-                <div className="flex items-center justify-between gap-3 pt-2">
-                  <div className="h-4 flex-1 rounded bg-gray-100" />
-                  <div className="h-9 w-28 shrink-0 rounded bg-gray-200" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <section className="mb-8">
+        <div className="mb-3 h-6 w-56 animate-pulse rounded bg-gray-200" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-72 animate-pulse rounded-2xl bg-gray-200" />
+          ))}
+        </div>
+      </section>
     );
   }
 
@@ -126,77 +104,51 @@ const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'V
   }
 
   return (
-    <Card className="mb-8">
-      <CardHeader className="space-y-1 p-4 sm:p-5 pb-3">
-        <CardTitle className="text-xl font-semibold">
-          Available Tours for {vehicleName}
-        </CardTitle>
-        <p className="text-sm text-gray-600">Perfect destinations for your {vehicleName}</p>
-      </CardHeader>
-      <CardContent className="p-0 px-4 pb-4 pt-0 sm:px-5">
-        <div className="grid gap-3">
-          {tours.map((tour) => (
-            <div
+    <section className="mb-8">
+      <div className="mb-3">
+        <h2 className="text-base font-bold text-slate-900">Tours by {vehicleName}</h2>
+        <p className="text-xs text-slate-500">Sightseeing from Visakhapatnam. Price is the {vehicleName} fare.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {tours.map((tour) => {
+          const days = tour.days != null ? `${tour.days} ${tour.days === 1 ? 'day' : 'days'}` : '';
+          const distance = tour.distance != null ? `${tour.distance} km` : '';
+          const meta = [days, distance].filter(Boolean).join(' · ');
+          return (
+            <Link
               key={tour.tourId}
-              className="min-h-[14rem] border border-gray-200 rounded-lg p-3 sm:p-4 sm:min-h-[15rem] hover:shadow-md transition-shadow"
+              to={getTourUrl(tour)}
+              className="group relative block h-72 overflow-hidden rounded-2xl shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
             >
-              {/* Title + price: one row so meta stats get full width below */}
-              <div className="flex justify-between items-start gap-4 mb-2">
-                <h4 className="font-semibold text-gray-900 min-w-0 flex-1 leading-snug pr-2">
-                  {tour.tourName}
-                </h4>
-                <div className="text-right shrink-0">
-                  <Badge className="bg-green-100 text-green-800 border-green-200 mb-1">
-                    ₹{tour.displayPrice.toLocaleString()}
-                  </Badge>
-                  <p className="text-xs text-gray-500">Total package</p>
-                </div>
-              </div>
-
-              <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                {tour.description || `Explore ${tour.tourName} with comfortable ${vehicleName}`}
-              </p>
-
-              {/* Distance / days / duration — full width, aligned, no awkward wraps */}
-              <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm text-gray-600 border-b border-gray-100 pb-3 mb-3">
-                {tour.distance != null && tour.distance !== undefined && (
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                    <MapPin className="h-4 w-4 shrink-0 text-gray-500" aria-hidden />
-                    <span className="tabular-nums">{tour.distance} km</span>
+              <img
+                src={tour.imageUrl || `/tours/${tour.tourId}.jpg`}
+                alt={tour.tourName}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+                decoding="async"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop';
+                }}
+              />
+              <span className="absolute inset-x-0 bottom-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.72)_46%,transparent)] px-3 pb-3 pt-16 text-white">
+                <span className="flex items-center gap-1 text-[11px] text-white/80">
+                  <MapPin className="h-3 w-3" aria-hidden />
+                  {tourTypeLabel(tour.tourName)}
+                </span>
+                <span className="mt-1 flex items-end justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold leading-snug">{tour.tourName}</span>
+                    {meta ? <span className="mt-0.5 block text-[11px] text-white/75">{meta}</span> : null}
                   </span>
-                )}
-                {tour.days != null && tour.days !== undefined && (
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                    <Calendar className="h-4 w-4 shrink-0 text-gray-500" aria-hidden />
-                    <span className="tabular-nums">
-                      {tour.days} day{tour.days > 1 ? 's' : ''}
-                    </span>
-                  </span>
-                )}
-                {tour.timeDuration && tour.timeDuration.trim() !== '' && (
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                    <Clock className="h-4 w-4 shrink-0 text-gray-500" aria-hidden />
-                    <span>{tour.timeDuration.trim()}</span>
-                  </span>
-                )}
-              </div>
-
-              <div className="flex w-full flex-nowrap items-center justify-between gap-3 pt-2">
-                <p className="min-w-0 flex-1 text-sm text-gray-600 pr-2">
-                  <span className="font-medium">Includes:</span>{' '}
-                  AC, Driver, Fuel, Parking
-                </p>
-                <Button variant="outline" size="sm" asChild className="shrink-0">
-                  <Link to={getTourUrl(tour)} className="whitespace-nowrap">
-                    View Details
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+                  <span className="shrink-0 text-lg font-bold">₹{tour.displayPrice.toLocaleString('en-IN')}</span>
+                </span>
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 };
 

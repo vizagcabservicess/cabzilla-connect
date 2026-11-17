@@ -21,6 +21,20 @@ export function TourHeroWidget({
 }: TourHeroWidgetProps) {
   if (typeof window !== 'undefined') {
     sessionStorage.setItem('tripType', 'tour');
+    try {
+      const rawPrefill = sessionStorage.getItem('routePrefillData');
+      if (rawPrefill) {
+        const parsed = JSON.parse(rawPrefill) as { tripType?: string };
+        if (parsed?.tripType && parsed.tripType !== 'tour') {
+          sessionStorage.removeItem('routePrefillData');
+          sessionStorage.removeItem('pickupLocation');
+          sessionStorage.removeItem('dropLocation');
+          sessionStorage.removeItem('intermediateStops');
+        }
+      }
+    } catch {
+      sessionStorage.removeItem('routePrefillData');
+    }
   }
 
   return (
@@ -32,6 +46,7 @@ export function TourHeroWidget({
         onStepChange={onStepChange}
         onTripEditOpenChange={onTripEditOpenChange}
         visibleTabs={['tour']}
+        pageDefaultTripType="tour"
         hideBackground
         embedCompactLayout
         embedStretchToShell={embedStretchToShell}

@@ -12,8 +12,13 @@ export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og-image.png`;
 const DESCRIPTION_MIN = 140;
 const DESCRIPTION_MAX = 160;
 const DESCRIPTION_FILLERS = [
-  ' Book online with Vizag Taxi Hub.',
-  ' Call Vizag Taxi Hub in Visakhapatnam.',
+  ' Available 24/7 with verified drivers in Vizag.',
+  ' Clear fares, AC vehicles and 24/7 support.',
+  ' Verified drivers and 24/7 booking support.',
+  ' Available 24/7 in Visakhapatnam.',
+  ' Transparent fares and 24/7 support.',
+  ' Verified AC cabs, 24/7 service.',
+  ' Available 24/7.',
 ] as const;
 
 /** Task 6 routes stay on the app shell. No public marketing title. */
@@ -63,13 +68,13 @@ const EXACT_HEADS: Record<string, ExactHead> = {
   '/tempo-traveller-rental-vizag': {
     title: 'Tempo Traveller Rental in Vizag | 12, 17 & 18 Seater',
     description:
-      'Hire AC 12, 17 and 18 seater tempo travellers in Vizag for groups, weddings and outstation trips. Book online with Vizag Taxi Hub.',
+      'Hire AC 12, 17 and 18 seater tempo travellers in Vizag for family groups, weddings and outstation trips with verified drivers. Book online 24/7.',
     ogImage: TEMPO_OG,
   },
   '/urbania-rental-vizag': {
     title: 'Force Urbania Rental in Vizag | Luxury Van Hire',
     description:
-      'Rent a Force Urbania luxury van in Vizag for weddings, corporate groups and Araku trips with a driver. Book online with Vizag Taxi Hub.',
+      'Rent a Force Urbania luxury AC van in Vizag for weddings, corporate groups and Araku trips with an experienced driver. Book online with Vizag Taxi Hub.',
     ogImage: URBANIA_OG,
   },
   '/12-seater-tempo-traveller-vizag': {
@@ -81,7 +86,7 @@ const EXACT_HEADS: Record<string, ExactHead> = {
   '/17-seater-tempo-traveller-vizag': {
     title: '17 Seater Tempo Traveller in Vizag | Vizag Taxi Hub',
     description:
-      'Book a 17 seater AC tempo traveller in Vizag for group tours, weddings and outstation trips with a driver. Book online with Vizag Taxi Hub.',
+      'Book a 17 seater AC tempo traveller in Vizag for group tours, weddings and outstation trips with an experienced driver. Book online or call 24/7.',
     ogImage: TEMPO_OG,
   },
   '/18-seater-tempo-traveller-vizag': {
@@ -93,79 +98,79 @@ const EXACT_HEADS: Record<string, ExactHead> = {
   '/wedding-tempo-traveller-vizag': {
     title: 'Wedding Tempo Traveller in Vizag | Vizag Taxi Hub',
     description:
-      'Wedding tempo traveller hire in Vizag for guest transport, baraat and venue transfers with AC coaches. Book online with Vizag Taxi Hub.',
+      'Wedding tempo traveller hire in Vizag for guest transport, baraat and venue transfers with spacious AC coaches and drivers. Book online 24/7.',
     ogImage: TEMPO_OG,
   },
   '/corporate-tempo-traveller-vizag': {
     title: 'Corporate Tempo Traveller in Vizag | Vizag Taxi Hub',
     description:
-      'Corporate tempo traveller hire in Vizag for office trips, conferences and staff travel with AC coaches. Book online with Vizag Taxi Hub.',
+      'Corporate tempo traveller hire in Vizag for office trips, conferences and employee travel with clean AC coaches and punctual drivers. Book online.',
     ogImage: TEMPO_OG,
   },
   '/pilgrimage-tempo-traveller-vizag': {
     title: 'Pilgrimage Tempo Traveller from Vizag | Vizag Taxi Hub',
     description:
-      'Pilgrimage tempo traveller from Vizag for temple trips and group darshan travel with AC coaches. Book online with Vizag Taxi Hub.',
+      'Pilgrimage tempo traveller from Vizag for temple trips and group darshan travel with comfortable AC coaches and experienced drivers. Book online.',
     ogImage: TEMPO_OG,
   },
   '/group-travel-tempo-traveller-vizag': {
     title: 'Group Travel Tempo Traveller in Vizag | Vizag Taxi Hub',
     description:
-      'Group travel tempo traveller in Vizag for tours, events and outstation trips with AC seating. Book online with Vizag Taxi Hub.',
+      'Group travel tempo traveller in Vizag for family tours, events and outstation trips with push-back AC seating and experienced drivers. Book online.',
     ogImage: TEMPO_OG,
   },
   '/mini-bus-travels-vizag': {
     title: 'Mini Bus Hire in Vizag | Vizag Taxi Hub',
     description:
-      'Mini bus hire in Vizag for group tours, weddings and outstation travel with a professional driver. Book online with Vizag Taxi Hub.',
+      'Mini bus hire in Vizag for group tours, weddings, school trips and outstation travel with a professional driver. Book online with Vizag Taxi Hub.',
     ogImage: TEMPO_OG,
   },
   '/araku-tour-packages-vizag': {
     title: 'Araku Tour Packages from Vizag | Vizag Taxi Hub',
     description:
-      'Araku tour packages from Vizag by private cab, including valley day trips with a professional driver. Book online with Vizag Taxi Hub.',
+      'Araku tour packages from Vizag by private cab, including 1-day and overnight valley trips with a professional driver. Book online with Vizag Taxi Hub.',
     ogImage: DEFAULT_OG_IMAGE,
   },
   '/airport-taxi': {
-    title: 'Vizag Airport Taxi | Pickup & Drop | Vizag Taxi Hub',
+    title: 'Bhogapuram Airport Taxi | Vizag Airport Cabs 24x7',
     description:
-      'Vizag airport taxi for pickup and drop at Bhogapuram and city terminals, with meet and greet support. Book online with Vizag Taxi Hub.',
+      'Vizag airport taxi for pickup and drop at Bhogapuram and city terminals, with flight tracking and meet and greet support. Book online 24/7.',
     ogImage: INNOVA_OG,
   },
   '/local-taxi': {
     title: 'Local Taxi in Vizag | City Cabs by the Hour',
     description:
-      'Local taxi in Vizag for city rides by the hour or point to point, with a professional driver. Book online with Vizag Taxi Hub.',
+      'Local taxi in Vizag for city rides by the hour or point-to-point trips across Visakhapatnam with a verified driver. Book online with Vizag Taxi Hub.',
     ogImage: DEFAULT_OG_IMAGE,
   },
   '/outstation-taxi': {
     title: 'Outstation Cabs from Vizag | One Way & Round Trip',
     description:
-      'Outstation cabs from Vizag for one way and round trips across Andhra and nearby states with a driver. Book online with Vizag Taxi Hub.',
+      'Outstation cabs from Vizag for one way and round trips across Andhra Pradesh and nearby states with an experienced driver. Book online 24/7.',
     ogImage: DEFAULT_OG_IMAGE,
   },
   '/tours': {
     title: 'Vizag & Araku Tour Packages by Cab | Vizag Taxi Hub',
     description:
-      'Vizag and Araku tour packages by private cab, from city sightseeing to valley day trips with a driver. Book online with Vizag Taxi Hub.',
+      'Vizag and Araku tour packages by private cab, from local city sightseeing to valley day trips with a verified driver. Book online with Vizag Taxi Hub.',
     ogImage: DEFAULT_OG_IMAGE,
   },
   '/fleet': {
     title: 'Our Fleet: Sedan, Innova, Tempo Traveller | Vizag Taxi Hub',
     description:
-      'Browse the Vizag Taxi Hub fleet in Visakhapatnam: sedans, Innova, tempo traveller and Urbania with drivers. Book online or call us.',
+      'Browse the Vizag Taxi Hub fleet in Visakhapatnam: sedans, Ertiga, Innova Crysta, tempo traveller and Urbania with drivers. Book online or call us.',
     ogImage: DEFAULT_OG_IMAGE,
   },
   '/hire-driver': {
     title: 'Hire a Driver in Vizag | Vizag Taxi Hub',
     description:
-      'Hire a driver in Vizag for your car, or book a cab with driver for local, airport and outstation trips. Book online with Vizag Taxi Hub.',
+      'Hire a verified driver in Vizag for your own car, or book a cab with driver for local, airport and outstation trips. Book online with Vizag Taxi Hub.',
     ogImage: DEFAULT_OG_IMAGE,
   },
   '/shared-carpooling': {
     title: 'Shared Carpooling in Vizag | Vizag Taxi Hub',
     description:
-      'Shared carpooling in Vizag for common routes, or book a private cab for local and outstation trips. Book online with Vizag Taxi Hub.',
+      'Shared carpooling in Vizag for daily office routes, or book a private cab for local, airport and outstation trips. Book online with Vizag Taxi Hub.',
     ogImage: DEFAULT_OG_IMAGE,
   },
 };
@@ -184,6 +189,8 @@ const VEHICLE_SLUGS = [
 
 const TOUR_SLUGS = [
   'araku-valley-tour',
+  'araku-valley-package-2d-1n',
+  'annavaram-temple-tour',
   'lambasingi-tour',
   'vanajangi-tour',
   'vizag-north-city-tour',
@@ -217,7 +224,7 @@ const STATIC_PAGES: Record<string, { name: string; summary: string }> = {
   '/contact-us': {
     name: 'Contact Us',
     summary:
-      'Contact Vizag Taxi Hub in Visakhapatnam for a cab with driver. Local, outstation and airport trips. Book online or call Vizag Taxi Hub.',
+      'Contact Vizag Taxi Hub in Visakhapatnam at +91 9966363662 for a cab with driver on local, outstation and airport trips. Book online 24/7.',
   },
   '/terms-conditions': {
     name: 'Terms and Conditions',
@@ -292,7 +299,7 @@ const STATIC_PAGES: Record<string, { name: string; summary: string }> = {
   '/offers': {
     name: 'Offers',
     summary:
-      'Current offers from Vizag Taxi Hub in Visakhapatnam on local, outstation, airport and tour bookings. Book online or call Vizag Taxi Hub.',
+      'Current offers from Vizag Taxi Hub in Visakhapatnam on local, outstation, airport and Araku tour cab bookings. Check fares and book online 24/7.',
   },
   '/vizag-to-araku-bus': {
     name: 'Vizag to Araku Bus',
@@ -302,35 +309,35 @@ const STATIC_PAGES: Record<string, { name: string; summary: string }> = {
   '/group-tours': {
     name: 'Group Tours',
     summary:
-      'Group tours from Visakhapatnam with Vizag Taxi Hub. Shared seats and private cabs for outstation trips. Book online or call Vizag Taxi Hub.',
+      'Group tours from Visakhapatnam with Vizag Taxi Hub. Shared tempo seats and private cabs for Araku and temple trips. Check dates and book online.',
   },
   '/payment': {
     name: 'Payment',
     summary:
-      'Secure payment for a Vizag Taxi Hub booking in Visakhapatnam. Complete your local, outstation or airport cab booking online.',
+      'Secure online payment for your Vizag Taxi Hub booking in Visakhapatnam. Complete your local, outstation, airport or tour cab reservation safely.',
   },
   '/booking-confirmation': {
     name: 'Booking Confirmation',
     summary:
-      'Booking confirmation from Vizag Taxi Hub in Visakhapatnam. Review your local, outstation or airport cab after you book online.',
+      'Booking confirmation from Vizag Taxi Hub in Visakhapatnam. Review your local, outstation or airport cab details, pickup time and driver info.',
   },
 };
 
 const OUTSTATION_TITLE = 'Visakhapatnam to {place} Taxi | Vizag Taxi Hub';
 const OUTSTATION_DESCRIPTION =
-  'Book a cab from Visakhapatnam to {place} with Vizag Taxi Hub. One way and round trip with a professional driver. Book online or call us.';
+  'Book a cab from Visakhapatnam to {place} with Vizag Taxi Hub. One way and round trip with a verified driver. Available 24/7 with clear fares.';
 const ROUTE_PAIR_TITLE = '{from} to {to} | Vizag Taxi Hub';
 const ROUTE_PAIR_DESCRIPTION =
-  'Cab from {from} to {to} with Vizag Taxi Hub in Visakhapatnam. A car with driver for this trip. Book online or call us.';
+  'Cab from {from} to {to} with Vizag Taxi Hub in Visakhapatnam. AC car with driver for one-way or round trips. Available 24/7 with clear fares.';
 const TOUR_TITLE = '{name} from Vizag | Vizag Taxi Hub';
 const TOUR_DESCRIPTION =
-  '{name} from Vizag by private cab with Vizag Taxi Hub and a professional driver. Book online or call Vizag Taxi Hub.';
+  '{name} from Vizag by private AC cab with Vizag Taxi Hub and a verified driver. Sightseeing itinerary included. Book online or call us 24/7.';
 const VEHICLE_TITLE = '{name} on Rent in Vizag | Vizag Taxi Hub';
 const VEHICLE_DESCRIPTION =
-  'Rent {name} in Vizag with a professional driver for local, airport and outstation trips. Book online with Vizag Taxi Hub.';
+  'Rent {name} in Vizag with a verified driver for local rides, airport transfers and outstation trips. Clean AC vehicle, 24/7 booking online.';
 const GENERIC_TITLE = '{name} | Vizag Taxi Hub';
 const GENERIC_DESCRIPTION =
-  '{name} with Vizag Taxi Hub in Visakhapatnam. Local, outstation and airport cabs with a professional driver. Book online or call us.';
+  '{name} with Vizag Taxi Hub in Visakhapatnam. Local, outstation and airport cabs with a professional driver. Available 24/7 with clear fares.';
 
 export function normalizePublicPath(raw: string): string {
   const noHash = raw.split('#')[0] ?? '';
@@ -356,24 +363,207 @@ export function fitDescription(text: string): string {
   if (clean.length >= DESCRIPTION_MIN && clean.length <= DESCRIPTION_MAX) return clean;
 
   let out = clean;
-  for (const filler of DESCRIPTION_FILLERS) {
-    if (out.length >= DESCRIPTION_MIN) break;
-    out = `${out.replace(/[. ]+$/g, '')}.${filler}`.replace(/\s+/g, ' ').trim();
-  }
-
-  if (out.length > DESCRIPTION_MAX) {
-    const slice = out.slice(0, DESCRIPTION_MAX);
-    const space = slice.lastIndexOf(' ');
-    out = (space >= DESCRIPTION_MIN ? slice.slice(0, space) : slice).replace(/[.,;:\s]+$/g, '');
-  }
-
   if (out.length < DESCRIPTION_MIN) {
-    out = clean.slice(0, DESCRIPTION_MAX).trim();
+    const base = out.replace(/[. ]+$/g, '') + '.';
+    const lower = base.toLowerCase();
+    for (const filler of DESCRIPTION_FILLERS) {
+      const candidate = `${base}${filler}`.replace(/\s+/g, ' ').trim();
+      if (candidate.length > DESCRIPTION_MAX) continue;
+      if (lower.includes('24/7') && filler.toLowerCase().includes('24/7') && candidate.length > DESCRIPTION_MIN + 15) {
+        continue;
+      }
+      if (lower.includes('verified driver') && filler.toLowerCase().includes('verified driver')) {
+        continue;
+      }
+      out = candidate;
+      if (out.length >= DESCRIPTION_MIN) break;
+    }
+    // Second pass without keyword filtering if still < DESCRIPTION_MIN
+    if (out.length < DESCRIPTION_MIN) {
+      for (const filler of DESCRIPTION_FILLERS) {
+        const candidate = `${base}${filler}`.replace(/\s+/g, ' ').trim();
+        if (candidate.length >= DESCRIPTION_MIN && candidate.length <= DESCRIPTION_MAX) {
+          out = candidate;
+          break;
+        }
+      }
+    }
   }
+
   if (out.length > DESCRIPTION_MAX) {
-    out = out.slice(0, DESCRIPTION_MAX).trim();
+    const slice = out.slice(0, DESCRIPTION_MAX - 1);
+    const sentenceEnd = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '));
+    if (sentenceEnd >= DESCRIPTION_MIN - 1) {
+      out = slice.slice(0, sentenceEnd + 1).trim();
+    } else {
+      const space = slice.lastIndexOf(' ');
+      out = `${(space >= DESCRIPTION_MIN - 1 ? slice.slice(0, space) : slice).replace(/[.,;:\s]+$/g, '')}.`;
+    }
   }
+
   return out;
+}
+
+export function buildStructuredData(
+  rawPath: string,
+  head: Pick<PublicHead, 'title' | 'description' | 'canonical' | 'ogImage' | 'h1'>,
+): Array<Record<string, unknown>> {
+  const path = normalizePublicPath(rawPath);
+  if (isPrivatePath(path)) return [];
+
+  if (path === '/') {
+    return [
+      {
+        '@context': 'https://schema.org',
+        '@type': ['LocalBusiness', 'TaxiService'],
+        '@id': `${SITE_ORIGIN}/#organization`,
+        name: 'Vizag Taxi Hub',
+        url: `${SITE_ORIGIN}/`,
+        logo: `${SITE_ORIGIN}/uploads/favicon.png`,
+        image: head.ogImage,
+        description: head.description,
+        telephone: '+91 9966363662',
+        email: 'info@vizagtaxihub.com',
+        foundingDate: '2020',
+        priceRange: '₹₹',
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: '44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram',
+          addressLocality: 'Visakhapatnam',
+          addressRegion: 'Andhra Pradesh',
+          postalCode: '530024',
+          addressCountry: 'IN',
+        },
+        areaServed: {
+          '@type': 'City',
+          name: 'Visakhapatnam',
+        },
+        openingHoursSpecification: {
+          '@type': 'OpeningHoursSpecification',
+          dayOfWeek: [
+            'Monday',
+            'Tuesday',
+            'Wednesday',
+            'Thursday',
+            'Friday',
+            'Saturday',
+            'Sunday',
+          ],
+          opens: '00:00',
+          closes: '23:59',
+        },
+      },
+    ];
+  }
+
+  const parts = path.split('/').filter(Boolean);
+  const cleanTitle = head.h1 || h1FromTitle(head.title);
+  const crumbs: Array<Record<string, unknown>> = [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Home',
+      item: `${SITE_ORIGIN}/`,
+    },
+  ];
+  let built = '';
+  parts.forEach((part, index) => {
+    built += `/${part}`;
+    const isLast = index === parts.length - 1;
+    crumbs.push({
+      '@type': 'ListItem',
+      position: index + 2,
+      name: isLast ? cleanTitle : titleCaseSlug(part),
+      item: `${SITE_ORIGIN}${built}`,
+    });
+  });
+
+  const blocks: Array<Record<string, unknown>> = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: crumbs,
+    },
+  ];
+
+  const isTour = path.startsWith('/tours/') || path === '/araku-tour-packages-vizag';
+  const isVehicle =
+    path.startsWith('/vehicle/') ||
+    path.includes('tempo-traveller') ||
+    path.includes('urbania') ||
+    path === '/mini-bus-travels-vizag';
+  const isService =
+    path.startsWith('/local-taxi') ||
+    path.startsWith('/outstation-taxi') ||
+    path.startsWith('/airport-taxi') ||
+    path === '/hire-driver' ||
+    path === '/shared-carpooling' ||
+    path === '/rentals' ||
+    path === '/pooling' ||
+    path === '/vizag-to-araku-bus' ||
+    path === '/group-tours';
+
+  const provider = {
+    '@type': 'TaxiService',
+    name: 'Vizag Taxi Hub',
+    url: `${SITE_ORIGIN}/`,
+    telephone: '+91 9966363662',
+  };
+
+  if (isTour) {
+    blocks.push({
+      '@context': 'https://schema.org',
+      '@type': 'TouristTrip',
+      name: cleanTitle,
+      description: head.description,
+      url: head.canonical,
+      image: head.ogImage,
+      touristType: 'Sightseeing',
+      provider,
+    });
+  } else if (isVehicle) {
+    blocks.push({
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: cleanTitle,
+      description: head.description,
+      url: head.canonical,
+      image: head.ogImage,
+      brand: {
+        '@type': 'Brand',
+        name: 'Vizag Taxi Hub',
+      },
+    });
+  } else if (isService) {
+    blocks.push({
+      '@context': 'https://schema.org',
+      '@type': 'Service',
+      serviceType: 'Taxi and Cab Service',
+      name: cleanTitle,
+      description: head.description,
+      url: head.canonical,
+      areaServed: {
+        '@type': 'City',
+        name: 'Visakhapatnam',
+      },
+      provider,
+    });
+  } else {
+    blocks.push({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: cleanTitle,
+      description: head.description,
+      url: head.canonical,
+      isPartOf: {
+        '@type': 'WebSite',
+        name: 'Vizag Taxi Hub',
+        url: `${SITE_ORIGIN}/`,
+      },
+    });
+  }
+
+  return blocks;
 }
 
 function titleCaseSlug(slug: string): string {
@@ -657,6 +847,20 @@ export function validatePublicHead(): void {
     const length = head.description.length;
     if (length < DESCRIPTION_MIN || length > DESCRIPTION_MAX) {
       throw new Error(`Description length ${length} for ${head.canonical}: ${head.description}`);
+    }
+  }
+
+  const allDoc = buildSeoHeadDocument();
+  for (const [docPath, entry] of Object.entries(allDoc.pages)) {
+    if (docPath === '/') continue;
+    if (entry.description.length < DESCRIPTION_MIN || entry.description.length > DESCRIPTION_MAX) {
+      throw new Error(`Description length ${entry.description.length} for ${docPath}: ${entry.description}`);
+    }
+    if (!/[.!]$/.test(entry.description)) {
+      throw new Error(`Cut-off description for ${docPath}: ${entry.description}`);
+    }
+    if (/Book online with Vizag Taxi Hub\.\s*Book/i.test(entry.description) || /Vizag Taxi Hub\.\s*Book online/i.test(entry.description)) {
+      throw new Error(`Repeated CTA in description for ${docPath}: ${entry.description}`);
     }
   }
 }

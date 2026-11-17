@@ -18,6 +18,9 @@ interface ExternalNavItem {
   label: string;
   href: string;
   external: true;
+  ctaName: string;
+  iconClassName?: string;
+  labelClassName?: string;
 }
 
 type NavItem = RouteNavItem | ExternalNavItem;
@@ -36,17 +39,23 @@ export const MobileNavigation = () => {
     },
     {
       kind: 'external',
-      icon: <FaWhatsapp className="h-5 w-5" aria-hidden />,
+      icon: <FaWhatsapp className="h-4 w-4" aria-hidden />,
       label: 'WhatsApp',
       href: whatsappHref,
       external: true,
+      ctaName: 'mobile_nav_whatsapp',
+      iconClassName: 'flex h-7 w-7 items-center justify-center rounded-full bg-[#25D366] text-white shadow-sm',
+      labelClassName: 'text-[11px] mt-0.5 font-semibold text-[#15803D]',
     },
     {
       kind: 'external',
-      icon: <Phone size={20} aria-hidden />,
+      icon: <Phone className="h-3.5 w-3.5" aria-hidden />,
       label: 'Call',
       href: 'tel:+919966363662',
       external: true,
+      ctaName: 'mobile_nav_call',
+      iconClassName: 'flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm',
+      labelClassName: 'text-[11px] mt-0.5 font-semibold text-blue-700',
     },
     {
       kind: 'route',
@@ -67,11 +76,12 @@ export const MobileNavigation = () => {
                 href={item.href}
                 target={item.href.startsWith('http') ? '_blank' : undefined}
                 rel={item.href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                className="relative flex min-h-[48px] flex-col items-center justify-center px-2 py-2 transition-colors text-gray-500 hover:text-gray-700 active:bg-gray-50/80"
+                data-cta-name={item.ctaName}
+                className="relative flex min-h-[48px] flex-col items-center justify-center px-2 py-1.5 transition-opacity hover:opacity-90 active:bg-gray-50/80"
                 aria-label={item.label}
               >
-                <div className="relative">{item.icon}</div>
-                <span className="text-xs mt-1">{item.label}</span>
+                <div className={item.iconClassName ?? 'relative'}>{item.icon}</div>
+                <span className={item.labelClassName ?? 'text-xs mt-1'}>{item.label}</span>
               </a>
             );
           }

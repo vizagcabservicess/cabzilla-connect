@@ -161,7 +161,7 @@ export default function GroupTourSearchPage() {
         <meta name="description" content={pageDescription} />
         <meta name="keywords" content="vizag group tours, group tour search, vizag to araku tour, shared travel vizag, affordable group tours, vizag taxi hub, tour packages vizag" />
         <meta name="author" content="Vizag Taxi Hub" />
-        <meta name="robots" content="index, follow" />
+        <meta name="robots" content="noindex, follow" />
         <link rel="canonical" href={canonicalUrl} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={canonicalUrl} />

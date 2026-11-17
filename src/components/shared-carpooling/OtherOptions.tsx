@@ -2,6 +2,7 @@ import { Bell, Phone } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { BRAND_GREEN } from './constants';
 import { VIZAG_TAXI_HUB_PHONE_E164, buildWhatsAppMeUrl } from '@/utils/whatsappPrefillMessage';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 const OPTIONS = [
   {
@@ -37,9 +38,11 @@ export function OtherOptions() {
       callback: 'Hi! I would like to request a callback regarding shared carpooling on my route.',
     };
     if (action === 'whatsapp') {
+      trackContactCta('whatsapp', { name: 'carpool_other_options_whatsapp' });
       window.open(waBase, '_blank', 'noopener,noreferrer');
       return;
     }
+    trackContactCta('whatsapp', { name: `carpool_other_options_${action}` });
     const url = `https://wa.me/${VIZAG_TAXI_HUB_PHONE_E164}?text=${encodeURIComponent(messages[action])}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };

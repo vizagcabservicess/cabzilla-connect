@@ -12,6 +12,7 @@ import { initRazorpay, openRazorpayCheckout, type RazorpayResponse } from '@/ser
 import { toast } from 'sonner';
 import { Loader2, MapPin, Calendar, Users, ArrowLeft, ChevronDown, ChevronUp, User } from 'lucide-react';
 import { countryCodes } from '@/lib/countryCodes';
+import { trackPaymentSuccess } from '@/utils/trackPaymentSuccess';
 
 const STORAGE_KEY = 'groupTourSeatSelection';
 const RESERVATION_STORAGE_KEY = 'groupTourReservationId';
@@ -270,6 +271,18 @@ export default function GroupTourPassengerDetailsPage() {
         }
       );
       setPaying(false);
+      trackPaymentSuccess({
+        transactionId: response.razorpay_payment_id,
+        bookingId: res.booking_id,
+        bookingNumber: res.booking_number,
+        amount: totalAmount,
+        paymentMethod: 'razorpay',
+        paymentMode: 'full',
+        tripType: 'group_tour',
+        itemName: tour ? `${tour.pickup_location} to ${tour.dropoff_location} Group Tour` : 'Group Tour Seat Booking',
+        itemCategory: 'group_tour',
+        flow: 'group_tour_payment',
+      });
       toast.success('Booking confirmed!');
       const confirmData = {
         booking_number: res.booking_number,
