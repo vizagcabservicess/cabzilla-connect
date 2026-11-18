@@ -1,24 +1,11 @@
-import { Navbar } from "@/components/Navbar";
-import { Hero } from '@/components/Hero';
-import { ServicesShowcase } from "@/components/ServicesShowcase";
-import { FleetShowcase } from "@/components/FleetShowcase";
-import { TempoTravellerShowcase } from "@/components/TempoTravellerShowcase";
-import { DestinationsShowcase } from "@/components/DestinationsShowcase";
-import { WhyChooseUs } from "@/components/WhyChooseUs";
-import { PopularRoutes } from "@/components/PopularRoutes";
-import { TestimonialsSection } from "@/components/TestimonialsSection";
-import { VideoTestimonials } from "@/components/VideoTestimonials";
-import { SocialMediaSection } from "@/components/SocialMediaSection";
-import { EnhancedCTA } from "@/components/EnhancedCTA";
+import { Suspense, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useEffect } from 'react';
-import { MobileNavigation } from '@/components/MobileNavigation';
-import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
+import { Navbar } from '@/components/Navbar';
+import { Hero } from '@/components/Hero';
+import { MobileNavigation } from '@/components/MobileNavigation';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { resolvePublicHead } from '@/seo/publicPageMeta';
-import { PopularGroupTours } from '@/components/PopularGroupTours';
-import { SharedCarpoolingPopup } from '@/components/SharedCarpoolingBanner';
-import { HomeOfferCampaignPopup } from '@/components/offers/HomeOfferCampaignPopup';
 import { resetPageScroll } from '@/lib/bookingWidgetScroll';
 import {
   applySharedBuildTrip,
@@ -26,7 +13,127 @@ import {
 } from '@/lib/buildYourTrip';
 import { openTourListPanel } from '@/lib/addTourToBookingWidget';
 import { applyVthAiCheckoutPrefill } from '@/lib/vthAiCheckoutPrefill';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { lazyWithRetry } from '@/utils/dynamicImportRetry';
+
+/** Below-fold / non-critical home modules — same UI, loaded after Hero can paint. */
+const DestinationsShowcase = lazyWithRetry(
+  () =>
+    import('@/components/DestinationsShowcase').then((m) => ({
+      default: m.DestinationsShowcase,
+    })),
+  { moduleName: 'DestinationsShowcase' },
+);
+const PopularGroupTours = lazyWithRetry(
+  () =>
+    import('@/components/PopularGroupTours').then((m) => ({
+      default: m.PopularGroupTours,
+    })),
+  { moduleName: 'PopularGroupTours' },
+);
+const FleetShowcase = lazyWithRetry(
+  () =>
+    import('@/components/FleetShowcase').then((m) => ({
+      default: m.FleetShowcase,
+    })),
+  { moduleName: 'FleetShowcase' },
+);
+const TempoTravellerShowcase = lazyWithRetry(
+  () =>
+    import('@/components/TempoTravellerShowcase').then((m) => ({
+      default: m.TempoTravellerShowcase,
+    })),
+  { moduleName: 'TempoTravellerShowcase' },
+);
+const ServicesShowcase = lazyWithRetry(
+  () =>
+    import('@/components/ServicesShowcase').then((m) => ({
+      default: m.ServicesShowcase,
+    })),
+  { moduleName: 'ServicesShowcase' },
+);
+const WhyChooseUs = lazyWithRetry(
+  () =>
+    import('@/components/WhyChooseUs').then((m) => ({
+      default: m.WhyChooseUs,
+    })),
+  { moduleName: 'WhyChooseUs' },
+);
+const PopularRoutes = lazyWithRetry(
+  () =>
+    import('@/components/PopularRoutes').then((m) => ({
+      default: m.PopularRoutes,
+    })),
+  { moduleName: 'PopularRoutes' },
+);
+const EnhancedCTA = lazyWithRetry(
+  () =>
+    import('@/components/EnhancedCTA').then((m) => ({
+      default: m.EnhancedCTA,
+    })),
+  { moduleName: 'EnhancedCTA' },
+);
+const TestimonialsSection = lazyWithRetry(
+  () =>
+    import('@/components/TestimonialsSection').then((m) => ({
+      default: m.TestimonialsSection,
+    })),
+  { moduleName: 'TestimonialsSection' },
+);
+const VideoTestimonials = lazyWithRetry(
+  () =>
+    import('@/components/VideoTestimonials').then((m) => ({
+      default: m.VideoTestimonials,
+    })),
+  { moduleName: 'VideoTestimonials' },
+);
+const SocialMediaSection = lazyWithRetry(
+  () =>
+    import('@/components/SocialMediaSection').then((m) => ({
+      default: m.SocialMediaSection,
+    })),
+  { moduleName: 'SocialMediaSection' },
+);
+const SharedCarpoolingPopup = lazyWithRetry(
+  () =>
+    import('@/components/SharedCarpoolingBanner').then((m) => ({
+      default: m.SharedCarpoolingPopup,
+    })),
+  { moduleName: 'SharedCarpoolingPopup' },
+);
+const HomeOfferCampaignPopup = lazyWithRetry(
+  () =>
+    import('@/components/offers/HomeOfferCampaignPopup').then((m) => ({
+      default: m.HomeOfferCampaignPopup,
+    })),
+  { moduleName: 'HomeOfferCampaignPopup' },
+);
+const Footer = lazyWithRetry(
+  () => import('@/components/Footer'),
+  { moduleName: 'Footer' },
+);
+
+const homeBelowFoldImports = [
+  () => import('@/components/DestinationsShowcase'),
+  () => import('@/components/PopularGroupTours'),
+  () => import('@/components/FleetShowcase'),
+  () => import('@/components/TempoTravellerShowcase'),
+  () => import('@/components/ServicesShowcase'),
+  () => import('@/components/WhyChooseUs'),
+  () => import('@/components/PopularRoutes'),
+  () => import('@/components/EnhancedCTA'),
+  () => import('@/components/TestimonialsSection'),
+  () => import('@/components/VideoTestimonials'),
+  () => import('@/components/SocialMediaSection'),
+  () => import('@/components/Footer'),
+  () => import('@/components/SharedCarpoolingBanner'),
+  () => import('@/components/offers/HomeOfferCampaignPopup'),
+] as const;
+
+function prefetchHomeBelowFold() {
+  for (const load of homeBelowFoldImports) {
+    void load().catch(() => {});
+  }
+}
 
 // Sync before Hero mounts so loadFromSessionStorage sees AI checkout prefill
 if (typeof window !== 'undefined') {
@@ -60,6 +167,11 @@ const Index = () => {
     const shared = applySharedBuildTrip(searchParams);
     if (shared.length > 0) openTourListPanel();
   }, [isSearch, searchParams]);
+
+  // Start below-fold chunks immediately so sections match live as soon as possible.
+  useEffect(() => {
+    prefetchHomeBelowFold();
+  }, []);
 
   return (
     <>
@@ -109,9 +221,11 @@ const Index = () => {
       <div className="home-soft-page min-h-screen flex flex-col">
         <Navbar />
         {/* Home carpool promo popup — off for now */}
-        <SharedCarpoolingPopup enabled={false} />
-        {/* Active campaign coupon popup on homepage (Airport / Local) */}
-        {!isSearch && !isBuildTripDeepLink(searchParams) && <HomeOfferCampaignPopup enabled />}
+        <Suspense fallback={null}>
+          <SharedCarpoolingPopup enabled={false} />
+          {/* Active campaign coupon popup on homepage (Airport / Local) */}
+          {!isSearch && !isBuildTripDeepLink(searchParams) && <HomeOfferCampaignPopup enabled />}
+        </Suspense>
         <main className="flex-1">
           <ErrorBoundary>
             <Hero
@@ -125,25 +239,29 @@ const Index = () => {
             />
           </ErrorBoundary>
           
-          {/* Main Content — soft premium rhythm */}
+          {/* Main Content — soft premium rhythm (same sections/order as live) */}
           {!isSearch && (
-            <div className="space-y-0 md:space-y-0">
-              <DestinationsShowcase />
-              <PopularGroupTours hideWhenEmpty />
-              <FleetShowcase />
-              <TempoTravellerShowcase />
-              <ServicesShowcase />
-              <WhyChooseUs />
-              <PopularRoutes />
-              <EnhancedCTA />
-              <TestimonialsSection />
-              <VideoTestimonials />
-              <SocialMediaSection />
-            </div>
+            <Suspense fallback={null}>
+              <div className="space-y-0 md:space-y-0">
+                <DestinationsShowcase />
+                <PopularGroupTours hideWhenEmpty />
+                <FleetShowcase />
+                <TempoTravellerShowcase />
+                <ServicesShowcase />
+                <WhyChooseUs />
+                <PopularRoutes />
+                <EnhancedCTA />
+                <TestimonialsSection />
+                <VideoTestimonials />
+                <SocialMediaSection />
+              </div>
+            </Suspense>
           )}
         </main>
         
-        <Footer />
+        <Suspense fallback={null}>
+          <Footer />
+        </Suspense>
 
         {/* Mobile Navigation */}
         <MobileNavigation />

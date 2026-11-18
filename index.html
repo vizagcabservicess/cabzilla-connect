@@ -51,7 +51,8 @@
           var path = (window.location.pathname || '/').replace(/\/+$/, '') || '/';
           var preloadByPath = {
             '/vehicle/urbania': 'https://vizagtaxihub.com/uploads/urbania-illustrator-vth.png',
-            '/vehicle/tempo-traveller': 'https://vizagtaxihub.com/uploads/tempo-traveller-search.jpg'
+            '/vehicle/tempo-traveller': 'https://vizagtaxihub.com/uploads/tempo-traveller-search.jpg',
+            '/tours': 'https://vizagtaxihub.com/uploads/banner-tours.jpg'
           };
           var href = preloadByPath[path];
           if (!href) return;
@@ -109,8 +110,7 @@
     <link rel="preconnect" href="https://maps.googleapis.com" />
     <link rel="preconnect" href="https://maps.gstatic.com" />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
-    <!-- Home hero LCP (desktop): banner hidden on mobile — preload only when shown -->
-    <link rel="preload" href="https://vizagtaxihub.com/uploads/banner-vth.jpg" as="image" fetchpriority="high" media="(min-width: 640px)" />
+    <!-- banner-vth.jpg preload removed: home hero is CSS mesh (HomeHeroBanner), not that image -->
     <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
     <link rel="dns-prefetch" href="https://cdn.razorpay.com" />
     <link rel="dns-prefetch" href="https://www.clarity.ms" />

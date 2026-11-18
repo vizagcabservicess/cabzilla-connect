@@ -1291,7 +1291,7 @@ export function LiveChatWidget({
         }}
         className={
           compactFab
-            ? 'group relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_10px_24px_-6px_rgba(109,40,217,0.55)] transition-transform hover:scale-[1.03] active:scale-[0.97]'
+            ? 'group relative flex h-11 w-11 items-center justify-center rounded-full text-white shadow-[0_8px_18px_-6px_rgba(109,40,217,0.5)] transition-transform hover:scale-[1.03] active:scale-[0.97]'
             : 'group relative flex max-w-[calc(50vw-0.85rem)] items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5 text-left shadow-[0_12px_28px_-8px_rgba(109,40,217,0.55)] transition-transform hover:scale-[1.02] active:scale-[0.98] sm:max-w-none sm:gap-3 sm:pr-4'
         }
         style={{
@@ -1304,9 +1304,9 @@ export function LiveChatWidget({
       >
         {compactFab ? (
           <>
-            {open ? <X className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
+            {open ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
             {!open && (
-              <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400" />
+              <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full border-2 border-white bg-emerald-400" />
             )}
           </>
         ) : (

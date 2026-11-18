@@ -1,11 +1,7 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
+import React, { Suspense, useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
-import { LocationInput } from "@/components/LocationInput";
-import { DateTimePicker } from "@/components/DateTimePicker";
 import { Button } from "@/components/ui/button";
-import { TourPickupSearchWidget } from "@/components/tour/TourPickupSearchWidget";
-import { BookingPaymentFooter } from "@/components/BookingPaymentFooter";
 import { useToast } from "@/components/ui/use-toast";
 import { Location } from "@/lib/locationData";
 import { isWithinTourPickupRadius } from "@/lib/locationUtils";
@@ -16,10 +12,7 @@ import { MobileNavigation } from "@/components/MobileNavigation";
 import { TourListItem } from "@/types/tour";
 import { tourDetailAPI } from "@/services/api/tourDetailAPI";
 import { getTourUrl } from '@/utils/tourUrlUtils';
-import { TourCard } from "@/components/tour/TourCard";
-import { TourCatalogCard } from "@/components/tour/TourCatalogCard";
 import { ToursCatalogView } from "@/components/tour/ToursCatalogView";
-import { TourVehicleSelection } from "@/components/tour/TourVehicleSelection";
 import { filterToursByCartIds, readTourCart, readTourCartCheckout, readTourCartPreferredVehicle, readTourCartTripExtras, removeTourFromCart, vehicleMatchesPreferred, writeTourCartCheckout, writeTourCartPreferredVehicle } from "@/lib/addTourToBookingWidget";
 import { tourPriceForVehicle } from "@/lib/tourVehiclePrice";
 import { resetPageScroll, smoothScrollToElement } from "@/lib/bookingWidgetScroll";
@@ -32,8 +25,51 @@ import {
   buildGuestSearchSummaryUrl,
 } from "@/services/trackSearchAPI";
 import { buildTourCartFareLinesForGuestTrack } from "@/lib/guestSearchFareLines";
-import Footer from "@/components/Footer";
 import { Helmet } from 'react-helmet-async';
+import { lazyWithRetry } from '@/utils/dynamicImportRetry';
+
+/** Cart/search-only — keep out of the default /tours catalog first paint. */
+const LocationInput = lazyWithRetry(
+  () => import('@/components/LocationInput').then((m) => ({ default: m.LocationInput })),
+  { moduleName: 'LocationInput' },
+);
+const DateTimePicker = lazyWithRetry(
+  () => import('@/components/DateTimePicker').then((m) => ({ default: m.DateTimePicker })),
+  { moduleName: 'DateTimePicker' },
+);
+const TourPickupSearchWidget = lazyWithRetry(
+  () =>
+    import('@/components/tour/TourPickupSearchWidget').then((m) => ({
+      default: m.TourPickupSearchWidget,
+    })),
+  { moduleName: 'TourPickupSearchWidget' },
+);
+const BookingPaymentFooter = lazyWithRetry(
+  () =>
+    import('@/components/BookingPaymentFooter').then((m) => ({
+      default: m.BookingPaymentFooter,
+    })),
+  { moduleName: 'BookingPaymentFooter' },
+);
+const TourCard = lazyWithRetry(
+  () => import('@/components/tour/TourCard').then((m) => ({ default: m.TourCard })),
+  { moduleName: 'TourCard' },
+);
+const TourCatalogCard = lazyWithRetry(
+  () =>
+    import('@/components/tour/TourCatalogCard').then((m) => ({
+      default: m.TourCatalogCard,
+    })),
+  { moduleName: 'TourCatalogCard' },
+);
+const TourVehicleSelection = lazyWithRetry(
+  () =>
+    import('@/components/tour/TourVehicleSelection').then((m) => ({
+      default: m.TourVehicleSelection,
+    })),
+  { moduleName: 'TourVehicleSelection' },
+);
+const Footer = lazyWithRetry(() => import('@/components/Footer'), { moduleName: 'Footer' });
 
 type VehicleWithPricing = CabType & { price: number };
 
@@ -808,27 +844,29 @@ const ToursPage = () => {
   };
 
   const renderSearchForm = () => (
-    <TourPickupSearchWidget
-      pickupLocation={pickupLocation}
-      onPickupLocationChange={setPickupLocation}
-      pickupDate={pickupDate}
-      onPickupDateChange={setPickupDate}
-      isSearching={isSearching}
-      onSearch={() => {
-        void handleSearchTours();
-      }}
-      onClearFilters={() => {
-        setPickupLocation(null);
-        try {
-          sessionStorage.removeItem('pickupLocation');
-        } catch {
-          /* ignore */
-        }
-      }}
-      onShowAllPackages={isCartSearch ? handleShowAllPackages : undefined}
-      selectedTourCount={cartTourIds.length}
-      submitLabel={isPickupStep || isCartSearch ? 'Find Available Quotes' : 'Search Tours'}
-    />
+    <Suspense fallback={null}>
+      <TourPickupSearchWidget
+        pickupLocation={pickupLocation}
+        onPickupLocationChange={setPickupLocation}
+        pickupDate={pickupDate}
+        onPickupDateChange={setPickupDate}
+        isSearching={isSearching}
+        onSearch={() => {
+          void handleSearchTours();
+        }}
+        onClearFilters={() => {
+          setPickupLocation(null);
+          try {
+            sessionStorage.removeItem('pickupLocation');
+          } catch {
+            /* ignore */
+          }
+        }}
+        onShowAllPackages={isCartSearch ? handleShowAllPackages : undefined}
+        selectedTourCount={cartTourIds.length}
+        submitLabel={isPickupStep || isCartSearch ? 'Find Available Quotes' : 'Search Tours'}
+      />
+    </Suspense>
   );
 
   const combinedFareLines = (
@@ -1161,7 +1199,9 @@ const ToursPage = () => {
                 {(!searchInitiated || showSearchForm) && (
                   <div className="mb-6">{renderSearchForm()}</div>
                 )}
-                {searchInitiated ? renderTourListing() : null}
+                {searchInitiated ? (
+                  <Suspense fallback={null}>{renderTourListing()}</Suspense>
+                ) : null}
               </div>
             </section>
           ) : (
@@ -1214,18 +1254,22 @@ const ToursPage = () => {
                   </p>
                 </div>
               ) : null}
-              <BookingPaymentFooter
-                finalTotal={combinedTotal}
-                mode={tourPaymentMode}
-                onModeChange={persistTourPaymentMode}
-                onBookNow={handleContinueWithVehicle}
-                disabled={!selectedVehicle || includedTours.length === 0 || combinedTotal <= 0}
-                disclaimerVariant="none"
-              />
+              <Suspense fallback={null}>
+                <BookingPaymentFooter
+                  finalTotal={combinedTotal}
+                  mode={tourPaymentMode}
+                  onModeChange={persistTourPaymentMode}
+                  onBookNow={handleContinueWithVehicle}
+                  disabled={!selectedVehicle || includedTours.length === 0 || combinedTotal <= 0}
+                  disclaimerVariant="none"
+                />
+              </Suspense>
             </div>
           </div>
         )}
-        <Footer />
+        <Suspense fallback={null}>
+          <Footer />
+        </Suspense>
         <MobileNavigation />
       </div>
     </>

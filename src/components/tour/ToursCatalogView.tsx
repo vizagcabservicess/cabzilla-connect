@@ -1,23 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Building2,
   CheckCircle2,
   ChevronDown,
   Compass,
-  Headphones,
   Landmark,
   MapPin,
   Mountain,
   Palmtree,
-  Shield,
-  Star,
-  Trophy,
-  Users,
   Waves,
   X,
 } from 'lucide-react';
-import '@/lib/fonts-tours';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { TourCatalogCard } from '@/components/tour/TourCatalogCard';
 import { Button } from '@/components/ui/button';
@@ -28,17 +22,24 @@ import {
 } from '@/lib/addTourToBookingWidget';
 import { resolveSmartBudgetMediaUrl } from '@/lib/smartBudgetUpload';
 import { cn } from '@/lib/utils';
+import { lazyWithRetry } from '@/utils/dynamicImportRetry';
 import type { TourListItem } from '@/types/tour';
 
+const ToursCatalogBelowFold = lazyWithRetry(
+  () =>
+    import('@/components/tour/ToursCatalogBelowFold').then((m) => ({
+      default: m.ToursCatalogBelowFold,
+    })),
+  { moduleName: 'ToursCatalogBelowFold' },
+);
+
 const HERO_IMAGE = 'https://vizagtaxihub.com/uploads/banner-tours.jpg';
-const CTA_IMAGE = 'https://vizagtaxihub.com/uploads/footer-tours-banner.jpg';
 
 const POPULAR_CHIPS = [
   'Araku Valley',
   'Lambasingi',
   'Vizag City Tour',
   'Temple Tours',
-  'Maredumilli',
 ] as const;
 type PopularChip = (typeof POPULAR_CHIPS)[number];
 
@@ -58,24 +59,6 @@ const CATEGORIES: {
   { id: 'custom', label: 'Custom Tours', Icon: Compass, tone: 'bg-amber-100 text-amber-500' },
 ];
 
-const REVIEWS = [
-  {
-    name: 'Priya Sharma',
-    place: 'Delhi',
-    text: 'Excellent service! Our Araku trip was well planned and the driver was very professional. Highly recommended!',
-  },
-  {
-    name: 'Rohit Mehta',
-    place: 'Bangalore',
-    text: 'Clean vehicle, polite driver and amazing experience. Vizag Taxi Hub made our family trip hassle-free.',
-  },
-  {
-    name: 'Anita Reddy',
-    place: 'Hyderabad',
-    text: 'Lambasingi trip was wonderful! Everything was well organised and the support team was very good.',
-  },
-];
-
 type ToursCatalogViewProps = {
   tours: TourListItem[];
   loading: boolean;
@@ -92,8 +75,6 @@ function matchesChip(tour: TourListItem, selected: PopularChip): boolean {
       return name.includes('city') || name.includes('vizag north') || name.includes('vizag south');
     case 'Temple Tours':
       return name.includes('temple') || name.includes('srikurmam') || name.includes('arasavalli');
-    case 'Maredumilli':
-      return name.includes('maredumilli') || name.includes('vanajangi');
     default: {
       const _exhaustive: never = selected;
       return _exhaustive;
@@ -164,6 +145,14 @@ export function ToursCatalogView({ tours, loading }: ToursCatalogViewProps) {
   const [showAll, setShowAll] = useState(false);
   const [packageOpen, setPackageOpen] = useState(false);
   const packageMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    void import('@/lib/fonts-tours').catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    void import('@/components/tour/ToursCatalogBelowFold').catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!packageOpen) return;
@@ -289,7 +278,13 @@ export function ToursCatalogView({ tours, loading }: ToursCatalogViewProps) {
   return (
     <div className="tours-catalog bg-[#f4f8fb] antialiased">
       <section className="relative z-20 isolate overflow-x-clip">
-        <img src={HERO_IMAGE} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={HERO_IMAGE}
+          alt=""
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-slate-950/45 to-cyan-900/20" />
         <div className="relative mx-auto max-w-7xl px-4 pb-10 pt-24 md:px-6 md:pb-12 md:pt-28">
           <div className="flex items-start justify-between gap-6">
@@ -468,30 +463,32 @@ export function ToursCatalogView({ tours, loading }: ToursCatalogViewProps) {
 
       <section className="py-10">
         <div className="mx-auto max-w-7xl px-4 md:px-6">
-          <div className="mb-5 flex items-end justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+          <div className="mb-5 flex flex-col gap-2.5 md:mb-6 md:flex-row md:items-end md:justify-between md:gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 md:text-[11px] md:tracking-[0.16em]">
                 Explore Vizag & beyond
               </p>
-              <h2 className="mt-1 text-2xl font-extrabold tracking-[-0.02em] text-slate-900">
+              <h2 className="mt-1.5 text-xl font-extrabold leading-snug tracking-[-0.02em] text-slate-900 md:mt-1 md:text-2xl">
                 Trending Destinations
               </h2>
-              <p className="mt-1 text-sm text-slate-500">Most searched. Most loved. Handpicked for you.</p>
+              <p className="mt-1 text-[13px] leading-snug text-slate-500 md:text-sm">
+                Most searched. Most loved. Handpicked for you.
+              </p>
             </div>
             <button
               type="button"
-              className="shrink-0 text-sm font-semibold text-blue-600 hover:text-blue-800"
+              className="self-start text-[13px] font-semibold text-blue-600 hover:text-blue-800 md:shrink-0 md:self-auto md:text-sm"
               onClick={applySearch}
             >
               View All Destinations →
             </button>
           </div>
-          <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-6 md:overflow-visible md:px-0">
+          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-6 md:gap-4 md:overflow-visible md:px-0">
             {(loading ? [] : tours.slice(0, 6)).map((tour) => (
               <button
                 key={tour.tourId}
                 type="button"
-                className="w-[170px] shrink-0 text-left md:w-auto"
+                className="w-[148px] shrink-0 text-left md:w-auto"
                 onClick={() => {
                   setQuery(tour.tourName);
                   setSelectedTourId(tour.tourId);
@@ -499,13 +496,17 @@ export function ToursCatalogView({ tours, loading }: ToursCatalogViewProps) {
                   applySearch();
                 }}
               >
-                <div className="h-36 overflow-hidden rounded-2xl bg-slate-200 shadow-sm">
+                <div className="h-32 overflow-hidden rounded-2xl bg-slate-200 shadow-sm md:h-36">
                   {tour.imageUrl ? (
                     <img src={tour.imageUrl} alt="" className="h-full w-full object-cover" />
                   ) : null}
                 </div>
-                <p className="mt-2 truncate text-[13px] font-bold text-slate-900">{tour.tourName}</p>
-                <p className="truncate text-[11px] text-slate-500">{destinationBlurb(tour)}</p>
+                <p className="mt-2 line-clamp-2 text-[12px] font-bold leading-snug text-slate-900 md:text-[13px]">
+                  {tour.tourName}
+                </p>
+                <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-slate-500">
+                  {destinationBlurb(tour)}
+                </p>
               </button>
             ))}
           </div>
@@ -514,15 +515,15 @@ export function ToursCatalogView({ tours, loading }: ToursCatalogViewProps) {
 
       <section id="popular-tour-packages" className="pb-12">
         <div className="mx-auto max-w-7xl px-4 md:px-6">
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+          <div className="mb-5 flex flex-col gap-2.5 md:mb-6 md:flex-row md:items-end md:justify-between md:gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 md:text-[11px] md:tracking-[0.16em]">
                 Handpicked for you
               </p>
-              <h2 className="mt-1 text-2xl font-extrabold tracking-[-0.02em] text-slate-900">
+              <h2 className="mt-1.5 text-xl font-extrabold leading-snug tracking-[-0.02em] text-slate-900 md:mt-1 md:text-2xl">
                 Popular Tour Packages
               </h2>
-              <p className="mt-1 max-w-2xl text-sm text-slate-500">
+              <p className="mt-1 max-w-2xl text-[13px] leading-snug text-slate-500 md:text-sm">
                 Explore our most loved tours with detailed itineraries and transparent pricing.
               </p>
             </div>
@@ -570,110 +571,9 @@ export function ToursCatalogView({ tours, loading }: ToursCatalogViewProps) {
         </div>
       </section>
 
-      <section className="pb-10">
-        <div className="mx-auto grid max-w-7xl gap-3 px-4 sm:grid-cols-2 md:px-6 lg:grid-cols-4">
-          {[
-            {
-              value: '10,000+',
-              label: 'Happy Travelers',
-              Icon: Users,
-              tone: 'bg-violet-100 text-violet-600',
-            },
-            {
-              value: '10+ Years',
-              label: 'Local Experience',
-              Icon: Trophy,
-              tone: 'bg-amber-100 text-amber-500',
-            },
-            {
-              value: '24/7',
-              label: 'Travel Support',
-              Icon: Headphones,
-              tone: 'bg-sky-100 text-sky-600',
-            },
-            {
-              value: 'Verified Drivers',
-              label: 'Safe & Professional',
-              Icon: Shield,
-              tone: 'bg-emerald-100 text-emerald-600',
-            },
-          ].map(({ value, label, Icon, tone }) => (
-            <div key={label} className="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 shadow-sm">
-              <span className={cn('flex h-11 w-11 items-center justify-center rounded-full', tone)}>
-                <Icon className="h-5 w-5" strokeWidth={2.25} />
-              </span>
-              <div>
-                <p className="text-sm font-bold text-slate-900">{value}</p>
-                <p className="text-[12px] text-slate-500">{label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="bg-white py-12">
-        <div className="mx-auto max-w-7xl px-4 md:px-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-            What travelers say
-          </p>
-          <h2 className="mt-1 max-w-md text-2xl font-extrabold tracking-[-0.02em] text-slate-900">
-            Trusted by Families, Friends & Explorers
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">Real journeys. Real stories. Real happiness.</p>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {REVIEWS.map((review) => (
-              <article key={review.name} className="rounded-2xl border border-slate-100 bg-[#f8fafc] p-4">
-                <div className="mb-3 flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-700">
-                    {review.name.charAt(0)}
-                  </span>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">{review.name}</p>
-                    <p className="text-[11px] text-slate-500">{review.place}</p>
-                  </div>
-                </div>
-                <div className="mb-2 flex gap-0.5 text-amber-400">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <Star key={index} className="h-3.5 w-3.5 fill-current" />
-                  ))}
-                </div>
-                <p className="text-[13px] leading-relaxed text-slate-600">“{review.text}”</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="relative isolate overflow-hidden">
-        <img src={CTA_IMAGE} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-slate-950/55" />
-        <div className="relative mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-4 py-14 md:flex-row md:items-end md:px-6 md:py-16">
-          <div className="max-w-xl">
-            <h2 className="text-2xl font-extrabold tracking-[-0.02em] text-white md:text-[1.85rem]">
-              Your Next Adventure Awaits
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-white/85">
-              Plan your perfect trip with Vizag Taxi Hub. Custom itineraries, best prices, and
-              unforgettable experiences across Andhra Pradesh.
-            </p>
-            <Button
-              type="button"
-              className="mt-5 rounded-lg bg-blue-600 px-5 font-semibold text-white hover:bg-blue-700"
-              onClick={applySearch}
-            >
-              Plan My Trip
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
-          <p className="font-script text-[2rem] leading-tight text-white/95">
-            Good Trips
-            <br />
-            Create
-            <br />
-            Great Stories
-          </p>
-        </div>
-      </section>
+      <Suspense fallback={null}>
+        <ToursCatalogBelowFold onPlanTrip={applySearch} />
+      </Suspense>
     </div>
   );
 }

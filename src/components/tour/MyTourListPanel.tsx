@@ -1081,11 +1081,11 @@ export function MyTourListPanel() {
               : 'Build Your Trip'
           }
           className={cn(
-            'fixed z-[10030] max-w-[calc(50%-0.75rem)] rounded-full bg-blue-600 font-semibold text-white shadow-[0_10px_24px_-6px_rgba(37,99,235,0.55)] hover:bg-blue-700',
+            'fixed z-[10030] max-w-[calc(50%-0.75rem)] rounded-full bg-blue-600 font-semibold text-white shadow-[0_8px_18px_-6px_rgba(37,99,235,0.5)] hover:bg-blue-700',
             'right-3',
             'bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px)+var(--vth-chat-clearance,0px))]',
             'md:bottom-[calc(1rem+var(--vth-chat-clearance,0px))] md:right-[10rem]',
-            'flex items-center gap-2 py-1.5 pl-1.5 pr-2.5 text-left md:py-1 md:pl-1.5 md:pr-2.5'
+            'flex items-center gap-1.5 py-1 pl-1 pr-2 text-left md:gap-2 md:py-1 md:pl-1.5 md:pr-2.5'
           )}
           onClick={() => {
             if (items.length === 0) {
@@ -1095,21 +1095,21 @@ export function MyTourListPanel() {
             openTourListPanel();
           }}
         >
-          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 md:h-8 md:w-8">
-            <Briefcase className="h-5 w-5 md:h-4 md:w-4" />
+          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 md:h-8 md:w-8">
+            <Briefcase className="h-4 w-4" />
             {items.length > 0 ? (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-0.5 text-[10px] font-bold text-blue-600">
+              <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-white px-0.5 text-[9px] font-bold text-blue-600">
                 {items.length}
               </span>
             ) : null}
           </span>
           <span className="min-w-0 pr-0.5">
-            <span className="block truncate text-[13px] font-semibold leading-tight">
+            <span className="block truncate text-[11px] font-semibold leading-tight md:text-[13px]">
               {items.length > 0 ? `My trip · ${items.length}` : 'Build Your Trip'}
             </span>
-            <span className="mt-0.5 flex items-center gap-0.5 truncate text-[10px] font-medium leading-tight text-white/80">
+            <span className="mt-0.5 flex items-center gap-0.5 truncate text-[9px] font-medium leading-tight text-white/80 md:text-[10px]">
               {items.length > 0 ? 'View selected tours' : 'Add tours & transfers'}
-              <ChevronRight className="h-3 w-3 shrink-0" />
+              <ChevronRight className="h-2.5 w-2.5 shrink-0 md:h-3 md:w-3" />
             </span>
           </span>
         </button>
